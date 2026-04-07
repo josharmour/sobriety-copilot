@@ -1,0 +1,10 @@
+flask>=3.0
+chromadb>=1.0.0
+sentence-transformers>=2.2.0
+einops>=0.7.0
+pdfplumber>=0.10.0
+PyPDF2>=3.0.0
+openai>=1.0.0
+ebooklib>=0.18
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
