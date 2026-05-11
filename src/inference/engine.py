@@ -47,8 +47,19 @@ class InferenceEngine:
     def _extra_body(self) -> dict:
         if self.backend == "ollama":
             return {"keep_alive": self.keep_alive, "options": {"num_ctx": self.num_ctx}}
-        # vLLM / other OpenAI servers: send nothing extra. vLLM ignores unknown
-        # keys but rejects entire-payload extras like `options`.
+        if self.backend == "vllm":
+            extra: dict = {}
+            # Gemma 4 reasoning models on vLLM only emit `<think>...</think>`
+            # (which the `--reasoning-parser=gemma4` flag splits into
+            # `delta.reasoning`) when the chat template is invoked with
+            # `enable_thinking=True`. Without this the model just streams
+            # content tokens and the UI's thinking panel never receives
+            # anything. Disable via VLLM_ENABLE_THINKING=0 if the loaded
+            # model isn't a reasoning variant.
+            if os.environ.get("VLLM_ENABLE_THINKING", "1").strip().lower() not in ("0", "false", "no", "off"):
+                extra["chat_template_kwargs"] = {"enable_thinking": True}
+            return extra
+        # Other OpenAI-compatible servers: send nothing extra.
         return {}
 
     def generate(
