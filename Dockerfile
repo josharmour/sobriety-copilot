@@ -16,6 +16,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY --chown=app:app src/ ./src/
 COPY --chown=app:app static/ ./static/
 
+# Pre-create writable subdirs under /home/app so the named volumes mount
+# with app:app ownership instead of root (fresh volumes inherit the image
+# mount-point owner).
+RUN mkdir -p /home/app/memory /home/app/render_cache \
+ && chown -R app:app /home/app
+
 USER app
 EXPOSE 5000
 
