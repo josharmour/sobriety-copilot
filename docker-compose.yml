@@ -1,0 +1,116 @@
+x-app-env: &app-env
+  REDIS_URL: redis://redis:6379/0
+  LLM_BASE_URL: http://host.docker.internal:11434/v1
+  LLM_MODEL: gemma4:e2b
+  LLM_API_KEY: ollama
+  INFERENCE_BACKEND: ollama
+  EMBEDDING_PROVIDER: ollama
+  EMBEDDING_MODEL: nomic-embed-text
+  EMBEDDING_BASE_URL: http://host.docker.internal:11434/v1
+  OLLAMA_KEEP_ALIVE: "-1"
+  OLLAMA_EMBED_BATCH_SIZE: "8"
+  MAX_EMBED_WORDS: "320"
+  MAX_EMBED_CHARS: "2000"
+  CHROMA_HOST: chroma
+  CHROMA_PORT: "8000"
+  CHROMA_BATCH_SIZE: "256"
+  DOCUMENTS_DIR: /app/documents
+  RAG_COLLECTION: recovery_literature
+  INDEX_QUEUE_NAME: indexing
+  INDEX_TASK_TTL_SECONDS: "604800"
+  CELERY_RESULT_EXPIRES: "86400"
+  CELERY_VISIBILITY_TIMEOUT: "43200"
+  RENDER_CACHE_DIR: /home/app/render_cache
+  RENDER_CACHE_MAX_DOCUMENTS: "8"
+  PIP_NO_CACHE_DIR: "1"
+
+services:
+  app:
+    build: .
+    image: sobriety-copilot-app
+    restart: always
+    environment:
+      <<: *app-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./documents:/app/documents:ro
+      - render_cache_data:/home/app/render_cache
+    depends_on:
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_started
+    expose:
+      - "5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 5
+
+  worker:
+    build: .
+    image: sobriety-copilot-worker
+    restart: always
+    command: ["celery", "-A", "src.tasks.celery_app:celery_app", "worker", "--loglevel=info", "--concurrency=1", "-Q", "indexing"]
+    environment:
+      <<: *app-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./documents:/app/documents:ro
+      - render_cache_data:/home/app/render_cache
+    depends_on:
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_started
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: ["redis-server", "--appendonly", "no", "--save", "60", "1", "--stop-writes-on-bgsave-error", "no"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 5
+
+  chroma:
+    image: chromadb/chroma:latest
+    restart: always
+    environment:
+      PERSIST_DIRECTORY: /data
+      IS_PERSISTENT: "TRUE"
+    volumes:
+      - chroma_data:/data
+    expose:
+      - "8000"
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    image: sobriety-copilot-nginx
+    restart: always
+    ports:
+      - "5000:80"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 5
+
+volumes:
+  redis_data:
+  chroma_data:
+  render_cache_data:

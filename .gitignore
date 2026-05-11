@@ -1,0 +1,23 @@
+venv/
+__pycache__/
+*.pyc
+rag_db/
+documents/*
+!documents/README.md
+.env
+*.egg-info/
+dist/
+build/
+@eaDir/
+
+# SQLite databases created at runtime (e.g. user memory)
+*.db
+*.db-journal
+
+# RAGAS evaluation output
+tests/eval_results.csv
+
+# Scratch / unrelated checkouts that sometimes appear here
+repos/
+vllm/
+sobriety-copilot-recovered/
