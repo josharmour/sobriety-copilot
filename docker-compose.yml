@@ -1,9 +1,8 @@
 x-app-env: &app-env
   REDIS_URL: redis://redis:6379/0
-  LLM_BASE_URL: http://host.docker.internal:11434/v1
-  LLM_MODEL: gemma4:e2b
-  LLM_API_KEY: ollama
-  INFERENCE_BACKEND: ollama
+  LLM_BASE_URL: http://host.docker.internal:8000/v1
+  LLM_MODEL: gemma4-31b-uncensored
+  LLM_API_KEY: ignored
   EMBEDDING_PROVIDER: ollama
   EMBEDDING_MODEL: nomic-embed-text
   EMBEDDING_BASE_URL: http://host.docker.internal:11434/v1
