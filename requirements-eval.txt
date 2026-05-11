@@ -1,0 +1,4 @@
+# Extra deps for tests/eval_rag.py — kept out of the runtime image.
+ragas>=0.2.0
+pandas>=2.0.0
+datasets>=2.18.0

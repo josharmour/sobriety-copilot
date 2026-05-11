@@ -26,10 +26,13 @@ curl -X POST http://localhost:5000/api/index
 docker compose down
 ```
 
-For evaluation (heavyweight deps not installed in the runtime image):
+For evaluation (heavyweight RAGAS deps live in `requirements-eval.txt`,
+kept out of the runtime image):
 ```bash
-pip install -r requirements.txt
-python -m tests.eval_rag        # writes rag_eval_results.csv
+pip install -r requirements.txt -r requirements-eval.txt
+python -m tests.eval_rag                  # uses tests/eval_cases.json
+python -m tests.eval_rag path/to/cases.json
+# writes tests/eval_results.csv (gitignored)
 ```
 
 ## Environment variables

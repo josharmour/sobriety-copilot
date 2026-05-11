@@ -1,0 +1,14 @@
+[
+  {
+    "question": "What are the 12 steps?",
+    "ground_truth": "The 12 steps of Alcoholics Anonymous are a set of guiding principles for recovery: admitting powerlessness over alcohol, believing a higher power can restore sanity, deciding to turn one's will and life over to that higher power, taking a moral inventory, admitting wrongs, asking for character defects to be removed, humbly asking to have shortcomings removed, listing those harmed, making amends, continuing personal inventory, prayer and meditation, and carrying the message to other alcoholics while practicing the principles in all affairs."
+  },
+  {
+    "question": "How does A.A. literature view resentment?",
+    "ground_truth": "A.A. literature treats resentment as the number one offender — it is described in the Big Book as more destructive to alcoholics than anything else, the chief cause of relapse, and a poison the alcoholic cannot afford. The Fourth Step inventory addresses resentments directly: examining the people, institutions, and principles we resent, looking honestly at our own part in each situation, and asking that the resentment be removed."
+  },
+  {
+    "question": "Who wrote the Big Book?",
+    "ground_truth": "The book Alcoholics Anonymous, known as the Big Book, was written principally by Bill Wilson with substantial input from the early fellowship in Akron and New York, including Dr. Bob Smith. It was first published in April 1939."
+  }
+]
