@@ -32,6 +32,7 @@ from src.prompts.templates import NO_CONTEXT_TEMPLATE, USER_MESSAGE_TEMPLATE, sy
 from src.rag.chroma_client import find_largest_collection_with_prefix
 from src.rag.embeddings import warmup as warmup_embeddings
 from src.rag.indexer import DEFAULT_COLLECTION
+from src.rag.memory import UserMemoryManager, format_state_note
 from src.rag.reranker import warmup as warmup_reranker
 from src.rag.retriever import RAGRetriever
 from src.tasks.indexing import index_documents_task, perform_shadow_index
@@ -63,6 +64,7 @@ RAG_DB_PATH = os.environ.get("RAG_DB_PATH", "rag_db")
 RAG_COLLECTION = os.environ.get("RAG_COLLECTION", DEFAULT_COLLECTION)
 
 engine = InferenceEngine(base_url=BASE_URL, model=MODEL, api_key=API_KEY)
+memory_manager = UserMemoryManager()
 retriever: RAGRetriever | None = None
 retriever_version = "0"
 retriever_collection_name = RAG_COLLECTION
@@ -126,6 +128,7 @@ class ChatRequest(BaseModel):
     categories: list[str] | None = None
     tone: str | None = None
     show_thinking: bool = False
+    user_id: str | None = None
 
 
 class IndexRequest(BaseModel):
@@ -1142,6 +1145,10 @@ def chat(payload: ChatRequest):
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="missing 'message' field")
 
+    user_id = (payload.user_id or "default_user").strip() or "default_user"
+    user_state = memory_manager.get_user_state(user_id)
+    user_state_note = format_state_note(user_state)
+
     retriever_instance = _safe_get_retriever()
     query = payload.message
     history = payload.history
@@ -1196,6 +1203,8 @@ def chat(payload: ChatRequest):
 
     sources = _build_chat_sources(results)
     sys_msg = system_message_for_tone(payload.tone)
+    if user_state_note:
+        sys_msg = f"{sys_msg}\n\n{user_state_note}" if sys_msg else user_state_note
     want_thinking = bool(payload.show_thinking)
 
     def generate():
@@ -1203,6 +1212,8 @@ def chat(payload: ChatRequest):
         if hyde_passage:
             first_event["expanded_query"] = hyde_passage
         yield f"data: {json.dumps(first_event)}\n\n"
+
+        response_buffer: list[str] = []
         try:
             for kind, text in engine.stream_typed(prompt, history=history, system_message=sys_msg):
                 if kind == "thinking":
@@ -1215,10 +1226,17 @@ def chat(payload: ChatRequest):
                         # models can reason longer than that before any token).
                         yield ": keepalive\n\n"
                 else:
+                    response_buffer.append(text)
                     yield f"data: {json.dumps({'token': text})}\n\n"
             yield "data: {\"done\": true}\n\n"
         except Exception as exc:
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        finally:
+            response_text = "".join(response_buffer).strip()
+            try:
+                memory_manager.save_interaction(user_id, query, response_text)
+            except Exception as mem_exc:
+                print(f"[MEM-ERR] {type(mem_exc).__name__}: {mem_exc}", flush=True)
 
     return StreamingResponse(
         generate(),

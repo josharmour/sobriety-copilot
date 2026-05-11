@@ -22,6 +22,7 @@ x-app-env: &app-env
   CELERY_VISIBILITY_TIMEOUT: "43200"
   RENDER_CACHE_DIR: /home/app/render_cache
   RENDER_CACHE_MAX_DOCUMENTS: "8"
+  USER_MEMORY_DB_PATH: /home/app/memory/user_memory.db
   PIP_NO_CACHE_DIR: "1"
 
 services:
@@ -36,6 +37,7 @@ services:
     volumes:
       - ./documents:/app/documents:ro
       - render_cache_data:/home/app/render_cache
+      - user_memory_data:/home/app/memory
     depends_on:
       redis:
         condition: service_healthy
@@ -114,3 +116,4 @@ volumes:
   redis_data:
   chroma_data:
   render_cache_data:
+  user_memory_data:
