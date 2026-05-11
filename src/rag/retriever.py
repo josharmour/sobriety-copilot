@@ -7,6 +7,7 @@ from chromadb.config import Settings
 
 from .embeddings import embed_query
 from .indexer import DEFAULT_COLLECTION
+from .reranker import RAGReranker
 
 
 @dataclass
@@ -33,6 +34,7 @@ class RAGRetriever:
             name=collection_name,
             metadata={"hnsw:space": "cosine"},
         )
+        self.reranker = RAGReranker()
 
     def retrieve(
         self,
@@ -68,7 +70,11 @@ class RAGRetriever:
                     scale=meta.get("scale", "medium"),
                 )
             )
-        return retrieval_results
+        
+        # Rerank results
+        docs = [r.text for r in retrieval_results]
+        top_indices = self.reranker.rerank(query, docs, top_k=top_k)
+        return [retrieval_results[i] for i in top_indices]
 
     def format_context(
         self, results: list[RetrievalResult], max_total_chars: int = 12000
