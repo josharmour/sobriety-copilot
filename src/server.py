@@ -127,7 +127,7 @@ class ChatRequest(BaseModel):
     history: list[dict[str, Any]] = Field(default_factory=list)
     categories: list[str] | None = None
     tone: str | None = None
-    show_thinking: bool = False
+    show_thinking: bool = True
     user_id: str | None = None
 
 

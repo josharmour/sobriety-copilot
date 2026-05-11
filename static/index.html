@@ -692,19 +692,6 @@
       word-wrap: break-word;
       max-height: 22rem;
       overflow-y: auto;
-      transition: max-height 0.45s ease, opacity 0.3s ease, padding 0.45s ease;
-    }
-    /* Auto-collapse after the answer completes: the <details> stays open
-       during the animation so the body's max-height/opacity transition is
-       visible, then the JS flips `open` off once the transition finishes. */
-    .msg-thinking.collapsing .thinking-body {
-      max-height: 0;
-      opacity: 0;
-      padding-top: 0;
-      padding-bottom: 0;
-    }
-    .msg-thinking.collapsed-faded summary {
-      opacity: 0.7;
     }
     .index-card { display: flex; flex-direction: column; gap: 0.5rem; }
     .index-row {
@@ -1988,13 +1975,6 @@
       <div class="section">
         <h3>Response tone</h3>
         <div class="tone-grid" id="tone-grid"></div>
-        <label class="toggle-row">
-          <input type="checkbox" id="show-thinking-toggle">
-          <span class="toggle-label">
-            <span class="toggle-name">Show thinking</span>
-            <span class="toggle-desc">Stream the model's reasoning above the answer</span>
-          </span>
-        </label>
       </div>
       <div class="section">
         <h3>Voice</h3>
@@ -2278,7 +2258,7 @@
       categories: "enabledCategories",
       meetingLocation: "sc.meetingLocation",
       tone: "sc.tone",
-      showThinking: "sc.showThinking",
+      thinkingExpanded: "sc.thinkingExpanded",
     };
     const TONES = [
       { id: "warm", label: "Warm", desc: "Reassuring, conversational" },
@@ -2761,13 +2741,14 @@
     }
     renderToneSelector();
 
-    // Show-thinking toggle
-    function getShowThinking() { return localStorage.getItem(STORAGE_KEYS.showThinking) === "1"; }
-    function setShowThinking(v) { localStorage.setItem(STORAGE_KEYS.showThinking, v ? "1" : "0"); }
-    const showThinkingToggle = document.getElementById("show-thinking-toggle");
-    if (showThinkingToggle) {
-      showThinkingToggle.checked = getShowThinking();
-      showThinkingToggle.addEventListener("change", () => setShowThinking(showThinkingToggle.checked));
+    // Thinking panel — always streamed from the server, but the panel
+    // starts collapsed (just the summary chevron) until the user expands
+    // it. Their choice persists across conversations and reloads.
+    function getThinkingExpanded() {
+      return localStorage.getItem(STORAGE_KEYS.thinkingExpanded) === "1";
+    }
+    function setThinkingExpanded(v) {
+      localStorage.setItem(STORAGE_KEYS.thinkingExpanded, v ? "1" : "0");
     }
 
     // ── Voice picker init ────────────────────────────────────────────
@@ -4896,7 +4877,6 @@
             history: conversation.slice(-10),
             categories: getActiveCategories(),
             tone: getTone(),
-            show_thinking: getShowThinking(),
           }),
         });
         if (!res.ok || !res.body) throw new Error(await readErrorResponse(res));
@@ -4924,7 +4904,7 @@
           }
           thinkingPanel = document.createElement("details");
           thinkingPanel.className = "msg-thinking";
-          thinkingPanel.open = true;
+          thinkingPanel.open = getThinkingExpanded();
           const summary = document.createElement("summary");
           summary.innerHTML = '<span>Thinking</span><span class="thinking-status">streaming…</span>';
           thinkingStatus = summary.querySelector(".thinking-status");
@@ -4934,16 +4914,10 @@
           thinkingPanel.appendChild(thinkingBody);
           // Insert above the message (which may not yet exist)
           assistantRow.insertBefore(thinkingPanel, assistantRow.firstChild);
-          // Reset the "post-answer" fade when the user re-opens the panel
-          // and restore the "Thinking" label so it doesn't keep saying
-          // "tap to expand" after they've tapped.
+          // Persist the user's choice — once they expand the panel here,
+          // every future conversation starts with it open.
           thinkingPanel.addEventListener("toggle", () => {
-            if (thinkingPanel.open) {
-              thinkingPanel.classList.remove("collapsed-faded");
-              if (thinkingStatus && thinkingStatus.textContent === "tap to expand") {
-                thinkingStatus.textContent = "done";
-              }
-            }
+            setThinkingExpanded(thinkingPanel.open);
           });
           return thinkingPanel;
         }
@@ -5009,27 +4983,6 @@
                 highlight_seed: highlightSeed,
               });
               persistCurrentMessages();
-              // Auto-collapse the thinking panel now that the answer is final.
-              // Brief pause so the user registers that thinking is done before
-              // it folds away; the panel stays clickable to re-open.
-              if (thinkingPanel && thinkingPanel.open) {
-                if (thinkingStatus) thinkingStatus.textContent = "tap to expand";
-                setTimeout(() => {
-                  // Pin the current height so the CSS transition has a
-                  // concrete starting point to animate down from.
-                  const body = thinkingPanel.querySelector(".thinking-body");
-                  if (body) body.style.maxHeight = body.scrollHeight + "px";
-                  requestAnimationFrame(() => {
-                    thinkingPanel.classList.add("collapsing");
-                  });
-                  setTimeout(() => {
-                    thinkingPanel.open = false;
-                    thinkingPanel.classList.remove("collapsing");
-                    thinkingPanel.classList.add("collapsed-faded");
-                    if (body) body.style.maxHeight = "";
-                  }, 480);
-                }, 600);
-              }
             }
           }
         }
