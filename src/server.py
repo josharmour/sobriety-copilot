@@ -43,11 +43,14 @@ def chat():
     results = retriever.retrieve(query, categories=categories or None)
 
     user_info = f"User Sobriety Date: {user_state.sobriety_date}, Current Step: {user_state.current_step}"
+    # Separate user state from the actual query to avoid prompt pollution
+    user_prefix = f"User State: {user_info}\n\n"
     if results:
         context = retriever.format_context(results)
         prompt = USER_MESSAGE_TEMPLATE.format(context=f"{context}\n\nUser Info: {user_info}", question=query)
     else:
-        prompt = NO_CONTEXT_TEMPLATE.format(question=f"{query}\n\nUser Info: {user_info}")
+        # Prefix the query with user info instead of appending it inside the question slot
+        prompt = NO_CONTEXT_TEMPLATE.format(question=f"{user_prefix}{query}")
 
     sources = []
     for r in results:
@@ -62,16 +65,17 @@ def chat():
     def generate():
         # Send sources first
         yield f"data: {json.dumps({'sources': sources})}\n\n"
+        full_response = []
         try:
             for token in engine.stream(prompt, history=history):
+                full_response.append(token)
                 yield f"data: {json.dumps({'token': token})}\n\n"
             yield "data: {\"done\": true}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n""
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
         finally:
-            # We can't easily get the full final response from a generator without capturing it.
-            # For now, we'll save the query. A better way would be to buffer the generator.
-            memory_manager.save_interaction(user_id, query, "Response streamed")
+            response_text = "".join(full_response) or "Error during generation"
+            memory_manager.save_interaction(user_id, query, response_text)
 
     return Response(generate(), mimetype="text/event-stream")
 

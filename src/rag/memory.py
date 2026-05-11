@@ -12,8 +12,9 @@ class UserState:
     last_interaction: Optional[str] = None
 
 class UserMemoryManager:
-    def __init__(self, db_path: str = "user_memory.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: str = None):
+        import os
+        self.db_path = db_path or os.environ.get("USER_MEMORY_DB_PATH", "user_memory.db")
         self._init_db()
 
     def _init_db(self):
