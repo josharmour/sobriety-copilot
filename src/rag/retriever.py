@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from .chroma_client import create_chroma_client
 from .embeddings import embed_query
 from .indexer import DEFAULT_COLLECTION
+from . import reranker
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9']+")
 
@@ -336,6 +337,10 @@ class RAGRetriever:
         source_counts: dict[str, int] = defaultdict(int)
         bucket_indexes = {bucket: 0 for bucket in BUCKET_ORDER}
 
+        # Oversample the diversity-filtered pool when a reranker will trim it
+        # back: give the cross-encoder real choices instead of a fixed top_k.
+        target_k = top_k * reranker.oversample_factor()
+
         def _can_add(candidate: RankedCandidate) -> bool:
             if candidate.context_id in seen_context_ids:
                 return False
@@ -348,7 +353,7 @@ class RAGRetriever:
             source_counts[candidate.result.source] += 1
             retrieval_results.append(candidate.result)
 
-        while len(retrieval_results) < top_k:
+        while len(retrieval_results) < target_k:
             made_progress = False
             for bucket in BUCKET_ORDER:
                 queue = bucket_candidates.get(bucket, [])
@@ -360,17 +365,22 @@ class RAGRetriever:
                     _add(candidate)
                     made_progress = True
                     break
-                if len(retrieval_results) >= top_k:
+                if len(retrieval_results) >= target_k:
                     break
             if not made_progress:
                 break
 
         for candidate in candidates:
-            if len(retrieval_results) >= top_k:
+            if len(retrieval_results) >= target_k:
                 break
             if not _can_add(candidate):
                 continue
             _add(candidate)
+
+        if reranker.is_enabled() and len(retrieval_results) > 1:
+            retrieval_results = reranker.rerank(query, retrieval_results, top_k=top_k)
+        elif len(retrieval_results) > top_k:
+            retrieval_results = retrieval_results[:top_k]
 
         return retrieval_results
 

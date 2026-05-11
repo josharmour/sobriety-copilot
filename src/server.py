@@ -32,6 +32,7 @@ from src.prompts.templates import NO_CONTEXT_TEMPLATE, USER_MESSAGE_TEMPLATE, sy
 from src.rag.chroma_client import find_largest_collection_with_prefix
 from src.rag.embeddings import warmup as warmup_embeddings
 from src.rag.indexer import DEFAULT_COLLECTION
+from src.rag.reranker import warmup as warmup_reranker
 from src.rag.retriever import RAGRetriever
 from src.tasks.indexing import index_documents_task, perform_shadow_index
 from src.tasks.job_store import (
@@ -755,7 +756,9 @@ def _assert_no_active_index_job() -> None:
 
 async def _warmup_models() -> None:
     # Sequential so a small GPU isn't asked to load both models at once.
-    for fn in (engine.warmup, warmup_embeddings):
+    # The cross-encoder is CPU-only and small (~80MB), so it's safe to warm
+    # alongside the others; the lifespan task still runs in the background.
+    for fn in (engine.warmup, warmup_embeddings, warmup_reranker):
         try:
             await asyncio.to_thread(fn)
         except Exception:
