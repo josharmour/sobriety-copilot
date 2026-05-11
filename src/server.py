@@ -9,6 +9,7 @@ from src.inference.engine import InferenceEngine
 from src.prompts.templates import NO_CONTEXT_TEMPLATE, USER_MESSAGE_TEMPLATE
 from src.rag.indexer import RAGIndexer
 from src.rag.retriever import RAGRetriever
+from src.rag.memory import UserMemoryManager
 
 app = Flask(__name__, static_folder="../static")
 
@@ -20,6 +21,7 @@ RAG_DB_PATH = os.environ.get("RAG_DB_PATH", "rag_db")
 
 engine = InferenceEngine(base_url=BASE_URL, model=MODEL, api_key=API_KEY)
 retriever = RAGRetriever(db_path=RAG_DB_PATH)
+memory_manager = UserMemoryManager()
 
 
 @app.route("/")
@@ -33,16 +35,19 @@ def chat():
     if not data or "message" not in data:
         return jsonify({"error": "missing 'message' field"}), 400
 
+    user_id = data.get("user_id", "default_user")
+    user_state = memory_manager.get_user_state(user_id)
     query = data["message"]
     history = data.get("history", [])
     categories = data.get("categories")
     results = retriever.retrieve(query, categories=categories or None)
 
+    user_info = f"User Sobriety Date: {user_state.sobriety_date}, Current Step: {user_state.current_step}"
     if results:
         context = retriever.format_context(results)
-        prompt = USER_MESSAGE_TEMPLATE.format(context=context, question=query)
+        prompt = USER_MESSAGE_TEMPLATE.format(context=f"{context}\n\nUser Info: {user_info}", question=query)
     else:
-        prompt = NO_CONTEXT_TEMPLATE.format(question=query)
+        prompt = NO_CONTEXT_TEMPLATE.format(question=f"{query}\n\nUser Info: {user_info}")
 
     sources = []
     for r in results:
@@ -62,7 +67,11 @@ def chat():
                 yield f"data: {json.dumps({'token': token})}\n\n"
             yield "data: {\"done\": true}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            yield f"data: {json.dumps({'error': str(e)})}\n\n""
+        finally:
+            # We can't easily get the full final response from a generator without capturing it.
+            # For now, we'll save the query. A better way would be to buffer the generator.
+            memory_manager.save_interaction(user_id, query, "Response streamed")
 
     return Response(generate(), mimetype="text/event-stream")
 
