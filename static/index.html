@@ -692,6 +692,19 @@
       word-wrap: break-word;
       max-height: 22rem;
       overflow-y: auto;
+      transition: max-height 0.45s ease, opacity 0.3s ease, padding 0.45s ease;
+    }
+    /* Auto-collapse after the answer completes: the <details> stays open
+       during the animation so the body's max-height/opacity transition is
+       visible, then the JS flips `open` off once the transition finishes. */
+    .msg-thinking.collapsing .thinking-body {
+      max-height: 0;
+      opacity: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+    .msg-thinking.collapsed-faded summary {
+      opacity: 0.7;
     }
     .index-card { display: flex; flex-direction: column; gap: 0.5rem; }
     .index-row {
@@ -4921,6 +4934,17 @@
           thinkingPanel.appendChild(thinkingBody);
           // Insert above the message (which may not yet exist)
           assistantRow.insertBefore(thinkingPanel, assistantRow.firstChild);
+          // Reset the "post-answer" fade when the user re-opens the panel
+          // and restore the "Thinking" label so it doesn't keep saying
+          // "tap to expand" after they've tapped.
+          thinkingPanel.addEventListener("toggle", () => {
+            if (thinkingPanel.open) {
+              thinkingPanel.classList.remove("collapsed-faded");
+              if (thinkingStatus && thinkingStatus.textContent === "tap to expand") {
+                thinkingStatus.textContent = "done";
+              }
+            }
+          });
           return thinkingPanel;
         }
 
@@ -4953,9 +4977,9 @@
                 assistantBody = document.createElement("div");
                 assistantBody.className = "msg assistant";
                 assistantRow.appendChild(assistantBody);
-                // Mark thinking as finished but keep it expanded so the user
-                // can read what the model worked through. The chevron lets
-                // them collapse it manually whenever they want.
+                // Mark thinking as finished; we keep it expanded for now so
+                // the user sees the final reasoning lines while the answer
+                // streams in. The auto-collapse fires on `done` below.
                 if (thinkingStatus) thinkingStatus.textContent = "done";
               }
               fullText += payload.token;
@@ -4985,6 +5009,27 @@
                 highlight_seed: highlightSeed,
               });
               persistCurrentMessages();
+              // Auto-collapse the thinking panel now that the answer is final.
+              // Brief pause so the user registers that thinking is done before
+              // it folds away; the panel stays clickable to re-open.
+              if (thinkingPanel && thinkingPanel.open) {
+                if (thinkingStatus) thinkingStatus.textContent = "tap to expand";
+                setTimeout(() => {
+                  // Pin the current height so the CSS transition has a
+                  // concrete starting point to animate down from.
+                  const body = thinkingPanel.querySelector(".thinking-body");
+                  if (body) body.style.maxHeight = body.scrollHeight + "px";
+                  requestAnimationFrame(() => {
+                    thinkingPanel.classList.add("collapsing");
+                  });
+                  setTimeout(() => {
+                    thinkingPanel.open = false;
+                    thinkingPanel.classList.remove("collapsing");
+                    thinkingPanel.classList.add("collapsed-faded");
+                    if (body) body.style.maxHeight = "";
+                  }, 480);
+                }, 600);
+              }
             }
           }
         }
