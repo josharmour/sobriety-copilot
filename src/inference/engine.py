@@ -44,21 +44,27 @@ class InferenceEngine:
             backend = "ollama" if ":11434" in str(base_url) else "vllm"
         self.backend = backend
 
-    def _extra_body(self) -> dict:
+    def _thinking_default(self) -> bool:
+        """Whether thinking is on by default (env-driven). Overridable per call."""
+        return os.environ.get("VLLM_ENABLE_THINKING", "1").strip().lower() not in ("0", "false", "no", "off")
+
+    def _extra_body(self, enable_thinking: bool | None = None) -> dict:
         if self.backend == "ollama":
             return {"keep_alive": self.keep_alive, "options": {"num_ctx": self.num_ctx}}
         if self.backend == "vllm":
-            extra: dict = {}
             # Gemma 4 reasoning models on vLLM only emit `<think>...</think>`
             # (which the `--reasoning-parser=gemma4` flag splits into
             # `delta.reasoning`) when the chat template is invoked with
-            # `enable_thinking=True`. Without this the model just streams
-            # content tokens and the UI's thinking panel never receives
-            # anything. Disable via VLLM_ENABLE_THINKING=0 if the loaded
-            # model isn't a reasoning variant.
-            if os.environ.get("VLLM_ENABLE_THINKING", "1").strip().lower() not in ("0", "false", "no", "off"):
-                extra["chat_template_kwargs"] = {"enable_thinking": True}
-            return extra
+            # `enable_thinking=True`. We ALWAYS send the kwarg explicitly:
+            # omitting it lets the server's --default-chat-template-kwargs win,
+            # so a server defaulting to thinking-on can't be turned off and
+            # VLLM_ENABLE_THINKING=0 becomes a no-op. Helper calls (HyDE,
+            # follow-ups) pass enable_thinking=False so their reasoning doesn't
+            # leak into the returned text; the chat answer keeps the env default
+            # so the UI's thinking panel still receives reasoning.
+            if enable_thinking is None:
+                enable_thinking = self._thinking_default()
+            return {"chat_template_kwargs": {"enable_thinking": bool(enable_thinking)}}
         # Other OpenAI-compatible servers: send nothing extra.
         return {}
 
@@ -68,6 +74,7 @@ class InferenceEngine:
         history: list[dict] | None = None,
         max_tokens: int = 4096,
         system_message: str | None = None,
+        enable_thinking: bool | None = None,
     ) -> str:
         messages = self._build_messages(prompt, history, system_message)
         response = self.client.chat.completions.create(
@@ -75,7 +82,7 @@ class InferenceEngine:
             messages=messages,
             max_tokens=max_tokens,
             temperature=0.7,
-            extra_body=self._extra_body(),
+            extra_body=self._extra_body(enable_thinking),
         )
         message = response.choices[0].message
         content = message.content or ""
@@ -94,9 +101,10 @@ class InferenceEngine:
         history: list[dict] | None = None,
         max_tokens: int = 4096,
         system_message: str | None = None,
+        enable_thinking: bool | None = None,
     ) -> Generator[str, None, None]:
         # Backwards-compatible: yields content tokens as plain strings.
-        for kind, text in self.stream_typed(prompt, history, max_tokens, system_message):
+        for kind, text in self.stream_typed(prompt, history, max_tokens, system_message, enable_thinking):
             if kind == "content":
                 yield text
 
@@ -106,6 +114,7 @@ class InferenceEngine:
         history: list[dict] | None = None,
         max_tokens: int = 4096,
         system_message: str | None = None,
+        enable_thinking: bool | None = None,
     ) -> Generator[tuple[str, str], None, None]:
         """Stream both reasoning and content as tagged (kind, text) pairs.
 
@@ -120,7 +129,7 @@ class InferenceEngine:
             max_tokens=max_tokens,
             temperature=0.7,
             stream=True,
-            extra_body=self._extra_body(),
+            extra_body=self._extra_body(enable_thinking),
         )
         for chunk in response:
             if not chunk.choices:

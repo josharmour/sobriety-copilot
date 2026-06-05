@@ -127,7 +127,7 @@ class ChatRequest(BaseModel):
     history: list[dict[str, Any]] = Field(default_factory=list)
     categories: list[str] | None = None
     tone: str | None = None
-    show_thinking: bool = True
+    show_thinking: bool = False
     user_id: str | None = None
 
 
@@ -680,6 +680,55 @@ def _build_suggestions(query: str, results) -> list[dict[str, str]]:
     return suggestions
 
 
+_FOLLOWUP_SYS = (
+    "You generate short follow-up questions for a recovery-support chat. "
+    "Given the exchange, output 3 brief, natural questions the person might ask "
+    "next to go deeper. Each on its own line, phrased in the person's own first "
+    "person voice (e.g. \"How do I...\", \"What if I...\"). No numbering, no "
+    "bullets, no preamble, under 12 words each."
+)
+
+
+def _generate_followups(query: str, answer: str) -> list[str]:
+    """Generate up to 3 'Keep exploring' follow-up questions from the exchange.
+
+    Cheap, capped LLM call. Returns [] on any shortfall so the caller can skip
+    emitting the event entirely.
+    """
+    if not answer:
+        return []
+    prompt = (
+        f"The person asked:\n{query}\n\n"
+        f"The assistant replied:\n{answer[:1500]}\n\n"
+        "Three follow-up questions the person might ask next:"
+    )
+    # Thinking OFF (via extra_body) so the model emits the questions directly
+    # instead of burning the budget on reasoning that then leaks into content.
+    # A tight budget is plenty for three short questions.
+    response = engine.client.chat.completions.create(
+        model=engine.model,
+        messages=[
+            {"role": "system", "content": _FOLLOWUP_SYS},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=200,
+        temperature=0.7,
+        extra_body=engine._extra_body(enable_thinking=False),
+    )
+    message = response.choices[0].message
+    raw = message.content or getattr(message, "reasoning", "") or ""
+    out: list[str] = []
+    for line in (raw or "").splitlines():
+        # Strip leading bullets / numbering / quotes that models sometimes add.
+        cleaned = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", line).strip().strip('"').strip()
+        if len(cleaned) < 5 or "?" not in cleaned:
+            continue
+        out.append(cleaned)
+        if len(out) >= 3:
+            break
+    return out
+
+
 def _get_abs_documents_dir() -> str:
     return os.path.abspath(DOCUMENTS_DIR)
 
@@ -904,6 +953,9 @@ def _hyde_for_query(question: str) -> str | None:
     Used as the embedding for semantic retrieval (HyDE). Cached by query hash
     so repeated questions hit instantly, with a 24h TTL.
     """
+    enable_hyde = os.environ.get("ENABLE_HYDE", "1").strip().lower() not in ("0", "false", "no", "off")
+    if not enable_hyde:
+        return None
     if not question or len(question) > 600:
         return None
     key = _hyde_cache_key(question)
@@ -911,14 +963,16 @@ def _hyde_for_query(question: str) -> str | None:
     if cached:
         return cached
     try:
-        # Budget enough headroom for thinking-model variants (e.g., gemma4:e2b)
-        # that burn tokens on internal reasoning before emitting content.
-        # ~400 thinking + ~150 useful output, with safety margin.
+        # Thinking OFF: HyDE only needs the hypothetical passage, and leaving
+        # reasoning on let the model's chain-of-thought leak into the passage
+        # (and from there into the retrieval embedding). With no reasoning the
+        # passage comes back directly, so a tight budget is enough.
         passage = engine.generate(
             prompt=HYDE_PROMPT.format(question=question.strip()),
             history=[],
-            max_tokens=900,
+            max_tokens=400,
             system_message=HYDE_SYSTEM_MESSAGE,
+            enable_thinking=False,
         )
         passage = (passage or "").strip()
     except Exception as exc:
@@ -1228,6 +1282,15 @@ def chat(payload: ChatRequest):
                 else:
                     response_buffer.append(text)
                     yield f"data: {json.dumps({'token': text})}\n\n"
+            # "Keep exploring" follow-up questions, generated from the answer.
+            # Best-effort: never let a failure here break the stream.
+            try:
+                answer_text = "".join(response_buffer).strip()
+                followups = _generate_followups(query, answer_text)
+                if followups:
+                    yield f"data: {json.dumps({'followups': followups})}\n\n"
+            except Exception as fu_exc:
+                print(f"[FOLLOWUPS-ERR] {type(fu_exc).__name__}: {fu_exc}", flush=True)
             yield "data: {\"done\": true}\n\n"
         except Exception as exc:
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
@@ -1490,9 +1553,10 @@ def render_document(
             text = page_text[index]
             if text:
                 escaped_text = html_mod.escape(text).replace("\n", "<br>")
+                # No "Page N of M" label — the embedded reference viewer shows the
+                # passage text only; page numbers belong in the chat prose, not here.
                 pages.append(
                     f'<div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid #e5e7eb;">'
-                    f'<div style="font-size:0.7rem;color:#9ca3af;margin-bottom:0.5rem;">Page {index + 1} of {total}</div>'
                     f'<div>{escaped_text}</div></div>'
                 )
         content = "\n".join(pages)
