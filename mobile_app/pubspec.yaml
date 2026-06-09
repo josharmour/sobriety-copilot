@@ -1,0 +1,55 @@
+name: sobriety_copilot_mobile
+description: "Sobriety Copilot — a recovery-support chat app (Flutter port of the web app)."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.6.1
+
+  # Networking
+  http: ^1.3.0
+
+  # Persistence
+  shared_preferences: ^2.5.2
+  path_provider: ^2.1.5
+
+  # Markdown rendering of assistant answers
+  flutter_markdown_plus: ^1.0.3
+  markdown: ^7.3.0
+
+  # Formatting / dates
+  intl: ^0.20.2
+
+  # Launch tel:, https:, maps links
+  url_launcher: ^6.3.1
+
+  # Read answers aloud
+  flutter_tts: ^4.2.0
+
+  # Meeting search: location
+  geolocator: ^13.0.2
+  permission_handler: ^11.3.1
+
+  # Scan / OCR text into the input box
+  image_picker: ^1.1.2
+  google_mlkit_text_recognition: ^0.14.0
+  google_mlkit_commons: ^0.9.0
+
+  # Connectivity awareness
+  connectivity_plus: ^6.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
