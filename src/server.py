@@ -806,6 +806,18 @@ def _assert_no_active_index_job() -> None:
         )
 
 
+def _warmup_retriever() -> None:
+    """Build the BM25 keyword cache and exercise the full retrieval path now.
+
+    refresh_cache() loads + tokenizes the entire corpus (~45s for ~29k chunks)
+    and is otherwise built lazily on the first user query — so without this the
+    first question after a restart pays ~45s on top of the embedding-model load
+    and the client times out. Runs after the embedding model is warm, since
+    retrieve() needs it.
+    """
+    _get_retriever().retrieve("recovery serenity acceptance", top_k=4)
+
+
 async def _warmup_models() -> None:
     # Sequential so a small GPU isn't asked to load both models at once.
     # The cross-encoder is CPU-only and small (~80MB), so it's safe to warm
@@ -815,6 +827,11 @@ async def _warmup_models() -> None:
             await asyncio.to_thread(fn)
         except Exception:
             pass
+    # Warm the BM25 cache last: it depends on the embedding model being loaded.
+    try:
+        await asyncio.to_thread(_warmup_retriever)
+    except Exception:
+        pass
 
 
 async def _warmup_meetings() -> None:

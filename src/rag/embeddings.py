@@ -38,8 +38,11 @@ def _embed_extra_body() -> dict:
         return {"keep_alive": EMBED_KEEP_ALIVE}
     return {}
 
+import threading
+
 _client: OpenAI | None = None
 _fallback_model = None
+_fallback_model_lock = threading.Lock()
 
 
 def _truncate(text: str, max_words: int, max_chars: int) -> str:
@@ -75,16 +78,22 @@ def _get_client() -> OpenAI:
 
 def _get_fallback_model():
     global _fallback_model
-    if _fallback_model is None:
-        from sentence_transformers import SentenceTransformer
+    if _fallback_model is not None:
+        return _fallback_model
+    # Lock so a request arriving during the ~68s startup warmup load waits for
+    # that load instead of kicking off a second concurrent one (which contends
+    # for CPU and can hang both for over a minute).
+    with _fallback_model_lock:
+        if _fallback_model is None:
+            from sentence_transformers import SentenceTransformer
 
-        model_name = os.environ.get("SENTENCE_TRANSFORMER_MODEL", "nomic-ai/nomic-embed-text-v1.5")
-        device = os.environ.get("SENTENCE_TRANSFORMER_DEVICE", "cpu")
-        _fallback_model = SentenceTransformer(
-            model_name,
-            trust_remote_code=True,
-            device=device,
-        )
+            model_name = os.environ.get("SENTENCE_TRANSFORMER_MODEL", "nomic-ai/nomic-embed-text-v1.5")
+            device = os.environ.get("SENTENCE_TRANSFORMER_DEVICE", "cpu")
+            _fallback_model = SentenceTransformer(
+                model_name,
+                trust_remote_code=True,
+                device=device,
+            )
     return _fallback_model
 
 
@@ -160,7 +169,14 @@ def embed_query(query: str) -> list[float]:
 
 
 def warmup() -> None:
-    """Issue a tiny embedding request so Ollama loads and pins the model."""
-    if EMBEDDING_PROVIDER != "ollama":
+    """Pre-load the active embedding model so the first real query isn't cold.
+
+    For the sentence-transformers provider this loads the model AND runs one
+    encode to JIT the forward path; otherwise the model only loads lazily on
+    the first user query, adding ~10s to that request. For Ollama, a tiny
+    request loads and pins the model.
+    """
+    if EMBEDDING_PROVIDER == "sentence-transformers":
+        _get_fallback_model().encode(_prepare_text("warmup", prefix=QUERY_PREFIX))
         return
     _embed_with_ollama(["warmup"])
