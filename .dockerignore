@@ -1,0 +1,33 @@
+# The Dockerfile only needs requirements.txt, src/ and static/.
+# Everything else just bloats/slows the build context.
+
+.git
+.gitignore
+.dockerignore
+
+# Mobile app + bundled Flutter SDK (not part of the server image)
+flutter/
+mobile_app/
+
+# Runtime-mounted, not baked into the image
+documents/
+*.db
+
+# Eval / tests (heavyweight, run out-of-band)
+tests/
+requirements-eval.txt
+
+# Python caches / virtualenvs
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editor / OS / stray artifacts
+.idea/
+.vscode/
+*.png
+windows-*.txt
+AGENTS.md
+CLAUDE.md
+README.md
