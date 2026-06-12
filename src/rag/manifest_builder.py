@@ -3,6 +3,7 @@ import re
 import json
 import hashlib
 from typing import Any
+from bs4 import BeautifulSoup
 
 from src.render_cache import extract_pdf_render_payload
 from src.rag.document_processor import _detect_running_headers, _ALWAYS_STRIP_RE
@@ -27,7 +28,7 @@ def get_manifest_path(source_path: str, documents_dir: str) -> str:
     return os.path.join(documents_dir, ".manifests", f"{doc_id}.json")
 
 
-def should_rebuild(source_path: str, documents_dir: str, current_extractor_version: int = 1) -> bool:
+def should_rebuild(source_path: str, documents_dir: str, current_extractor_version: int = 3) -> bool:
     """
     Check if a manifest should be rebuilt (based on SHA256 of source and extractor version).
     """
@@ -77,10 +78,262 @@ def detect_manifest_running_headers(pages: list[str], threshold: int = 3) -> set
     return {p for p, count in pattern_counts.items() if count >= threshold}
 
 
+def extract_epub_blocks_from_soup(soup: BeautifulSoup) -> list[dict[str, Any]]:
+    """
+    Extract headings, lists, blockquotes (epigraphs) and paragraphs in DOM order.
+    """
+    block_tags = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote", "pre"}
+    blocks = []
+    
+    body = soup.find("body")
+    if not body:
+        return []
+        
+    def traverse(element):
+        if not element:
+            return
+        if hasattr(element, "name") and element.name:
+            tag_name = element.name.lower()
+            if tag_name in block_tags:
+                text = element.get_text(" ", strip=True)
+                if text:
+                    if tag_name.startswith("h"):
+                        level = int(tag_name[1])
+                        blocks.append({"type": "heading", "level": level, "text": text})
+                    elif tag_name == "li":
+                        blocks.append({"type": "list", "text": text})
+                    elif tag_name == "blockquote":
+                        blocks.append({"type": "epigraph", "text": text})
+                    else:
+                        blocks.append({"type": "paragraph", "text": text})
+                return
+            for child in element.children:
+                traverse(child)
+                
+    traverse(body)
+    return blocks
+
+
+def build_epub_manifest(source_path: str, category: str) -> dict[str, Any]:
+    """
+    Build a canonical manifest for an EPUB document by traversing its spine.
+    """
+    import ebooklib
+    from ebooklib import epub
+    
+    base = os.path.splitext(os.path.basename(source_path))[0]
+    if " - " in base:
+        title, author = base.split(" - ", 1)
+    else:
+        title = base
+        author = "Unknown"
+        
+    doc_id = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+    
+    sha = hashlib.sha256()
+    with open(source_path, "rb") as f:
+        while chunk := f.read(8192):
+            sha.update(chunk)
+    content_sha256 = sha.hexdigest()
+    
+    book = epub.read_epub(source_path, options={"ignore_ncx": True})
+    items = list(book.get_items_of_type(9))  # ebooklib.ITEM_DOCUMENT is 9
+    
+    blocks = []
+    block_ordinal = 1
+    
+    # Global vocabulary for epub repairs
+    all_text_list = []
+    for item in items:
+        soup = BeautifulSoup(item.get_content(), "xml")
+        body = soup.find("body")
+        if body:
+            all_text_list.append(body.get_text(" "))
+    global_text = "\n".join(all_text_list)
+    
+    # Pre-build vocabulary
+    words = re.findall(r'\b[a-zA-Z]{2,}\b', global_text)
+    word_counts_hyphen = {}
+    for w in words:
+        wl = w.lower()
+        word_counts_hyphen[wl] = word_counts_hyphen.get(wl, 0) + 1
+    valid_words = {w for w, count in word_counts_hyphen.items() if count >= 2}
+    
+    word_counts_ligature = {}
+    for w in re.findall(r'\b[a-zA-Z]+\b', global_text):
+        wl = w.lower()
+        word_counts_ligature[wl] = word_counts_ligature.get(wl, 0) + 1
+        
+    allowlist = {
+        "first", "sufficient", "fellowship", "influence", "conflict", "afflict",
+        "definition", "define", "final", "finally", "difficult", "difficulty",
+        "flourish", "flat", "flight", "flow", "flower", "fluid", "fly", "flying",
+        "official", "officer", "office", "efficiency", "efficient", "affliction",
+        "conflict", "inflict", "conflate", "inflate", "deflate", "flu", "flush",
+        "find", "finds", "finding", "findings", "terrific", "profit", "profitable",
+        "flame", "fled", "flee", "fleet", "flesh", "float", "flock", "flood", "floor",
+        "flowed", "flows", "flung", "flurry", "flute", "reflect", "reflection"
+    }
+    
+    hyphen_repairs_count = 0
+    ligature_repairs_count = 0
+    garbage_lines_count = 0
+    toc_blocks_count = 0
+    
+    for idx, item in enumerate(items, 1):
+        physical_page = idx
+        soup = BeautifulSoup(item.get_content(), "xml")
+        raw_blocks = extract_epub_blocks_from_soup(soup)
+        
+        for r_b in raw_blocks:
+            text = r_b["text"].strip()
+            if not text:
+                continue
+                
+            # Count hyphens/ligatures
+            hyphen_pattern = r'\b([a-zA-Z]+)-\s*(\r?\n\s*|\s+)([a-zA-Z]+)\b'
+            local_hyphens = 0
+            for m in re.finditer(hyphen_pattern, text):
+                part1 = m.group(1)
+                part2 = m.group(3)
+                combined_word = part1 + part2
+                is_part1_word = part1.lower() in valid_words
+                is_part2_word = part2.lower() in valid_words
+                if combined_word.lower() in valid_words or not is_part1_word or not is_part2_word:
+                    local_hyphens += 1
+            hyphen_repairs_count += local_hyphens
+            text = repair_hyphenation(text)
+            
+            ligature_pattern = r'\b(\w*f[il])\s+(\w+)\b'
+            local_ligatures = 0
+            for m in re.finditer(ligature_pattern, text):
+                part1 = m.group(1)
+                part2 = m.group(2)
+                combined_word = part1 + part2
+                combined_lower = combined_word.lower()
+                if combined_lower in allowlist or word_counts_ligature.get(combined_lower, 0) >= 2:
+                    local_ligatures += 1
+            ligature_repairs_count += local_ligatures
+            text = repair_ligatures(text)
+            
+            block_type = classify_block(text, position_on_page=None)
+            
+            # Map structural overrides from DOM
+            if r_b["type"] == "heading":
+                block_type = "heading"
+            elif r_b["type"] == "list":
+                block_type = "list"
+            elif r_b["type"] == "epigraph" and block_type == "paragraph":
+                block_type = "epigraph"
+                
+            if block_type == "garbage":
+                garbage_lines_count += 1
+            elif block_type == "toc":
+                toc_blocks_count += 1
+                
+            block_id = f"b{block_ordinal:05d}"
+            block_ordinal += 1
+            
+            block_dict = {
+                "id": block_id,
+                "type": block_type,
+                "text": text,
+                "printed_page": None,
+                "physical_page": physical_page
+            }
+            
+            if block_type == "heading":
+                if "level" in r_b:
+                    block_dict["level"] = r_b["level"]
+                else:
+                    if re.match(r'^(Part|Section)\b', text, re.IGNORECASE):
+                        block_dict["level"] = 1
+                    elif re.match(r'^(Step|Chapter|Tradition)\b', text, re.IGNORECASE):
+                        block_dict["level"] = 2
+                    else:
+                        block_dict["level"] = 3
+                        
+            blocks.append(block_dict)
+            
+    manifest = {
+        "schema_version": 1,
+        "doc_id": doc_id,
+        "source_file": source_path,
+        "content_sha256": content_sha256,
+        "extractor_version": 3,
+        "title": title,
+        "author": author,
+        "category": category,
+        "blocks": blocks,
+        "lint": {
+            "doubled_layer_pages": 0,
+            "headers_stripped": 0,
+            "hyphen_repairs": hyphen_repairs_count,
+            "ligature_repairs": ligature_repairs_count,
+            "garbage_lines_removed": garbage_lines_count,
+            "toc_blocks": toc_blocks_count,
+            "ocr_recommended": False
+        }
+    }
+    return manifest
+
+
+def extract_page_number_from_line(line: str) -> str | None:
+    """
+    Extract page number (digits or Roman numerals) from a line, supporting bare numbers,
+    decorative dividers, and numbers embedded in running header/footer titles.
+    """
+    s = line.strip()
+    if not s:
+        return None
+        
+    # Check if the line is just decorative dividers with a page number
+    # e.g., "------------------- 10 -------------------" or "~~ 10 ~~"
+    dec_match = re.match(r'^[\-\s~_]*([ivxlcdmIVXLCDM]+|\d+)[\-\s~_]*$', s)
+    if dec_match:
+        s = dec_match.group(1)
+
+    # Helper to validate page number
+    def is_valid_page(p: str) -> bool:
+        if p.isdigit():
+            return int(p) < 1000
+        return len(p) <= 10
+
+    # 1. Bare number or cleaned divider number
+    if re.match(r'^\d+$', s):
+        if is_valid_page(s):
+            return s
+        return None
+    # 2. Bare Roman numeral
+    if re.match(r'^[ivxlcdmIVXLCDM]+$', s):
+        if is_valid_page(s):
+            return s
+        return None
+        
+    # 3. Number at the start of a running header line
+    m_start = re.match(r'^([ivxlcdmIVXLCDM]+|\d+)\s+([a-zA-Z\s\-\.,\'&:;!?\"]+)$', s)
+    if m_start:
+        num = m_start.group(1)
+        if num.lower() not in ('i', 'a') and is_valid_page(num):
+            return num
+            
+    # 4. Number at the end of a running header line
+    m_end = re.match(r'^([a-zA-Z\s\-\.,\'&:;!?\"]+)\s+([ivxlcdmIVXLCDM]+|\d+)$', s)
+    if m_end:
+        num = m_end.group(2)
+        if num.lower() not in ('i', 'a') and is_valid_page(num):
+            return num
+            
+    return None
+
+
 def build_manifest(source_path: str, category: str) -> dict[str, Any]:
     """
-    Build a canonical manifest for a PDF document.
+    Build a canonical manifest for a PDF or EPUB document.
     """
+    if source_path.lower().endswith(".epub"):
+        return build_epub_manifest(source_path, category)
+        
     base = os.path.splitext(os.path.basename(source_path))[0]
     if " - " in base:
         title, author = base.split(" - ", 1)
@@ -121,8 +374,12 @@ def build_manifest(source_path: str, category: str) -> dict[str, Any]:
         for line in candidate_lines:
             stripped = line.strip()
             collapsed_cand = collapse_doubled_layers(stripped)
-            if re.match(r'^\d+$', collapsed_cand):
-                printed_page = int(collapsed_cand)
+            page_num_str = extract_page_number_from_line(collapsed_cand)
+            if page_num_str:
+                if page_num_str.isdigit():
+                    printed_page = int(page_num_str)
+                else:
+                    printed_page = page_num_str.lower()
                 break
         printed_pages.append(printed_page)
         
@@ -297,7 +554,7 @@ def build_manifest(source_path: str, category: str) -> dict[str, Any]:
         "doc_id": doc_id,
         "source_file": source_path,
         "content_sha256": content_sha256,
-        "extractor_version": 1,
+        "extractor_version": 3,
         "title": title,
         "author": author,
         "category": category,

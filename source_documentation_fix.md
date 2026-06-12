@@ -184,7 +184,7 @@ with `can_handle()/extract()` (lines 106-150), `_detect_running_headers` (line 2
 produces a manifest with zero doubled-character blocks, the contents page typed
 `toc`, and Step Ten's chapter text in clean paragraphs (manually inspect ~20 blocks).
 
-### T1.4 Manifest builder for EPUBs
+### T1.4 Manifest builder for EPUBs — **DONE**
 **Files:** `src/rag/manifest_builder.py` (extend)
 **Steps:** EPUBs are structured HTML — walk the spine; `<h1-h6>` → heading
 blocks with `level`, `<p>` → paragraph, `<ol>/<ul>` → list. No page numbers:
@@ -193,7 +193,7 @@ where needed (epub text is usually clean).
 **Done when:** *Little Red Book - E A Webster.epub* manifest has chapter
 headings as `heading` blocks and prose as full-paragraph blocks.
 
-### T1.5 CLI + lint report
+### T1.5 CLI + lint report — **DONE**
 **Files:** new `scripts/build_manifests.py`
 **Steps:** iterate `documents/**/*.{pdf,epub}` (skip `@eaDir`, `.manifests`),
 build all manifests, print a one-line lint summary per book and a final table

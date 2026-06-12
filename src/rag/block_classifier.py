@@ -83,6 +83,11 @@ def classify_block(
     if not s:
         return "garbage"
 
+    # Check for Table of Contents dot leaders (e.g. "... 15") first
+    # to avoid false-positive garbage classifications due to low alphanumeric ratio
+    if re.search(r'\.{4,}', s):
+        return "toc"
+
     # 1. Garbage detection (less than 40% alphanumeric chars)
     alnum_count = sum(1 for c in s if c.isalnum())
     if (alnum_count / len(s)) < 0.40:

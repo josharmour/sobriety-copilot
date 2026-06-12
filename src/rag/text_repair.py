@@ -6,7 +6,7 @@ def collapse_doubled_layers(line: str) -> str:
     and collapse runs. A run of length k collapses to max(1, k // 2).
     Return the input unchanged when below threshold.
     """
-    if not line:
+    if not line or len(line) < 5:
         return line
 
     n = len(line)
