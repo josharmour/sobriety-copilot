@@ -4381,10 +4381,19 @@
       sources.forEach(s => {
         const key = s.url || `${s.source}:${grouped.size}`;
         if (!grouped.has(key)) {
-          grouped.set(key, { source: s.source, url: s.url, excerpts: [] });
+          grouped.set(key, { 
+            source: s.source, 
+            url: s.url, 
+            doc_id: s.doc_id, 
+            excerpts: [], 
+            block_ids_list: [] 
+          });
           labelCounts.set(s.source, (labelCounts.get(s.source) || 0) + 1);
         }
-        if (s.excerpt) grouped.get(key).excerpts.push(s.excerpt);
+        if (s.excerpt) {
+          grouped.get(key).excerpts.push(s.excerpt);
+          grouped.get(key).block_ids_list.push(s.block_ids);
+        }
       });
       return Array.from(grouped.values()).map(entry => ({
         ...entry,
@@ -4484,9 +4493,15 @@
       }
     }
 
-    async function loadRenderedDocument(url, highlightText) {
+    async function loadRenderedDocument(url, highlightText, doc_id, block_ids) {
       const requestId = ++viewerRequestId;
-      const renderUrl = buildRenderUrl(url, highlightText);
+      let renderUrl;
+      if (doc_id && block_ids) {
+        const blocksParam = Array.isArray(block_ids) ? block_ids.join(",") : block_ids;
+        renderUrl = `/api/doc/${doc_id}?blocks=${encodeURIComponent(blocksParam)}`;
+      } else {
+        renderUrl = buildRenderUrl(url, highlightText);
+      }
       pdfPanel.innerHTML = `
         <div class="viewer-shell">
           <div class="viewer-toolbar"><span>Read-only preview · selection disabled</span></div>
@@ -4704,7 +4719,7 @@
           const hint = c.label.querySelector(".excerpt-jump-hint");
           if (hint) hint.textContent = ci === idx ? "Showing →" : "Jump to →";
         });
-        loadRenderedDocument(url, excerpts[idx] || "");
+        loadRenderedDocument(url, excerpts[idx] || "", entry.doc_id, entry.block_ids_list ? entry.block_ids_list[idx] : null);
       };
 
       excerpts.forEach((text, i) => {
@@ -4835,7 +4850,7 @@
       if (isRenderable) {
         pdfPanel.style.display = "block";
         if (cards[0]) cards[0].card.classList.add("excerpt-active");
-        loadRenderedDocument(url, excerpts[0] || "");
+        loadRenderedDocument(url, excerpts[0] || "", entry.doc_id, entry.block_ids_list ? entry.block_ids_list[0] : null);
       } else {
         pdfPanel.style.display = "none";
       }

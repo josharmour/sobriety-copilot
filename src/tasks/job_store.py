@@ -265,25 +265,49 @@ def _stored_payload_is_orphaned(task_id: str, payload: dict[str, Any], async_sta
 
 
 def _normalize_from_async_result(task_id: str, result: AsyncResult) -> dict[str, Any] | None:
-    if result.state == "PENDING":
-        return None
-
-    if isinstance(result.info, dict):
-        payload = dict(result.info)
-        payload.setdefault("id", task_id)
-        return payload
-
-    if result.state == "FAILURE":
+    try:
+        state = result.state
+    except Exception as exc:
         return {
             "id": task_id,
             "status": "failed",
             "stage": "failed",
             "progress": 100,
-            "message": f"Indexing failed: {result.info}",
-            "error": str(result.info),
+            "message": f"Could not retrieve task status: {exc}",
+            "error": str(exc),
         }
 
-    if result.state == "REVOKED":
+    if state == "PENDING":
+        return None
+
+    try:
+        info = result.info
+    except Exception as exc:
+        return {
+            "id": task_id,
+            "status": "failed",
+            "stage": "failed",
+            "progress": 100,
+            "message": f"Could not retrieve task metadata: {exc}",
+            "error": str(exc),
+        }
+
+    if isinstance(info, dict):
+        payload = dict(info)
+        payload.setdefault("id", task_id)
+        return payload
+
+    if state == "FAILURE":
+        return {
+            "id": task_id,
+            "status": "failed",
+            "stage": "failed",
+            "progress": 100,
+            "message": f"Indexing failed: {info}",
+            "error": str(info),
+        }
+
+    if state == "REVOKED":
         return {
             "id": task_id,
             "status": "failed",
@@ -293,12 +317,17 @@ def _normalize_from_async_result(task_id: str, result: AsyncResult) -> dict[str,
             "error": "cancelled",
         }
 
-    if result.state == "SUCCESS" and isinstance(result.result, dict):
-        payload = dict(result.result)
-        payload.setdefault("id", task_id)
-        return payload
+    if state == "SUCCESS":
+        try:
+            res_val = result.result
+        except Exception:
+            res_val = None
+        if isinstance(res_val, dict):
+            payload = dict(res_val)
+            payload.setdefault("id", task_id)
+            return payload
 
-    return {"id": task_id, "status": result.state.lower(), "stage": result.state.lower()}
+    return {"id": task_id, "status": state.lower(), "stage": state.lower()}
 
 
 def get_task_status_payload(task_id: str | None = None) -> dict[str, Any] | None:
@@ -308,7 +337,18 @@ def get_task_status_payload(task_id: str | None = None) -> dict[str, Any] | None
 
     stored = get_index_task(resolved_task_id)
     async_result = AsyncResult(resolved_task_id, app=celery_app)
-    async_payload = _normalize_from_async_result(resolved_task_id, async_result)
+    
+    try:
+        async_payload = _normalize_from_async_result(resolved_task_id, async_result)
+    except Exception as exc:
+        async_payload = {
+            "id": resolved_task_id,
+            "status": "failed",
+            "stage": "failed",
+            "progress": 100,
+            "message": f"Error resolving task payload: {exc}",
+            "error": str(exc),
+        }
 
     if async_payload and async_payload.get("status") in TERMINAL_STATUSES:
         stored = update_index_task(resolved_task_id, **async_payload)
@@ -316,7 +356,11 @@ def get_task_status_payload(task_id: str | None = None) -> dict[str, Any] | None
         return stored
 
     if stored:
-        if _stored_payload_is_orphaned(resolved_task_id, stored, async_result.state):
+        try:
+            state = async_result.state
+        except Exception:
+            state = "PENDING"
+        if _stored_payload_is_orphaned(resolved_task_id, stored, state):
             return _mark_task_orphaned(resolved_task_id, stored)
         if stored.get("status") in TERMINAL_STATUSES:
             clear_active_index_task(resolved_task_id)

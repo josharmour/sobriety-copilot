@@ -20,6 +20,8 @@ import 'package:sobriety_copilot_mobile/features/sheets/alt_recovery_sheet.dart'
 import 'package:sobriety_copilot_mobile/features/sheets/crisis_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/sheets/meetings_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/sheets/settings_sheet.dart';
+import 'package:sobriety_copilot_mobile/features/sheets/library_sheet.dart';
+import 'package:sobriety_copilot_mobile/features/library/offline_reader.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/widgets.dart';
@@ -36,7 +38,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 }
 
 /// Menu actions surfaced by the app-bar overflow menu.
-enum _MenuAction { saved, meetings, crisis, altRecovery, settings, about }
+enum _MenuAction { saved, library, meetings, crisis, altRecovery, settings, about }
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _input = TextEditingController();
@@ -230,6 +232,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     switch (action) {
       case _MenuAction.saved:
         await showAppSheet(context, const SavedPassagesSheet());
+      case _MenuAction.library:
+        await showAppSheet(context, const LibrarySheet());
       case _MenuAction.meetings:
         await showAppSheet(context, const MeetingsSheet());
       case _MenuAction.crisis:
@@ -311,6 +315,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 child: ListTile(
                   leading: Icon(Icons.bookmark_outline),
                   title: Text('Saved passages'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: _MenuAction.library,
+                child: ListTile(
+                  leading: Icon(Icons.library_books_outlined),
+                  title: Text('Recovery library'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -797,7 +809,7 @@ class _MessageBubble extends StatelessWidget {
 // Source detail bottom sheet
 // ════════════════════════════════════════════════════════════════════════════
 
-class _SourceDetailSheet extends StatefulWidget {
+class _SourceDetailSheet extends ConsumerStatefulWidget {
   final Source source;
   final String baseUrl;
   final SavedPassagesNotifier savedNotifier;
@@ -808,10 +820,10 @@ class _SourceDetailSheet extends StatefulWidget {
   });
 
   @override
-  State<_SourceDetailSheet> createState() => _SourceDetailSheetState();
+  ConsumerState<_SourceDetailSheet> createState() => _SourceDetailSheetState();
 }
 
-class _SourceDetailSheetState extends State<_SourceDetailSheet> {
+class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
   late bool _saved;
 
   @override
@@ -830,9 +842,29 @@ class _SourceDetailSheetState extends State<_SourceDetailSheet> {
   }
 
   Future<void> _open() async {
-    final url = widget.source.renderUrl(
+    final s = widget.source;
+    if (s.docId != null) {
+      final libraryRepo = ref.read(libraryRepositoryProvider);
+      final installed = await libraryRepo.isPackInstalled;
+      if (installed && mounted) {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OfflineReaderScreen(
+              docId: s.docId!,
+              title: s.title,
+              highlightBlockIds: s.blockIds,
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
+    final url = s.renderUrl(
       widget.baseUrl,
-      highlight: widget.source.excerpt,
+      highlight: s.excerpt,
     );
     final uri = Uri.tryParse(url);
     if (uri != null) {

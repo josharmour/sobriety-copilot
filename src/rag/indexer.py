@@ -120,7 +120,42 @@ class RAGIndexer:
         category = self._get_category(doc.source_path, directory)
         relative_path = self._get_relative_path(doc.source_path, directory)
         document_key = self._document_key(doc.source_path, directory)
-        chunks = self.chunker.chunk(doc.text)
+        
+        from src.rag.manifest_builder import get_manifest_path
+        import json
+        manifest_path = get_manifest_path(doc.source_path, directory)
+        manifest_exists = os.path.exists(manifest_path)
+        
+        blocks = []
+        doc_id = None
+        
+        if manifest_exists:
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    manifest = json.load(f)
+                doc_id = manifest.get("doc_id")
+                raw_blocks = manifest.get("blocks", [])
+                
+                current_heading = None
+                content_blocks = []
+                for b in raw_blocks:
+                    if b["type"] == "heading":
+                        current_heading = b["text"]
+                    elif b["type"] in ("paragraph", "epigraph", "footnote"):
+                        b_copy = dict(b)
+                        b_copy["heading_context"] = current_heading
+                        content_blocks.append(b_copy)
+                blocks = content_blocks
+            except Exception as e:
+                print(f"Warning: failed to read manifest {manifest_path}, falling back to legacy: {e}")
+                manifest_exists = False
+                
+        if not manifest_exists:
+            print(f"Warning: no manifest found for {doc.source}, falling back to legacy text path.")
+            chunks = self.chunker.chunk(doc.text)
+        else:
+            chunks = self.chunker.chunk_from_blocks(blocks)
+            
         scale_counts: Counter[str] = Counter()
         records = []
 
@@ -129,26 +164,40 @@ class RAGIndexer:
             chunk_index = scale_counts[scale]
             scale_counts[scale] += 1
             chunk_id = f"{document_key}_{scale}_chunk_{chunk_index}"
-            records.append(
-                {
-                    "id": chunk_id,
-                    "text": chunk["text"],
-                    "metadata": {
-                        "source": doc.source,
-                        "relative_path": relative_path,
-                        "source_path": doc.source_path,
-                        "chunk_index": chunk_index,
-                        "scale": scale,
-                        "category": category,
-                        "document_key": document_key,
-                        "start_paragraph": chunk["start_paragraph"],
-                        "end_paragraph": chunk["end_paragraph"],
-                    },
-                    "scale": scale,
-                    "start_paragraph": chunk["start_paragraph"],
-                    "end_paragraph": chunk["end_paragraph"],
-                }
-            )
+            
+            meta = {
+                "source": doc.source,
+                "relative_path": relative_path,
+                "source_path": doc.source_path,
+                "chunk_index": chunk_index,
+                "scale": scale,
+                "category": category,
+                "document_key": document_key,
+                "start_paragraph": chunk["start_paragraph"],
+                "end_paragraph": chunk["end_paragraph"],
+            }
+            
+            if manifest_exists:
+                meta["doc_id"] = doc_id
+                meta["block_ids"] = json.dumps(chunk["block_ids"])
+                if chunk["printed_page_start"] is not None:
+                    meta["printed_page_start"] = chunk["printed_page_start"]
+                if chunk["printed_page_end"] is not None:
+                    meta["printed_page_end"] = chunk["printed_page_end"]
+                
+            record_dict = {
+                "id": chunk_id,
+                "text": chunk["text"],
+                "metadata": meta,
+                "scale": scale,
+                "start_paragraph": chunk["start_paragraph"],
+                "end_paragraph": chunk["end_paragraph"],
+            }
+            
+            if manifest_exists and chunk.get("heading_context"):
+                record_dict["embedding_text"] = chunk["heading_context"] + "\n\n" + chunk["text"]
+                
+            records.append(record_dict)
 
         records_by_scale: dict[str, list[dict]] = defaultdict(list)
         for record in records:
@@ -279,7 +328,7 @@ class RAGIndexer:
             ),
         )
         embed_start = time.time()
-        texts = [record["text"] for record in all_records]
+        texts = [record.get("embedding_text", record["text"]) for record in all_records]
         embeddings = embed_documents(texts, batch_size=32).tolist()
         self._emit(
             stage="embedding",

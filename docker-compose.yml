@@ -44,6 +44,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./documents:/app/documents:ro
+      - ./packs:/app/packs:ro
       - render_cache_data:/home/app/render_cache
       - user_memory_data:/home/app/memory
       - models_data:/app/models:ro

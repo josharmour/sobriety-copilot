@@ -1,6 +1,6 @@
 # Source Documentation Fix — Canonical Document Model + Offline Android Packs
 
-**Status:** design approved, not started.
+**Status:** completed.
 
 > **Handoff notes (read first):**
 > - Line numbers in this doc are approximate — the files have been edited since;
@@ -205,7 +205,7 @@ whole library and the report flags the known-bad books (D1/D2 sources).
 
 ## 4. Phase 2 — Index from manifests
 
-### T2.1 Chunker consumes blocks
+### T2.1 Chunker consumes blocks — **DONE**
 **Files:** `src/rag/indexer.py` (`_build_records_for_document`, line 119),
 `src/rag/semantic_chunker.py`
 **Steps:**
@@ -221,7 +221,7 @@ whole library and the report flags the known-bad books (D1/D2 sources).
 **Done when:** shadow-indexing (T2.2) yields chunks whose `block_ids` resolve to
 the right manifest blocks; no chunk starts mid-sentence on a 10-chunk sample.
 
-### T2.2 Shadow index + eval
+### T2.2 Shadow index + eval — **DONE**
 **Files:** none new — use `perform_shadow_index` (`src/tasks/indexing.py`) and the
 eval harness (`requirements-eval.txt`).
 **Steps:**
@@ -235,7 +235,7 @@ eval harness (`requirements-eval.txt`).
 **Done when:** review sheet approved; production flipped; rollback documented
 (one-line: re-point `RAG_COLLECTION`).
 
-### T2.3 Citations carry pages + block ids
+### T2.3 Citations carry pages + block ids — **DONE**
 **Files:** `src/server.py` (`_build_chat_sources`, line 782)
 **Steps:** add §2.3 fields from chunk metadata. Update the web chip tooltip to
 "Title — p. 88". (Web/Flutter already ignore unknown fields; no breaking change.)
@@ -245,7 +245,7 @@ eval harness (`requirements-eval.txt`).
 
 ## 5. Phase 3 — Viewer renders manifests (kills fuzzy highlighting)
 
-### T3.1 Block-render endpoint
+### T3.1 Block-render endpoint — **DONE**
 **Files:** `src/server.py` (near `/api/render/{filepath:path}`, line 1654)
 **Steps:** new `GET /api/doc/{doc_id}?blocks=b00042,b00043` → HTML rendered
 *from the manifest*: headings as `<h2-h4>`, paragraphs as `<p id="b00043">`,
@@ -255,7 +255,7 @@ highlight style + `id="hl"` on the first one.
 **Done when:** the Step Ten passage renders as clean paragraphs with its blocks
 highlighted — no doubled characters, no line fragments, no running heads.
 
-### T3.2 Web viewer prefers block rendering
+### T3.2 Web viewer prefers block rendering — **DONE**
 **Files:** `static/index.html` (`buildRenderUrl` line ~4362, modal at
 `openModal`/`renderModalSource` lines ~4629-4652)
 **Steps:** when a source has `doc_id` + `block_ids`, open `/api/doc/...` and
@@ -273,7 +273,7 @@ Target: the Flutter app (`mobile_app/`) functions **fully offline** for the
 library: browse books, full-text search, open citations from past conversations,
 read whole chapters. (Offline *chat* is a separate optional tier — §6 T4.5.)
 
-### T4.1 Pack builder
+### T4.1 Pack builder — **DONE**
 **Files:** new `scripts/build_content_pack.py`
 **Steps:** assemble §2.4 zip from `documents/.manifests/`; build `search.db`
 (SQLite) with `CREATE VIRTUAL TABLE blocks USING fts5(doc_id, block_id, heading,
@@ -283,7 +283,7 @@ FTS5's built-in BM25 gives offline ranking with zero model weights.
 blocks WHERE blocks MATCH 'personal inventory' ORDER BY rank LIMIT 5"` returns
 sensible Step 4/10 blocks.
 
-### T4.2 Pack hosting + app download
+### T4.2 Pack hosting + app download — **DONE**
 **Files:** `src/server.py` (new `GET /api/packs/latest` → pack.json metadata +
 download URL), `mobile_app/lib/data/repositories/` (new `library_repository.dart`)
 **Steps:** app checks `pack_version` on launch (when online), downloads to app
@@ -292,7 +292,7 @@ user's own instance — the literature stays user-provisioned (do not bundle the
 corpus into a store-distributed APK; it ships via the private server).
 **Done when:** fresh install + one online launch → airplane mode → library opens.
 
-### T4.3 Offline reader + citation deep links
+### T4.3 Offline reader + citation deep links — **DONE**
 **Files:** `mobile_app/lib/features/` (new `library/` feature),
 `mobile_app/lib/data/models/chat_models.dart` (extend `Source` with `docId`,
 `blockIds`, `page` — fields already arrive in the SSE event after T2.3)
@@ -304,7 +304,7 @@ the web viewer. Conversations are already client-side; persist them with
 **Done when:** airplane mode → open old conversation → tap citation → reader
 opens at the highlighted passage with "p. NN" visible.
 
-### T4.4 Offline search
+### T4.4 Offline search — **DONE**
 **Files:** `mobile_app/lib/features/library/` (search screen), `sqflite` dep
 **Steps:** query `search.db` FTS5 (BM25 ranked), group results by book, render
 snippet + page, tap → reader anchor. This is deterministic retrieval — the same

@@ -147,6 +147,10 @@ class CachedChunk:
     context_parent_scale: str = "medium"
     topic_parent_id: str = ""
     topic_parent_scale: str = "medium"
+    doc_id: str | None = None
+    block_ids: str | None = None
+    printed_page_start: int | str | None = None
+    printed_page_end: int | str | None = None
 
 
 @dataclass
@@ -163,6 +167,10 @@ class RetrievalResult:
     parent_id: str = ""
     matched_chunk_id: str = ""
     category: str = "uncategorized"
+    doc_id: str | None = None
+    block_ids: list[str] | None = None
+    printed_page_start: int | str | None = None
+    printed_page_end: int | str | None = None
 
 
 @dataclass
@@ -240,6 +248,10 @@ class RAGRetriever:
                         "topic_parent_scale",
                         metadata.get("parent_scale", metadata.get("scale", "medium")),
                     ),
+                    doc_id=metadata.get("doc_id"),
+                    block_ids=metadata.get("block_ids"),
+                    printed_page_start=metadata.get("printed_page_start"),
+                    printed_page_end=metadata.get("printed_page_end"),
                 )
                 self._chunks_by_id[chunk_id] = chunk
 
@@ -329,6 +341,15 @@ class RAGRetriever:
         bucket = self._bucket_for_scale(chunk.scale)
         context_chunk = self._compact_context_chunk(chunk) if bucket != "broad" else self._broad_context_chunk(chunk)
         context_id = context_chunk.id
+        
+        import json
+        block_ids_list = None
+        if chunk.block_ids:
+            try:
+                block_ids_list = json.loads(chunk.block_ids)
+            except Exception:
+                pass
+                
         return RankedCandidate(
             context_id=context_id,
             bucket=bucket,
@@ -346,6 +367,10 @@ class RAGRetriever:
                 parent_id=context_id,
                 matched_chunk_id=chunk.id,
                 category=chunk.category,
+                doc_id=chunk.doc_id,
+                block_ids=block_ids_list,
+                printed_page_start=chunk.printed_page_start,
+                printed_page_end=chunk.printed_page_end,
             ),
         )
 

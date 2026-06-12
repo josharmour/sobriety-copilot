@@ -8,6 +8,9 @@ class Source {
   final String excerpt;
   final String? matchScale; // server "match_scale" (nullable)
   final String? contextScale; // server "context_scale" (nullable)
+  final String? docId;
+  final List<String>? blockIds;
+  final dynamic page; // printed page number (printed_page_start)
 
   const Source({
     required this.source,
@@ -16,6 +19,9 @@ class Source {
     required this.excerpt,
     this.matchScale,
     this.contextScale,
+    this.docId,
+    this.blockIds,
+    this.page,
   });
 
   factory Source.fromJson(Map<String, dynamic> json) {
@@ -26,6 +32,11 @@ class Source {
       excerpt: (json['excerpt'] ?? '').toString(),
       matchScale: json['match_scale']?.toString(),
       contextScale: json['context_scale']?.toString(),
+      docId: json['doc_id']?.toString(),
+      blockIds: json['block_ids'] != null
+          ? (json['block_ids'] as List<dynamic>).map((e) => e.toString()).toList()
+          : null,
+      page: json['page'],
     );
   }
 
@@ -36,6 +47,9 @@ class Source {
         'excerpt': excerpt,
         if (matchScale != null) 'match_scale': matchScale,
         if (contextScale != null) 'context_scale': contextScale,
+        if (docId != null) 'doc_id': docId,
+        if (blockIds != null) 'block_ids': blockIds,
+        if (page != null) 'page': page,
       };
 
   /// Human title derived from the filename: basename, strip ext, '_'->' ',

@@ -1686,6 +1686,303 @@ def serve_document(filepath: str):
     )
 
 
+@app.get("/api/doc/{doc_id}")
+def render_manifest_doc(
+    doc_id: str,
+    blocks: str = Query(default=""),
+    debug: str = Query(default=""),
+):
+    import json
+    
+    manifest_path = os.path.join(DOCUMENTS_DIR, ".manifests", f"{doc_id}.json")
+    if not os.path.isfile(manifest_path):
+        raise HTTPException(status_code=404, detail="Document manifest not found")
+        
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read manifest: {e}")
+        
+    raw_blocks = manifest.get("blocks", [])
+    if not raw_blocks:
+        raise HTTPException(status_code=400, detail="Manifest has no blocks")
+        
+    requested_blocks = [b.strip() for b in blocks.split(",") if b.strip()]
+    requested_set = set(requested_blocks)
+    
+    # Find block indices of requested blocks
+    block_indices = []
+    for idx, b in enumerate(raw_blocks):
+        if b["id"] in requested_set:
+            block_indices.append(idx)
+            
+    # Determine which blocks to show (context window)
+    if not block_indices:
+        # Default: show the first 5 pages or first 30 blocks
+        show_indices = []
+        for idx, b in enumerate(raw_blocks):
+            phys_page = b.get("physical_page")
+            if phys_page is not None and phys_page <= 5:
+                show_indices.append(idx)
+            elif phys_page is None and idx < 30:
+                show_indices.append(idx)
+        if not show_indices:
+            show_indices = list(range(min(len(raw_blocks), 30)))
+    else:
+        # Find physical page range or index range
+        has_phys = any(raw_blocks[idx].get("physical_page") is not None for idx in block_indices)
+        if has_phys:
+            pages = [raw_blocks[idx]["physical_page"] for idx in block_indices if raw_blocks[idx].get("physical_page") is not None]
+            min_page = min(pages)
+            max_page = max(pages)
+            
+            show_indices = []
+            for idx, b in enumerate(raw_blocks):
+                phys = b.get("physical_page")
+                if phys is not None and (min_page - 3 <= phys <= max_page + 3):
+                    show_indices.append(idx)
+        else:
+            min_idx = min(block_indices)
+            max_idx = max(block_indices)
+            start_idx = max(0, min_idx - 20)
+            end_idx = min(len(raw_blocks), max_idx + 21)
+            show_indices = list(range(start_idx, end_idx))
+            
+    # Now build the HTML blocks
+    rendered_blocks = []
+    last_printed_page = None
+    first_highlight_id_set = False
+    
+    for idx in show_indices:
+        b = raw_blocks[idx]
+        b_type = b.get("type", "paragraph")
+        
+        # Skip headers, footers, garbage
+        if b_type in ("page_header", "page_footer", "garbage"):
+            continue
+            
+        # Page marker
+        printed_page = b.get("printed_page")
+        if printed_page is not None and printed_page != last_printed_page:
+            rendered_blocks.append(f'<div class="page-marker">p. {printed_page}</div>')
+            last_printed_page = printed_page
+            
+        # Highlight logic
+        is_highlighted = b["id"] in requested_set
+        hl_attr = ""
+        hl_class = ""
+        if is_highlighted:
+            hl_class = " hl-block"
+            if not first_highlight_id_set:
+                hl_attr = ' id="hl"'
+                first_highlight_id_set = True
+                
+        # Render tag
+        b_id = b["id"]
+        text = b.get("text", "")
+        import html as html_mod
+        escaped_text = html_mod.escape(text)
+        
+        if b_type == "heading":
+            level = b.get("level", 2)
+            if level not in (2, 3, 4):
+                level = 2
+            rendered_blocks.append(f'<h{level}{hl_attr} class="doc-heading{hl_class}">{escaped_text}</h{level}>')
+        elif b_type == "epigraph":
+            rendered_blocks.append(f'<blockquote{hl_attr} class="epigraph{hl_class}">{escaped_text}</blockquote>')
+        elif b_type == "footnote":
+            rendered_blocks.append(f'<p{hl_attr} class="footnote{hl_class}" id="{b_id}"><sup>*</sup> {escaped_text}</p>')
+        elif b_type == "list":
+            rendered_blocks.append(f'<p{hl_attr} class="list-item{hl_class}" id="{b_id}">• {escaped_text}</p>')
+        elif b_type == "toc":
+            rendered_blocks.append(f'<p{hl_attr} class="toc-item{hl_class}" id="{b_id}">{escaped_text}</p>')
+        else:
+            rendered_blocks.append(f'<p{hl_attr} class="paragraph{hl_class}" id="{b_id}">{escaped_text}</p>')
+            
+    content = "\n".join(rendered_blocks)
+    
+    purchase_notice = (
+        '<div class="purchase-notice">'
+        '<div class="notice-headline">Please purchase this book at your local meeting</div>'
+        '<div class="notice-sub">Only a few pages of context are shown here. '
+        'The full text supports the work of A.A. and the publisher.</div>'
+        '</div>'
+    )
+    framed_content = purchase_notice + content + purchase_notice
+    
+    page = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body {{
+  font-family: Georgia, "Times New Roman", serif;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  line-height: 1.8;
+  color: #1a1a2e;
+  font-size: 1rem;
+  background: #fff;
+}}
+h1,h2,h3,h4 {{ font-family: -apple-system, sans-serif; color: #264653; margin-top: 1.5em; }}
+p {{ margin: 0.75em 0; }}
+#hl {{ scroll-margin-top: 100px; }}
+.purchase-notice {{
+  background: linear-gradient(135deg, #fff7ed 0%, #fde68a 100%);
+  color: #7c2d12;
+  border: 2px solid #f59e0b;
+  border-radius: 0.75rem;
+  padding: 1.75rem 1.5rem;
+  margin: 2rem 0;
+  text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}}
+.purchase-notice .notice-headline {{
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.01em;
+}}
+.purchase-notice .notice-sub {{
+  font-size: 0.875rem;
+  font-weight: 400;
+  opacity: 0.85;
+  line-height: 1.5;
+}}
+.page-marker {{
+  text-align: center;
+  color: #888;
+  font-size: 0.8rem;
+  margin: 2rem 0;
+  border-top: 1px dashed #ccc;
+  border-bottom: 1px dashed #ccc;
+  padding: 0.2rem 0;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+}}
+.hl-block {{
+  background-color: #d4f5e9 !important;
+  padding: 4px 8px;
+  border-radius: 4px;
+}}
+.epigraph {{
+  font-style: italic;
+  margin: 1rem 2rem;
+  color: #555;
+}}
+.footnote {{
+  font-size: 0.875rem;
+  color: #666;
+}}
+.list-item {{
+  margin-left: 1.5rem;
+}}
+@media (prefers-color-scheme: dark) {{
+  body {{ background: #161b22; color: #e8eaed; }}
+  h1,h2,h3,h4 {{ color: #4ec3b1; }}
+  #hl {{ background: #1f4a3e !important; }}
+  .hl-block {{ background-color: #1f4a3e !important; }}
+  .purchase-notice {{
+    background: linear-gradient(135deg, #2d1b0e 0%, #432818 100%);
+    color: #fef3c7;
+    border-color: #d97706;
+  }}
+  .page-marker {{ border-color: #444; color: #777; }}
+  .epigraph {{ color: #aaa; }}
+  .footnote {{ color: #aaa; }}
+}}
+</style></head>
+<body>{framed_content}
+<script>
+  function scrollToHl() {{
+    const hl = document.getElementById('hl');
+    if (!hl) return;
+    hl.scrollIntoView({{ behavior: 'auto', block: 'center' }});
+  }}
+  function startScrollAttempts() {{
+    requestAnimationFrame(() => requestAnimationFrame(scrollToHl));
+    [0, 60, 180, 400].forEach(d => setTimeout(scrollToHl, d));
+  }}
+  if (document.readyState === 'complete') startScrollAttempts();
+  else window.addEventListener('load', startScrollAttempts);
+</script>
+</body></html>"""
+    return HTMLResponse(page)
+
+
+@app.get("/api/packs/latest")
+def get_latest_pack():
+    import glob
+    import hashlib
+    import zipfile
+    
+    packs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "packs")
+    if not os.path.isdir(packs_dir):
+        packs_dir = "packs"
+        
+    pack_files = glob.glob(os.path.join(packs_dir, "library-v*.scpack"))
+    if not pack_files:
+        raise HTTPException(status_code=404, detail="No content packs found")
+        
+    # Find latest pack file by version number
+    latest_file = None
+    latest_version = -1
+    for pf in pack_files:
+        basename = os.path.basename(pf)
+        try:
+            ver_part = basename.replace("library-v", "").replace(".scpack", "")
+            ver = int(ver_part)
+            if ver > latest_version:
+                latest_version = ver
+                latest_file = pf
+        except ValueError:
+            continue
+            
+    if not latest_file:
+        raise HTTPException(status_code=404, detail="No valid content packs found")
+        
+    # Read pack.json metadata from zip
+    try:
+        with zipfile.ZipFile(latest_file, "r") as zipf:
+            pack_json_data = zipf.read("pack.json")
+            pack_meta = json.loads(pack_json_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read pack metadata: {e}")
+        
+    # Compute sha256 of the zip file
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(latest_file, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        file_sha256 = sha256_hash.hexdigest()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to hash pack file: {e}")
+        
+    return {
+        "pack_version": pack_meta.get("pack_version", latest_version),
+        "schema_version": pack_meta.get("schema_version", 1),
+        "created_utc": pack_meta.get("created_utc", int(os.path.getmtime(latest_file))),
+        "doc_count": pack_meta.get("doc_count", 0),
+        "sha256": file_sha256,
+        "download_url": f"/api/packs/download/v{latest_version}"
+    }
+
+@app.get("/api/packs/download/v{version}")
+def download_pack(version: int):
+    packs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "packs")
+    if not os.path.isdir(packs_dir):
+        packs_dir = "packs"
+        
+    pack_file = os.path.join(packs_dir, f"library-v{version}.scpack")
+    if not os.path.isfile(pack_file):
+        raise HTTPException(status_code=404, detail=f"Content pack version {version} not found")
+        
+    return FileResponse(
+        pack_file,
+        media_type="application/zip",
+        filename=f"library-v{version}.scpack"
+    )
+
+
 @app.get("/api/render/{filepath:path}")
 def render_document(
     filepath: str,

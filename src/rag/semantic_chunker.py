@@ -117,14 +117,23 @@ class SemanticChunker:
                         break
 
             if accumulator_words >= TOPIC_MIN or (not topic_chunks and accumulator_words > MEDIUM_MAX):
-                topic_chunks.append(
-                    self._make_chunk(
-                        "\n\n".join(accumulator),
-                        "topic",
-                        paragraph_entries[start_index]["index"],
-                        paragraph_entries[end_index - 1]["index"],
+                sub_entries = paragraph_entries[start_index:end_index]
+                if sub_entries and "block_id" in sub_entries[0]:
+                    topic_chunks.append(
+                        self._make_chunk_from_entries(
+                            sub_entries,
+                            "topic"
+                        )
                     )
-                )
+                else:
+                    topic_chunks.append(
+                        self._make_chunk(
+                            "\n\n".join(accumulator),
+                            "topic",
+                            paragraph_entries[start_index]["index"],
+                            paragraph_entries[end_index - 1]["index"],
+                        )
+                    )
 
             if end_index >= paragraph_count:
                 break
@@ -273,6 +282,228 @@ class SemanticChunker:
                         "large",
                         accumulator_start,
                         accumulator_start + len(accumulator_text) - 1,
+                    )
+                )
+
+        topic_chunks = self._build_topic_chunks(paragraph_entries)
+
+        return small_chunks + medium_chunks + large_chunks + topic_chunks
+
+    def _make_chunk_from_entries(
+        self,
+        entries: list[dict],
+        scale: str,
+    ) -> dict:
+        if scale in ("large", "topic"):
+            text = "\n\n".join(e["text"] for e in entries)
+        else:
+            text = " ".join(e["text"] for e in entries)
+            
+        pages = [e["printed_page"] for e in entries if e.get("printed_page") is not None]
+        printed_page_start = pages[0] if pages else None
+        printed_page_end = pages[-1] if pages else None
+        
+        # Take the heading context from the first entry if available
+        heading_context = entries[0].get("heading_context")
+        
+        return {
+            "text": text,
+            "scale": scale,
+            "start_paragraph": entries[0]["index"],
+            "end_paragraph": entries[-1]["index"],
+            "block_ids": [e["block_id"] for e in entries],
+            "printed_page_start": printed_page_start,
+            "printed_page_end": printed_page_end,
+            "heading_context": heading_context,
+        }
+
+    def _split_long_paragraph_entries(self, entry: dict) -> list[dict]:
+        """Split a long paragraph entry into virtual sub-entries for chunking."""
+        sentences = self._split_sentences(entry["text"])
+        if len(sentences) <= 1:
+            words = entry["text"].split()
+            sub_entries = []
+            for index in range(0, len(words), MEDIUM_MAX):
+                chunk_text = " ".join(words[index : index + MEDIUM_MAX])
+                if self._word_count(chunk_text) >= SMALL_MIN:
+                    sub_entries.append(chunk_text)
+                elif sub_entries:
+                    sub_entries[-1] += " " + chunk_text
+            return [
+                {
+                    "index": entry["index"],
+                    "text": txt,
+                    "words": self._word_count(txt),
+                    "block_id": entry["block_id"],
+                    "printed_page": entry["printed_page"],
+                    "physical_page": entry["physical_page"],
+                    "heading_context": entry.get("heading_context")
+                }
+                for txt in sub_entries
+            ]
+
+        sub_entries = []
+        accumulator = []
+        accumulator_words = 0
+        for sentence in sentences:
+            word_count = self._word_count(sentence)
+            if accumulator_words + word_count > MEDIUM_MAX and accumulator:
+                sub_entries.append(" ".join(accumulator))
+                accumulator = []
+                accumulator_words = 0
+            accumulator.append(sentence)
+            accumulator_words += word_count
+
+        if accumulator:
+            merged = " ".join(accumulator)
+            if sub_entries and self._word_count(merged) < SMALL_MIN:
+                sub_entries[-1] += " " + merged
+            else:
+                sub_entries.append(merged)
+
+        return [
+            {
+                "index": entry["index"],
+                "text": txt,
+                "words": self._word_count(txt),
+                "block_id": entry["block_id"],
+                "printed_page": entry["printed_page"],
+                "physical_page": entry["physical_page"],
+                "heading_context": entry.get("heading_context")
+            }
+            for txt in sub_entries
+        ]
+
+    def chunk_from_blocks(self, blocks: list[dict]) -> list[dict]:
+        """Chunk manifest content blocks across small, medium, large, and topic scales."""
+        if not blocks:
+            return []
+
+        paragraph_entries = [
+            {
+                "index": index,
+                "text": b["text"],
+                "words": self._word_count(b["text"]),
+                "block_id": b["id"],
+                "printed_page": b.get("printed_page"),
+                "physical_page": b.get("physical_page"),
+                "heading_context": b.get("heading_context"),
+            }
+            for index, b in enumerate(blocks)
+        ]
+
+        small_chunks = []
+        for entry in paragraph_entries:
+            if SMALL_MIN <= entry["words"] <= SMALL_MAX:
+                small_chunks.append(
+                    self._make_chunk_from_entries(
+                        [entry],
+                        "small"
+                    )
+                )
+
+        medium_chunks = []
+        accumulator = []
+        accumulator_words = 0
+        accumulator_start = None
+
+        def flush_medium_accumulator() -> None:
+            nonlocal accumulator, accumulator_words, accumulator_start
+            if not accumulator:
+                return
+
+            merged_words = sum(e["words"] for e in accumulator)
+            if merged_words >= MEDIUM_MIN:
+                medium_chunks.append(
+                    self._make_chunk_from_entries(
+                        accumulator,
+                        "medium"
+                    )
+                )
+            elif medium_chunks:
+                last_chunk = medium_chunks[-1]
+                last_chunk["text"] += " " + " ".join(e["text"] for e in accumulator)
+                last_chunk["end_paragraph"] = accumulator[-1]["index"]
+                last_chunk["block_ids"].extend(e["block_id"] for e in accumulator)
+                pages = [e["printed_page"] for e in accumulator if e.get("printed_page") is not None]
+                if pages:
+                    last_chunk["printed_page_end"] = pages[-1]
+            elif merged_words >= SMALL_MIN:
+                small_chunks.append(
+                    self._make_chunk_from_entries(
+                        accumulator,
+                        "small"
+                    )
+                )
+
+            accumulator = []
+            accumulator_words = 0
+            accumulator_start = None
+
+        for entry in paragraph_entries:
+            word_count = entry["words"]
+
+            if word_count > MEDIUM_MAX:
+                flush_medium_accumulator()
+                for sub_entry in self._split_long_paragraph_entries(entry):
+                    medium_chunks.append(
+                        self._make_chunk_from_entries(
+                            [sub_entry],
+                            "medium"
+                        )
+                    )
+                continue
+
+            if word_count >= MEDIUM_MIN:
+                flush_medium_accumulator()
+                medium_chunks.append(
+                    self._make_chunk_from_entries(
+                        [entry],
+                        "medium"
+                    )
+                )
+                continue
+
+            if accumulator_start is None:
+                accumulator_start = entry["index"]
+            accumulator.append(entry)
+            accumulator_words += word_count
+
+            if accumulator_words >= MEDIUM_MIN:
+                flush_medium_accumulator()
+
+        flush_medium_accumulator()
+
+        large_chunks = []
+        accumulator_text = []
+        accumulator_words = 0
+        accumulator_start = None
+
+        for entry in paragraph_entries:
+            if accumulator_start is None:
+                accumulator_start = entry["index"]
+
+            if accumulator_words + entry["words"] > LARGE_MAX and accumulator_text:
+                large_chunks.append(
+                    self._make_chunk_from_entries(
+                        accumulator_text,
+                        "large"
+                    )
+                )
+                accumulator_text = []
+                accumulator_words = 0
+                accumulator_start = entry["index"]
+
+            accumulator_text.append(entry)
+            accumulator_words += entry["words"]
+
+        if accumulator_text:
+            merged_words = sum(e["words"] for e in accumulator_text)
+            if merged_words > MEDIUM_MAX:
+                large_chunks.append(
+                    self._make_chunk_from_entries(
+                        accumulator_text,
+                        "large"
                     )
                 )
 

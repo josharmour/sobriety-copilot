@@ -10,6 +10,7 @@ import 'package:sobriety_copilot_mobile/data/repositories/chat_repository.dart';
 import 'package:sobriety_copilot_mobile/data/repositories/suggest_repository.dart';
 import 'package:sobriety_copilot_mobile/data/repositories/meeting_repository.dart';
 import 'package:sobriety_copilot_mobile/data/repositories/server_repository.dart';
+import 'package:sobriety_copilot_mobile/data/repositories/library_repository.dart';
 import 'package:sobriety_copilot_mobile/features/chat/chat_notifier.dart';
 import 'package:sobriety_copilot_mobile/features/chat/conversations.dart';
 import 'package:sobriety_copilot_mobile/features/chat/saved_passages.dart';
@@ -73,6 +74,15 @@ final meetingRepositoryProvider = Provider<MeetingRepository>((ref) {
 final serverRepositoryProvider = Provider<ServerRepository>((ref) {
   return ServerRepository(
     client: ref.watch(httpClientProvider),
+    baseUrl: () => _baseUrl(ref),
+  );
+});
+
+/// Offline library repository (check packs, download, search).
+final libraryRepositoryProvider = Provider<LibraryRepository>((ref) {
+  return LibraryRepository(
+    client: ref.watch(httpClientProvider),
+    prefs: ref.watch(sharedPreferencesProvider),
     baseUrl: () => _baseUrl(ref),
   );
 });
