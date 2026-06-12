@@ -2088,6 +2088,8 @@ def render_document(
 
             def _wrap_seg(m: "re.Match[str]") -> str:
                 seg = m.group(0)
+                if seg.startswith("<"):
+                    return seg
                 if not seg.strip():
                     return seg
                 anchor = ' id="hl"' if first_seg[0] else ""
@@ -2097,7 +2099,7 @@ def render_document(
                     f'style="background:#d4f5e9;padding:2px 0;border-radius:3px;">{seg}</span>'
                 )
 
-            highlighted = re.sub(r"[^<>]+", _wrap_seg, snippet)
+            highlighted = re.sub(r"<[^>]*>|[^<>]+", _wrap_seg, snippet)
             content = content[:start] + highlighted + content[end:]
 
     purchase_notice = (
