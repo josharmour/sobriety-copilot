@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:sobriety_copilot_mobile/config/app_config.dart';
 import 'package:sobriety_copilot_mobile/data/models/meeting_models.dart';
+import 'package:sobriety_copilot_mobile/features/tts/neural_voices.dart';
+import 'package:sobriety_copilot_mobile/features/tts/voice_manager.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/widgets.dart';
@@ -141,6 +143,27 @@ class SettingsSheet extends ConsumerWidget {
                       ),
                       onChanged: (v) => notifier.setTtsEnabled(v),
                     ),
+                    if (config.ttsEnabled) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      const SectionHeader('Voice'),
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          top: AppSpacing.xs,
+                          bottom: AppSpacing.sm,
+                        ),
+                        child: Text(
+                          'Natural voices run fully on this device. Each is a '
+                          'one-time download over Wi-Fi.',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                        ),
+                      ),
+                      const _VoicePicker(),
+                    ],
                     const SizedBox(height: AppSpacing.lg),
                     Center(
                       child: Text(
@@ -381,6 +404,164 @@ class _ToneTile extends StatelessWidget {
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VoicePicker extends ConsumerWidget {
+  const _VoicePicker();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final config = ref.watch(appConfigProvider);
+    final statuses = ref.watch(voiceManagerProvider);
+    final configNotifier = ref.read(appConfigProvider.notifier);
+    final voices = ref.read(voiceManagerProvider.notifier);
+
+    Future<void> downloadAndSelect(NeuralVoice v) async {
+      await voices.download(v);
+      // Only auto-select if the install actually succeeded.
+      if (ref.read(voiceManagerProvider)[v.id]?.isInstalled == true) {
+        await configNotifier.setVoiceId(v.id);
+      }
+    }
+
+    return Column(
+      children: [
+        _VoiceTile(
+          label: 'System default',
+          desc: 'Built-in device voice (no download)',
+          selected: config.voiceId == kSystemVoiceId,
+          onTap: () => configNotifier.setVoiceId(kSystemVoiceId),
+        ),
+        ...kNeuralVoices.map((v) {
+          final status = statuses[v.id] ?? VoiceStatus.notInstalled;
+          final selected = config.voiceId == v.id && status.isInstalled;
+
+          Widget? trailing;
+          switch (status.state) {
+            case VoiceInstallState.notInstalled:
+            case VoiceInstallState.error:
+              trailing = TextButton.icon(
+                icon: const Icon(Icons.download, size: 18),
+                label: Text('${v.sizeMB} MB'),
+                onPressed: () => downloadAndSelect(v),
+              );
+            case VoiceInstallState.downloading:
+              trailing = SizedBox(
+                width: 72,
+                child: LinearProgressIndicator(value: status.progress),
+              );
+            case VoiceInstallState.extracting:
+              trailing = const SizedBox(
+                width: 72,
+                child: LinearProgressIndicator(),
+              );
+            case VoiceInstallState.installed:
+              trailing = IconButton(
+                icon: const Icon(Icons.delete_outline, size: 20),
+                tooltip: 'Remove download',
+                onPressed: () async {
+                  if (config.voiceId == v.id) {
+                    await configNotifier.setVoiceId(kSystemVoiceId);
+                  }
+                  await voices.delete(v);
+                },
+              );
+          }
+
+          return _VoiceTile(
+            label: v.label,
+            desc: status.state == VoiceInstallState.error
+                ? 'Download failed — tap to retry'
+                : v.desc,
+            selected: selected,
+            trailing: trailing,
+            onTap: () {
+              if (status.isInstalled) {
+                configNotifier.setVoiceId(v.id);
+              } else if (!status.isBusy) {
+                downloadAndSelect(v);
+              }
+            },
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _VoiceTile extends StatelessWidget {
+  final String label;
+  final String desc;
+  final bool selected;
+  final Widget? trailing;
+  final VoidCallback onTap;
+
+  const _VoiceTile({
+    required this.label,
+    required this.desc,
+    required this.selected,
+    required this.onTap,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppSpacing.radius),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: selected ? AppColors.accent : scheme.outlineVariant,
+              width: selected ? 2 : 1,
+            ),
+            color: selected ? AppColors.accentSoft : null,
+            borderRadius: BorderRadius.circular(AppSpacing.radius),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: selected ? AppColors.accent : scheme.onSurfaceVariant,
+                size: 20,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: selected ? AppColors.brand : null,
+                          ),
+                    ),
+                    Text(
+                      desc,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              if (trailing != null) trailing!,
             ],
           ),
         ),

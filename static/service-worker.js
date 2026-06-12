@@ -1,5 +1,5 @@
 /* Sobriety Copilot — minimal app-shell service worker */
-const CACHE_VERSION = "sc-shell-v30";
+const CACHE_VERSION = "sc-shell-v48";
 const SHELL_ASSETS = [
   "/",
   "/static/manifest.json",

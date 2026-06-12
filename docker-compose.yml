@@ -1,11 +1,15 @@
 x-app-env: &app-env
   REDIS_URL: redis://redis:6379/0
-  LLM_BASE_URL: http://host.docker.internal:8000/v1
-  LLM_MODEL: gemma4-31b-uncensored
-  LLM_API_KEY: ignored
-  EMBEDDING_PROVIDER: ollama
-  EMBEDDING_MODEL: nomic-embed-text
-  EMBEDDING_BASE_URL: http://host.docker.internal:11434/v1
+  LLM_BASE_URL: "${LLM_BASE_URL:-http://host.docker.internal:8000/v1}"
+  LLM_MODEL: "${LLM_MODEL:-gemma4-31b-uncensored}"
+  LLM_API_KEY: "${LLM_API_KEY:-ignored}"
+  VLLM_ENABLE_THINKING: "${VLLM_ENABLE_THINKING:-1}"
+  EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-ollama}"
+  EMBEDDING_MODEL: "${EMBEDDING_MODEL:-nomic-embed-text}"
+  EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-http://host.docker.internal:11434/v1}"
+  SENTENCE_TRANSFORMER_MODEL: "${SENTENCE_TRANSFORMER_MODEL:-/app/models/fine-tuned-embeddings}"
+  BUG_REPORT_DB_PATH: "${BUG_REPORT_DB_PATH:-/home/app/memory/bug_reports.db}"
+  ENABLE_HYDE: "${ENABLE_HYDE:-1}"
   OLLAMA_KEEP_ALIVE: "-1"
   OLLAMA_EMBED_BATCH_SIZE: "8"
   MAX_EMBED_WORDS: "320"
@@ -22,6 +26,11 @@ x-app-env: &app-env
   RENDER_CACHE_DIR: /home/app/render_cache
   RENDER_CACHE_MAX_DOCUMENTS: "8"
   USER_MEMORY_DB_PATH: /home/app/memory/user_memory.db
+  # Bug report admin token — gates GET /api/bugs (reads expose conversation
+  # history). Override via .env on the host or in your environment. Generate:
+  #   python3 -c "import secrets; print(secrets.token_hex(24))"
+  # Visit the app once as /?admin=<value> to unlock the in-app bug viewer.
+  BUG_ADMIN_TOKEN: "${BUG_ADMIN_TOKEN:-7fe8d9a7e8a43db0472dd8e927b5dcd8}"
   PIP_NO_CACHE_DIR: "1"
 
 services:
@@ -37,6 +46,7 @@ services:
       - ./documents:/app/documents:ro
       - render_cache_data:/home/app/render_cache
       - user_memory_data:/home/app/memory
+      - models_data:/app/models:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -63,6 +73,7 @@ services:
     volumes:
       - ./documents:/app/documents:ro
       - render_cache_data:/home/app/render_cache
+      - models_data:/app/models:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -100,7 +111,7 @@ services:
     image: sobriety-copilot-nginx
     restart: always
     ports:
-      - "5000:80"
+      - "8090:80"
     depends_on:
       app:
         condition: service_healthy
@@ -116,3 +127,4 @@ volumes:
   chroma_data:
   render_cache_data:
   user_memory_data:
+  models_data:

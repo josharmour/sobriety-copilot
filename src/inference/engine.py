@@ -115,31 +115,63 @@ class InferenceEngine:
         max_tokens: int = 4096,
         system_message: str | None = None,
         enable_thinking: bool | None = None,
+        continue_text: str | None = None,
+        n_blocks: int | None = None,
     ) -> Generator[tuple[str, str], None, None]:
         """Stream both reasoning and content as tagged (kind, text) pairs.
 
         For thinking-model variants (e.g. gemma4:e2b), reasoning is emitted on
         `delta.reasoning` before the visible content. Callers can choose to
         forward the reasoning to the user or discard it.
+
+        Diffusion-backend extras (iterative grounding): `continue_text` resumes
+        generation from previously committed raw answer text; `n_blocks` caps
+        how many diffusion blocks this call generates. The stream then also
+        yields ("raw", text) — the request-local committed raw text (replace
+        semantics, feed back as continue_text) — and ("finish", reason) where
+        reason is "length" when the block budget ran out before the answer did.
         """
         messages = self._build_messages(prompt, history, system_message)
+        extra = self._extra_body(enable_thinking)
+        if continue_text:
+            extra["continue_text"] = continue_text
+        if n_blocks:
+            extra["n_blocks"] = n_blocks
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             max_tokens=max_tokens,
             temperature=0.7,
             stream=True,
-            extra_body=self._extra_body(enable_thinking),
+            extra_body=extra,
         )
         for chunk in response:
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
+            # Diffusion backends (serve_diffusiongemma) stream a per-step canvas
+            # snapshot dict {block, step, total, reasoning, content} alongside
+            # the standard deltas. Replace semantics: each frame is the full
+            # response so far, not an append.
+            diffusion = getattr(delta, "diffusion", None)
+            if diffusion:
+                yield ("diffusion", diffusion)
+            # generation throughput {completion_tokens, elapsed_ms, tok_per_sec},
+            # updated on each committed block
+            stats = getattr(delta, "stats", None)
+            if stats:
+                yield ("stats", stats)
+            raw = getattr(delta, "raw_text", None)
+            if raw is not None:
+                yield ("raw", raw)
             reasoning = getattr(delta, "reasoning", None)
             if reasoning:
                 yield ("thinking", reasoning)
             if delta.content:
                 yield ("content", delta.content)
+            finish = chunk.choices[0].finish_reason
+            if finish:
+                yield ("finish", finish)
 
     def warmup(self) -> None:
         """Issue a tiny completion so Ollama loads and pins the chat model.

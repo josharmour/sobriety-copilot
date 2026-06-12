@@ -15,6 +15,20 @@ from . import reranker
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9']+")
 
+
+def _display_title(source: str) -> str:
+    """Human-facing work title from a source filename.
+
+    Strips any directory, the file extension, and a trailing " - <author/
+    fellowship>" suffix so the model sees the bare title it should name
+    (e.g. "Step Working Guides - NA.pdf" -> "Step Working Guides"). Mirrors
+    the frontend cleanSourceTitle() so inline-link matching lines up.
+    """
+    title = os.path.splitext(os.path.basename(source or ""))[0].replace("_", " ").strip()
+    if " - " in title:
+        title = title.split(" - ", 1)[0].strip()
+    return title
+
 # Stopwords to drop from query-side BM25 scoring. Document-side tokenization is
 # unchanged so chunks still index every word, but query-side filtering means
 # noise like "how", "do", "I", "with" doesn't get to boost generic chunks.
@@ -51,6 +65,71 @@ CATEGORY_BOOST = {
 }
 BUCKET_ORDER = ("small", "medium", "large")
 
+# When the user names a specific work ("what does the Big Book say…"), chunks
+# from that work get a large multiplicative boost — both in hybrid selection
+# (so they survive into the reranker's candidate pool) and in the final rerank
+# (so the cross-encoder can't silently demote the book actually asked about).
+# A relaxed per-source cap lets several passages from that one book through.
+TITLE_REFERENCE_BOOST = float(os.environ.get("BOOST_TITLE_REFERENCE", "3.0"))
+
+# Bare enumerations of the Steps/Traditions (TOC-style list pages) contain the
+# literal text of every step, so they out-score substantive discussion for any
+# "Step N" query while explaining nothing. Chunks carrying at least
+# RAG_ENUMERATION_MIN_MARKERS list markers get their score multiplied down.
+ENUMERATION_PENALTY = float(os.environ.get("RAG_ENUMERATION_PENALTY", "0.45"))
+ENUMERATION_MIN_MARKERS = int(os.environ.get("RAG_ENUMERATION_MIN_MARKERS", "5"))
+_ENUMERATION_MARKER = re.compile(
+    r"(?:Step|Tradition)\s+(?:One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve)\s*(?:[:.)]|\d{1,3}\b)"
+    r"|\b(?:[1-9]|1[0-2])\s*[.)]\s*(?:We\s+admitted|Came\s+to\s+believe|Made\s+a\s+(?:decision|list)"
+    r"|Made\s+direct\s+amends|Were\s+entirely\s+ready|Humbly\s+asked|Continued\s+to\s+take"
+    r"|Sought\s+through\s+prayer|Having\s+had\s+a\s+spiritual|Admitted\s+to\s+God|Became\s+willing)",
+    re.IGNORECASE,
+)
+# A literal CONTENTS heading is near-certain evidence of a table-of-contents
+# page (counts as several markers on its own).
+_CONTENTS_RE = re.compile(r"\bCONTENTS\b")
+REFERENCED_MAX_PER_SOURCE = int(os.environ.get("RAG_REFERENCED_MAX_PER_SOURCE", "4"))
+
+# Query phrases that name a specific work -> source-filename substrings (lower).
+# Substrings are deliberately specific so "big book" boosts the Big Book itself
+# ("Alcoholics Anonymous - AA.pdf") but not books *about* it ("…Comes of Age").
+WORK_ALIASES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
+    (("big book", "the big book"),
+     ("alcoholics anonymous - aa", "plain language big book", "trimmed-big-book")),
+    (("twelve and twelve", "twelve & twelve", "12 and 12", "12 & 12", "12&12",
+      "twelve steps and twelve traditions"),
+     ("twelve steps and twelve traditions - aa",)),
+    (("as bill sees it",), ("as bill sees it",)),
+    (("daily reflections",), ("daily reflections - aa",)),
+    (("living sober",), ("living sober - aa",)),
+    (("came to believe",), ("came to believe - aa",)),
+    (("twenty-four hours a day", "twenty four hours a day", "24 hours a day"),
+     ("twenty-four hours a day",)),
+    (("just for today",), ("just for today - na",)),
+    (("basic text", "narcotics anonymous", "na big book"),
+     ("narcotics anonymous - na",)),
+    (("it works how and why", "it works: how and why"), ("it works how and why",)),
+    (("living clean",), ("living clean",)),
+    (("step working guide",), ("step working guides - na",)),
+)
+
+
+def _referenced_source_substrings(query: str) -> set[str]:
+    """Source-filename substrings for any work the query names by title."""
+    q = (query or "").lower()
+    matched: set[str] = set()
+    for phrases, sources in WORK_ALIASES:
+        if any(phrase in q for phrase in phrases):
+            matched.update(sources)
+    return matched
+
+
+def _source_is_referenced(source: str, referenced: set[str]) -> bool:
+    if not referenced:
+        return False
+    s = (source or "").lower()
+    return any(sub in s for sub in referenced)
+
 
 @dataclass
 class CachedChunk:
@@ -83,6 +162,7 @@ class RetrievalResult:
     match_scale: str = "medium"
     parent_id: str = ""
     matched_chunk_id: str = ""
+    category: str = "uncategorized"
 
 
 @dataclass
@@ -110,6 +190,7 @@ class RAGRetriever:
         self._avg_doc_length = 0.0
         self._document_count = 0
         self._cache_initialized = False
+        self._enum_penalty: dict[str, float] = {}
 
     def _tokenize(self, text: str) -> list[str]:
         return [token.lower() for token in TOKEN_RE.findall(text)]
@@ -118,6 +199,7 @@ class RAGRetriever:
         self._chunks_by_id = {}
         self._postings = defaultdict(list)
         self._doc_lengths = {}
+        self._enum_penalty = {}
         self._avg_doc_length = 0.0
         self._document_count = self.collection.count()
         self._cache_initialized = True
@@ -211,6 +293,17 @@ class RAGRetriever:
 
         return dict(scores)
 
+    def _enumeration_penalty(self, chunk_id: str, chunk: CachedChunk) -> float:
+        cached = self._enum_penalty.get(chunk_id)
+        if cached is None:
+            text = chunk.text or ""
+            markers = len(_ENUMERATION_MARKER.findall(text))
+            if _CONTENTS_RE.search(text):
+                markers += 3
+            cached = ENUMERATION_PENALTY if markers >= ENUMERATION_MIN_MARKERS else 1.0
+            self._enum_penalty[chunk_id] = cached
+        return cached
+
     def _resolve_chunk(self, chunk_id: str | None, fallback: CachedChunk) -> CachedChunk:
         if chunk_id and chunk_id in self._chunks_by_id:
             return self._chunks_by_id[chunk_id]
@@ -252,6 +345,7 @@ class RAGRetriever:
                 match_scale=chunk.scale,
                 parent_id=context_id,
                 matched_chunk_id=chunk.id,
+                category=chunk.category,
             ),
         )
 
@@ -278,6 +372,8 @@ class RAGRetriever:
         where = None
         if categories:
             where = {"category": {"$in": categories}}
+
+        referenced_sources = _referenced_source_substrings(query)
 
         query_embedding = embed_query(embedding_query or query)
         candidate_count = min(max(top_k * QUERY_CANDIDATE_MULTIPLIER, top_k), collection_count)
@@ -312,9 +408,15 @@ class RAGRetriever:
             semantic_score = semantic_scores.get(chunk_id, 0.0) / max(max_semantic, 1e-6)
             keyword_score = keyword_scores.get(chunk_id, 0.0) / max(max_keyword, 1e-6)
             category_boost = CATEGORY_BOOST.get(chunk.category, 1.0)
+            title_boost = (
+                TITLE_REFERENCE_BOOST
+                if _source_is_referenced(chunk.source, referenced_sources)
+                else 1.0
+            )
             hybrid_score = (
                 (SEMANTIC_WEIGHT * semantic_score) + (KEYWORD_WEIGHT * keyword_score)
-            ) * SCALE_BOOST.get(chunk.scale, 1.0) * category_boost
+            ) * SCALE_BOOST.get(chunk.scale, 1.0) * category_boost * title_boost \
+                * self._enumeration_penalty(chunk_id, chunk)
             combined_scores[chunk_id] = hybrid_score
 
         ranked_ids = sorted(combined_scores, key=combined_scores.get, reverse=True)
@@ -341,10 +443,15 @@ class RAGRetriever:
         # back: give the cross-encoder real choices instead of a fixed top_k.
         target_k = top_k * reranker.oversample_factor()
 
+        def _source_cap(source: str) -> int:
+            if _source_is_referenced(source, referenced_sources):
+                return REFERENCED_MAX_PER_SOURCE
+            return MAX_RESULTS_PER_SOURCE
+
         def _can_add(candidate: RankedCandidate) -> bool:
             if candidate.context_id in seen_context_ids:
                 return False
-            if source_counts[candidate.result.source] >= MAX_RESULTS_PER_SOURCE:
+            if source_counts[candidate.result.source] >= _source_cap(candidate.result.source):
                 return False
             return True
 
@@ -378,7 +485,20 @@ class RAGRetriever:
             _add(candidate)
 
         if reranker.is_enabled() and len(retrieval_results) > 1:
-            retrieval_results = reranker.rerank(query, retrieval_results, top_k=top_k)
+            # Re-apply the priors the cross-encoder is blind to: category
+            # (conference-approved literature) and any work the query named.
+            rerank_boosts = [
+                CATEGORY_BOOST.get(r.category, 1.0)
+                * (
+                    TITLE_REFERENCE_BOOST
+                    if _source_is_referenced(r.source, referenced_sources)
+                    else 1.0
+                )
+                for r in retrieval_results
+            ]
+            retrieval_results = reranker.rerank(
+                query, retrieval_results, top_k=top_k, boosts=rerank_boosts
+            )
         elif len(retrieval_results) > top_k:
             retrieval_results = retrieval_results[:top_k]
 
@@ -397,7 +517,7 @@ class RAGRetriever:
             if remaining <= 0:
                 break
 
-            header = f"[Source {index}: {result.source} | match={result.match_scale}, context={result.scale}]"
+            header = f'[Source {index}: "{_display_title(result.source)}" | match={result.match_scale}, context={result.scale}]'
             if result.excerpt and result.excerpt != result.text:
                 section = (
                     f"{header}\n"

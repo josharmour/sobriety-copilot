@@ -13,6 +13,8 @@ import 'package:sobriety_copilot_mobile/data/repositories/server_repository.dart
 import 'package:sobriety_copilot_mobile/features/chat/chat_notifier.dart';
 import 'package:sobriety_copilot_mobile/features/chat/conversations.dart';
 import 'package:sobriety_copilot_mobile/features/chat/saved_passages.dart';
+import 'package:sobriety_copilot_mobile/features/tts/tts_service.dart';
+import 'package:sobriety_copilot_mobile/features/tts/voice_manager.dart';
 
 /// Resolved [SharedPreferences] instance.
 ///
@@ -113,4 +115,17 @@ final suggestionsProvider =
 /// refreshed via `ref.invalidate(healthProvider)`.
 final healthProvider = FutureProvider.autoDispose<HealthStatus>((ref) async {
   return ref.watch(serverRepositoryProvider).health();
+});
+
+/// Downloadable neural voice install state (download / extract / delete).
+final voiceManagerProvider =
+    NotifierProvider<VoiceManagerNotifier, Map<String, VoiceStatus>>(
+  VoiceManagerNotifier.new,
+);
+
+/// App-wide read-aloud service (system or neural voice per [AppConfig.voiceId]).
+final appTtsProvider = Provider<AppTts>((ref) {
+  final tts = AppTts(ref);
+  ref.onDispose(tts.dispose);
+  return tts;
 });

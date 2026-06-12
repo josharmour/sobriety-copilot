@@ -45,6 +45,9 @@ dependencies:
 
   # Connectivity awareness
   connectivity_plus: ^6.1.0
+  sherpa_onnx: ^1.13.2
+  audioplayers: ^6.7.1
+  archive: ^4.0.9
 
 dev_dependencies:
   flutter_test:

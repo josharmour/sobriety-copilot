@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_tts/flutter_tts.dart';
+import 'package:sobriety_copilot_mobile/features/tts/tts_service.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -42,7 +42,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final FocusNode _inputFocus = FocusNode();
-  final FlutterTts _tts = FlutterTts();
+  late final AppTts _tts;
 
   Timer? _debounce;
   String _suggestQuery = '';
@@ -57,9 +57,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _tts.setCompletionHandler(_onTtsDone);
-    _tts.setCancelHandler(_onTtsDone);
-    _tts.setErrorHandler((_) => _onTtsDone());
+    _tts = ref.read(appTtsProvider);
+    _tts.onDone = _onTtsDone;
     _inputFocus.addListener(() {
       if (!_inputFocus.hasFocus) {
         setState(() => _suggestVisible = false);
@@ -73,6 +72,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _input.dispose();
     _scroll.dispose();
     _inputFocus.dispose();
+    _tts.onDone = null;
     _tts.stop();
     super.dispose();
   }
@@ -206,9 +206,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
     final cleaned = _cleanForTts(m.text);
     if (cleaned.isEmpty) return;
-    await _tts.stop();
     setState(() => _speakingId = m.id);
-    await _tts.setSpeechRate(0.5);
     await _tts.speak(cleaned);
   }
 

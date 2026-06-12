@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sobriety_copilot_mobile/features/tts/neural_voices.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 
 /// Tone option shown in settings. Backend accepts the `id` string verbatim.
@@ -75,6 +76,7 @@ class AppConfig {
   final Set<String> enabledCategories; // subset of kAllCategories; default = all
   final bool showThinking; // default false
   final bool ttsEnabled; // default false
+  final String voiceId; // kSystemVoiceId or a NeuralVoice id
   final String userId; // stable per-install id (uuid-ish), never empty
 
   const AppConfig({
@@ -83,6 +85,7 @@ class AppConfig {
     required this.enabledCategories,
     required this.showThinking,
     required this.ttsEnabled,
+    required this.voiceId,
     required this.userId,
   });
 
@@ -95,6 +98,7 @@ class AppConfig {
       enabledCategories: kAllCategories.toSet(),
       showThinking: false,
       ttsEnabled: false,
+      voiceId: kSystemVoiceId,
       userId: id,
     );
   }
@@ -105,6 +109,7 @@ class AppConfig {
     Set<String>? enabledCategories,
     bool? showThinking,
     bool? ttsEnabled,
+    String? voiceId,
     String? userId,
   }) {
     return AppConfig(
@@ -113,6 +118,7 @@ class AppConfig {
       enabledCategories: enabledCategories ?? this.enabledCategories,
       showThinking: showThinking ?? this.showThinking,
       ttsEnabled: ttsEnabled ?? this.ttsEnabled,
+      voiceId: voiceId ?? this.voiceId,
       userId: userId ?? this.userId,
     );
   }
@@ -150,6 +156,7 @@ class AppConfig {
       enabledCategories: cats,
       showThinking: json['showThinking'] as bool? ?? false,
       ttsEnabled: json['ttsEnabled'] as bool? ?? false,
+      voiceId: (json['voiceId'] as String?) ?? kSystemVoiceId,
       userId: userId,
     );
   }
@@ -161,6 +168,7 @@ class AppConfig {
       'enabledCategories': enabledCategories.toList()..sort(),
       'showThinking': showThinking,
       'ttsEnabled': ttsEnabled,
+      'voiceId': voiceId,
       'userId': userId,
     };
   }
@@ -253,6 +261,11 @@ class AppConfigNotifier extends Notifier<AppConfig> {
 
   Future<void> setTtsEnabled(bool value) async {
     state = state.copyWith(ttsEnabled: value);
+    await _persist();
+  }
+
+  Future<void> setVoiceId(String value) async {
+    state = state.copyWith(voiceId: value);
     await _persist();
   }
 

@@ -116,6 +116,11 @@ ACTION_PHRASE_VERBS = {
 }
 SUGGESTION_RETRIEVE_TOP_K = int(os.environ.get("SUGGESTION_RETRIEVE_TOP_K", "24"))
 SUGGESTION_LIMIT = int(os.environ.get("SUGGESTION_LIMIT", "5"))
+
+# Iterative grounding (diffusion backend): max diffusion blocks per answer and
+# how many newly retrieved chunks may be folded into the context between blocks.
+GROUND_MAX_BLOCKS = int(os.environ.get("GROUND_MAX_BLOCKS", "16"))
+GROUND_NEW_CHUNKS_PER_BLOCK = int(os.environ.get("GROUND_NEW_CHUNKS_PER_BLOCK", "2"))
 RENDER_TOKEN_RE = re.compile(r"[A-Za-z0-9']+")
 RENDER_CACHE_MAX_DOCUMENTS = int(os.environ.get("RENDER_CACHE_MAX_DOCUMENTS", "8"))
 render_document_cache: OrderedDict[tuple[str, int, int], dict[str, Any]] = OrderedDict()
@@ -128,6 +133,7 @@ class ChatRequest(BaseModel):
     categories: list[str] | None = None
     tone: str | None = None
     show_thinking: bool = False
+    diffusion_view: bool = False
     user_id: str | None = None
 
 
@@ -285,41 +291,102 @@ def _locate_highlight_span(highlight: str, content: str) -> tuple[int, int] | No
     """
     # Pure alphanumeric tokens — ignoring apostrophes lets us match the same
     # word even when the document uses curly quotes vs the chunk's straight ones.
-    tokens = [t for t in re.findall(r"[A-Za-z0-9]+", highlight or "") if len(t) >= 3]
-    # Cap at 10; more is usually noise that hurts match rate.
-    tokens = tokens[:10]
+    all_tokens = [t for t in re.findall(r"[A-Za-z0-9]+", highlight or "") if len(t) >= 3]
+    # Anchor the match on the first 10; more is usually noise that hurts match rate.
+    tokens = all_tokens[:10]
     if len(tokens) < 2:
         return None
 
-    def _try(n: int, gap: int) -> tuple[int, int] | None:
+    # Rendered PDFs split words across lines ("hu- man", "unhappi-<br>ness",
+    # ligature losses like "suffi ciency"), so a token must be allowed to break
+    # INSIDE itself: between any two letters permit an optional hyphen/soft-
+    # hyphen followed by a short run of whitespace or markup.
+    _brk = r"(?:[-­]?(?:<[^>]{0,80}>|\s){1,8})?"
+
+    def _tok(t: str) -> str:
+        return _brk.join(re.escape(ch) for ch in t)
+
+    def _try(n: int, gap: int) -> list[tuple[int, int]]:
         # Take the first N significant tokens, allow up to `gap` chars (of any
         # kind: words, whitespace, HTML tags, page-break markup) between
         # consecutive ones, lazily-matched so we get the tightest window.
+        # Returns ALL matches: a 10-word phrase can recur (epigraphs, quotes
+        # repeated in TOCs), and only the forward walk below can tell which
+        # occurrence is the actual passage.
         if n < 2:
-            return None
+            return []
         sep = r"[\s\S]{1," + str(gap) + r"}?"
         pat = re.compile(
-            r"\b" + sep.join(re.escape(t) for t in tokens[:n]) + r"\b",
+            r"\b" + sep.join(_tok(t) for t in tokens[:n]) + r"\b",
             flags=re.IGNORECASE,
         )
-        best: tuple[int, int] | None = None
-        for m in pat.finditer(content):
-            span = (m.start(), m.end())
-            if best is None or (span[1] - span[0]) < (best[1] - best[0]):
-                best = span
-        return best
+        return [(m.start(), m.end()) for m in pat.finditer(content)][:8]
 
     # Try progressively looser configurations. Most snippets resolve at the
     # first or second attempt; the long-tail keeps us from leaving the user
-    # at the top of the page. Smaller gap first → tighter (more accurate)
-    # match wins when both succeed.
+    # at the top of the page.
+    candidates: list[tuple[int, int]] = []
     for n, gap in ((10, 50), (8, 60), (6, 80), (4, 120), (3, 160)):
         if n > len(tokens):
             continue
-        hit = _try(n, gap)
-        if hit:
-            return hit
-    return None
+        candidates = _try(n, gap)
+        if candidates:
+            break
+    if not candidates:
+        return None
+
+    def _walk(head: tuple[int, int]) -> tuple[int, int]:
+        """Extend a head match through the rest of the excerpt.
+
+        Walk forward in 8-token strides, each matched within a bounded window
+        after the last verified point. A stride that fails to match (the two
+        extraction pipelines diverge: footnotes, section breaks, inserted
+        captions) is SKIPPED — up to 2 consecutive misses with a widened
+        window — so a divergent patch in the middle doesn't truncate the
+        highlight. Returns (verified_token_count, end_offset).
+        """
+        sep = r"[\s\S]{1,80}?"
+        pos = end = head[1]
+        verified = min(10, len(all_tokens))
+        misses = 0
+        window = 4000
+        i = 10  # the head consumed the first ~10 significant tokens
+        while i < len(all_tokens):
+            stride = all_tokens[i:i + 8]
+            if len(stride) < 3:
+                break  # too few leftover tokens to match reliably
+            # no trailing \b: a length-capped excerpt may end mid-word
+            pat = re.compile(
+                r"\b" + sep.join(_tok(t) for t in stride),
+                flags=re.IGNORECASE,
+            )
+            m = pat.search(content, pos, pos + window)
+            if m:
+                end = m.end()
+                pos = end
+                verified += len(stride)
+                misses = 0
+                window = 4000
+            else:
+                misses += 1
+                if misses > 2:
+                    break
+                window = 9000  # widen past the divergent patch, keep position
+            i += 8
+        return verified, end
+
+    # Pick the head occurrence whose forward walk verifies the most of the
+    # excerpt — that's the real passage; a coincidental phrase match goes
+    # nowhere on the very next stride.
+    best_head = candidates[0]
+    best_verified, best_end = _walk(best_head)
+    for cand in candidates[1:]:
+        if best_verified >= len(all_tokens):
+            break
+        verified, cand_end = _walk(cand)
+        if verified > best_verified:
+            best_head, best_verified, best_end = cand, verified, cand_end
+    return (best_head[0], best_end)
 
 
 def _get_active_collection_name_safe() -> str:
@@ -764,13 +831,28 @@ def _strip_page_headers(text: str) -> str:
     return text.strip()
 
 
+def _unwrap_excerpt(text: str) -> str:
+    """Collapse PDF-layout line wraps so excerpts reflow naturally in the UI.
+
+    Extracted page text keeps a newline at every printed line, so excerpts
+    break at fixed columns. Rejoin hyphenated wraps, turn single newlines
+    into spaces, and keep blank lines as real paragraph breaks.
+    """
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
+    text = re.sub(r"\n{2,}", "\x00", text)
+    text = re.sub(r"\s*\n\s*", " ", text)
+    text = text.replace("\x00", "\n\n")
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
+
+
 def _build_chat_sources(results) -> list[dict[str, Any]]:
     sources = []
     for result in results:
         rel_path = result.relative_path or (
             os.path.relpath(result.source_path, DOCUMENTS_DIR) if result.source_path else result.source
         )
-        excerpt = _strip_page_headers(result.excerpt)
+        excerpt = _unwrap_excerpt(_strip_page_headers(result.excerpt))
         if len(excerpt) > MAX_EXCERPT_CHARS:
             excerpt = excerpt[:MAX_EXCERPT_CHARS].rsplit(" ", 1)[0] + "..."
         sources.append({
@@ -1277,6 +1359,7 @@ def chat(payload: ChatRequest):
     if user_state_note:
         sys_msg = f"{sys_msg}\n\n{user_state_note}" if sys_msg else user_state_note
     want_thinking = bool(payload.show_thinking)
+    want_diffusion = bool(payload.diffusion_view)
 
     def generate():
         first_event = {"sources": sources}
@@ -1286,19 +1369,102 @@ def chat(payload: ChatRequest):
 
         response_buffer: list[str] = []
         try:
-            for kind, text in engine.stream_typed(prompt, history=history, system_message=sys_msg):
-                if kind == "thinking":
-                    if want_thinking:
-                        yield f"data: {json.dumps({'thinking': text})}\n\n"
+            # Iterative grounding: generate ONE diffusion block per call; between
+            # blocks, re-retrieve using the draft so far and fold new chunks into
+            # the context. Strictly additive — chunks are never evicted, so
+            # grounding the model already drew on cannot vanish mid-answer.
+            merged_results = list(results)
+            seen_chunks = {(r.source, (r.excerpt or r.text or "")[:80]) for r in results}
+            cur_prompt = prompt
+            raw_answer = ""   # verbatim committed text (incl. thought tags) fed back as continue_text
+            agg_tokens = 0
+            gen_t0 = time.monotonic()
+            for block_i in range(GROUND_MAX_BLOCKS):
+                block_raw = ""
+                block_tokens = 0
+                finish = None
+                for kind, text in engine.stream_typed(
+                    cur_prompt,
+                    history=history,
+                    system_message=sys_msg,
+                    continue_text=raw_answer or None,
+                    n_blocks=1,
+                ):
+                    if kind == "diffusion":
+                        # Per-denoising-step snapshot of the WHOLE answer so far
+                        # (replace semantics). Only forwarded when the client
+                        # opted into the animated diffusion view; the committed
+                        # `token` events below remain the canonical answer text.
+                        if want_diffusion and isinstance(text, dict):
+                            frame = dict(text)
+                            frame["block"] = block_i
+                            yield f"data: {json.dumps({'diffusion': frame})}\n\n"
+                    elif kind == "stats":
+                        # backend stats are per-call; aggregate across blocks so
+                        # the client sees answer-level throughput
+                        if isinstance(text, dict):
+                            block_tokens = int(text.get("completion_tokens") or 0)
+                            elapsed = max(time.monotonic() - gen_t0, 1e-6)
+                            agg = {
+                                "completion_tokens": agg_tokens + block_tokens,
+                                "elapsed_ms": round(elapsed * 1000),
+                                "tok_per_sec": round((agg_tokens + block_tokens) / elapsed, 1),
+                            }
+                            yield f"data: {json.dumps({'stats': agg})}\n\n"
+                    elif kind == "raw":
+                        block_raw = text or ""
+                    elif kind == "finish":
+                        finish = text
+                    elif kind == "thinking":
+                        if want_thinking:
+                            yield f"data: {json.dumps({'thinking': text})}\n\n"
+                        else:
+                            # SSE comment — invisible to EventSource but keeps the
+                            # connection alive across proxies (Cloudflare free
+                            # tunnels close idle streams around 100s; thinking
+                            # models can reason longer than that before any token).
+                            yield ": keepalive\n\n"
                     else:
-                        # SSE comment — invisible to EventSource but keeps the
-                        # connection alive across proxies (Cloudflare free
-                        # tunnels close idle streams around 100s; thinking
-                        # models can reason longer than that before any token).
-                        yield ": keepalive\n\n"
-                else:
-                    response_buffer.append(text)
-                    yield f"data: {json.dumps({'token': text})}\n\n"
+                        response_buffer.append(text)
+                        yield f"data: {json.dumps({'token': text})}\n\n"
+                raw_answer += block_raw
+                agg_tokens += block_tokens
+                if finish != "length":
+                    break  # answer complete (EOG) — "length" means more blocks needed
+                draft = "".join(response_buffer).strip()
+                if not draft:
+                    continue  # still inside the thought channel; nothing to ground on yet
+                try:
+                    regrounded = retriever_instance.retrieve(
+                        retrieval_query,
+                        categories=categories,
+                        embedding_query=f"{query}\n\n{draft[-900:]}",
+                    )
+                except Exception as rg_exc:
+                    print(f"[REGROUND-ERR] {type(rg_exc).__name__}: {rg_exc}", flush=True)
+                    continue
+                fresh = []
+                for r in regrounded:
+                    chunk_key = (r.source, (r.excerpt or r.text or "")[:80])
+                    if chunk_key not in seen_chunks:
+                        seen_chunks.add(chunk_key)
+                        fresh.append(r)
+                if not fresh:
+                    continue
+                fresh.sort(key=lambda r: r.similarity, reverse=True)
+                merged_results.extend(fresh[:GROUND_NEW_CHUNKS_PER_BLOCK])
+                cur_prompt = USER_MESSAGE_TEMPLATE.format(
+                    context=retriever_instance.format_context(merged_results),
+                    question=query,
+                )
+                print(
+                    f"[REGROUND] after block {block_i}: +{len(fresh[:GROUND_NEW_CHUNKS_PER_BLOCK])} chunks"
+                    f" -> {len(merged_results)} total: "
+                    + ", ".join(r.source for r in fresh[:GROUND_NEW_CHUNKS_PER_BLOCK]),
+                    flush=True,
+                )
+                # cumulative source list — clients replace their copy wholesale
+                yield f"data: {json.dumps({'sources': _build_chat_sources(merged_results)})}\n\n"
             # "Keep exploring" follow-up questions, generated from the answer.
             # Best-effort: never let a failure here break the stream.
             try:
@@ -1524,6 +1690,7 @@ def serve_document(filepath: str):
 def render_document(
     filepath: str,
     highlight: str = Query(default=""),
+    debug: str = Query(default=""),
 ):
     import html as html_mod
     import re
@@ -1580,6 +1747,18 @@ def render_document(
 
     if highlight:
         match_span = _locate_highlight_span(highlight, content)
+        if debug:
+            span_words = 0
+            if match_span:
+                span_words = len(re.sub(r"<[^>]+>", " ", content[match_span[0]:match_span[1]]).split())
+            return JSONResponse({
+                "hl_len": len(highlight),
+                "hl_head": highlight[:60],
+                "hl_tail": highlight[-60:],
+                "content_len": len(content),
+                "span": list(match_span) if match_span else None,
+                "span_words": span_words,
+            })
         if match_span is not None:
             start, end = match_span
             # If the matched span starts with a run of ALL-CAPS title words
@@ -1602,7 +1781,26 @@ def render_document(
                 if pos < len(span_text) - 20:
                     start += pos
             snippet = content[start:end]
-            highlighted = f'<span id="hl" style="background:#d4f5e9;padding:2px 4px;border-radius:3px;">{snippet}</span>'
+            # The matched range can cross block elements (</p><p> in epub
+            # sections, page divs in PDFs). A single wrapping <span> is invalid
+            # HTML there — browsers auto-close it at the first block boundary,
+            # which visually truncates the highlight to one paragraph. Wrap
+            # each text run between tags individually instead; the first run
+            # carries id="hl" as the scroll anchor.
+            first_seg = [True]
+
+            def _wrap_seg(m: "re.Match[str]") -> str:
+                seg = m.group(0)
+                if not seg.strip():
+                    return seg
+                anchor = ' id="hl"' if first_seg[0] else ""
+                first_seg[0] = False
+                return (
+                    f'<span{anchor} class="hl-seg" '
+                    f'style="background:#d4f5e9;padding:2px 0;border-radius:3px;">{seg}</span>'
+                )
+
+            highlighted = re.sub(r"[^<>]+", _wrap_seg, snippet)
             content = content[:start] + highlighted + content[end:]
 
     purchase_notice = (

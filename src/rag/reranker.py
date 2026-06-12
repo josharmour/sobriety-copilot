@@ -18,6 +18,7 @@ Configurable via:
 
 from __future__ import annotations
 
+import math
 import os
 import threading
 from typing import TYPE_CHECKING
@@ -69,12 +70,36 @@ def warmup() -> None:
             print(f"[RERANK-WARMUP-ERR] {type(exc).__name__}: {exc}", flush=True)
 
 
-def rerank(query: str, results: list["RetrievalResult"], top_k: int) -> list["RetrievalResult"]:
+def _sigmoid(x: float) -> float:
+    """Squash a cross-encoder logit to (0, 1) so multiplicative boosts behave.
+
+    ms-marco scores are unbounded logits (often negative); multiplying a raw
+    logit by a boost would flip sign and meaning. Sigmoid is monotonic, so the
+    pre-boost ordering is preserved while boosts become well-defined scaling.
+    """
+    x = float(x)
+    if x >= 0:
+        return 1.0 / (1.0 + math.exp(-x))
+    z = math.exp(x)
+    return z / (1.0 + z)
+
+
+def rerank(
+    query: str,
+    results: list["RetrievalResult"],
+    top_k: int,
+    boosts: list[float] | None = None,
+) -> list["RetrievalResult"]:
     """Reorder results by cross-encoder relevance and trim to top_k.
 
     Scores against `excerpt` (the matched chunk) rather than the expanded
     parent `text` — the excerpt is what the upstream retrievers actually
     ranked, and it fits ms-marco's short-passage training distribution.
+
+    `boosts` (aligned with `results`) multiplies each squashed cross-encoder
+    score, re-applying priors the cross-encoder is blind to — category weight
+    and any work the query named by title. Without it the cross-encoder would
+    silently demote, e.g., the Big Book even when the user asked for it.
 
     On any model failure we fall back to the input order so the chat path
     never breaks because of reranking.
@@ -90,5 +115,12 @@ def rerank(query: str, results: list["RetrievalResult"], top_k: int) -> list["Re
         print(f"[RERANK-ERR] {type(exc).__name__}: {exc}", flush=True)
         return results[:top_k]
 
-    ranked = sorted(zip(results, scores), key=lambda pair: float(pair[1]), reverse=True)
+    final_scores = [_sigmoid(s) for s in scores]
+    if boosts:
+        final_scores = [
+            score * (boost if boost else 1.0)
+            for score, boost in zip(final_scores, boosts)
+        ]
+
+    ranked = sorted(zip(results, final_scores), key=lambda pair: float(pair[1]), reverse=True)
     return [r for r, _ in ranked[:top_k]]

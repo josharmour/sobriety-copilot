@@ -484,6 +484,62 @@
     #bug-submit:hover { background: var(--brand-hover); }
     #bug-submit:disabled { opacity: 0.55; cursor: not-allowed; }
 
+    #lit-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--bg-overlay);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(4px);
+    }
+    #lit-overlay.active { display: flex; }
+    #lit-modal {
+      background: var(--bg-surface);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      width: min(90vw, 420px);
+      box-shadow: var(--shadow-xl);
+    }
+    #lit-modal h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--brand);
+      margin-bottom: 0.75rem;
+    }
+    #lit-modal textarea {
+      width: 100%;
+      min-height: 100px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem;
+      font-size: 0.875rem;
+      font-family: inherit;
+      resize: vertical;
+      margin-bottom: 0.75rem;
+      background: var(--bg-surface-2);
+      color: var(--text-primary);
+    }
+    #lit-modal textarea:focus { outline: none; border-color: var(--accent); }
+    #lit-modal .lit-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+    }
+    #lit-modal .lit-actions button {
+      border: none;
+      border-radius: var(--radius-pill);
+      padding: 0.5rem 1rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+    }
+    #lit-cancel { background: var(--bg-surface-3); color: var(--text-secondary); }
+    #lit-cancel:hover { background: var(--border); }
+    #lit-submit { background: var(--brand); color: var(--text-on-brand); }
+    #lit-submit:hover { background: var(--brand-hover); }
+    #lit-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+
     /* ========== Settings popover ========== */
     #settings-panel {
       display: none;
@@ -512,6 +568,13 @@
       margin-top: 1rem;
       padding-top: 1rem;
       border-top: 1px solid var(--border-subtle);
+    }
+    #settings-panel .section-hint {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: -0.25rem;
+      margin-bottom: 0.75rem;
+      line-height: 1.35;
     }
     .theme-options {
       display: flex;
@@ -645,54 +708,6 @@
       font-style: italic;
     }
 
-    /* Thinking panel — streamed reasoning shown above assistant message */
-    .msg-thinking {
-      align-self: flex-start;
-      max-width: 90%;
-      margin-bottom: 0.375rem;
-      background: var(--bg-surface-2);
-      border: 1px dashed var(--border-strong);
-      border-radius: var(--radius-md);
-      font-size: 0.78rem;
-      line-height: 1.5;
-      color: var(--text-tertiary);
-      overflow: hidden;
-    }
-    .msg-thinking summary {
-      list-style: none;
-      cursor: pointer;
-      padding: 0.4rem 0.75rem;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      font-weight: 600;
-      color: var(--text-secondary);
-      user-select: none;
-    }
-    .msg-thinking summary::-webkit-details-marker { display: none; }
-    .msg-thinking summary::before {
-      content: "▸";
-      display: inline-block;
-      transition: transform 0.15s ease;
-      font-size: 0.65rem;
-    }
-    .msg-thinking[open] summary::before { transform: rotate(90deg); }
-    .msg-thinking summary .thinking-status {
-      margin-left: auto;
-      font-size: 0.65rem;
-      font-weight: 500;
-      color: var(--text-muted);
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-    .msg-thinking .thinking-body {
-      padding: 0 0.75rem 0.6rem 1.55rem;
-      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      max-height: 22rem;
-      overflow-y: auto;
-    }
     .index-card { display: flex; flex-direction: column; gap: 0.5rem; }
     .index-row {
       display: flex;
@@ -864,6 +879,13 @@
       font-weight: 600;
       margin-right: 0.125rem;
     }
+    /* Inline literature references turned into hyperlinks by markSourceNamesInHtml */
+    .msg a.source-ref {
+      color: var(--brand);
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      cursor: pointer;
+    }
     .source-chip {
       display: inline-flex;
       align-items: center;
@@ -885,6 +907,38 @@
       border-color: var(--accent);
     }
     .source-chip svg { width: 12px; height: 12px; }
+    /* Clickable "Keep exploring" follow-up question chips under an answer */
+    .followups-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin-top: 0.65rem;
+      align-self: stretch;
+    }
+    .followups-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .followup-chip {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-align: left;
+      line-height: 1.4;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .followup-chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-soft);
+    }
 
     /* Message actions */
     .msg-actions {
@@ -953,6 +1007,27 @@
     @keyframes bounce {
       0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
       40% { transform: translateY(-6px); opacity: 1; }
+    }
+
+    /* ========== Diffusion denoising animation ==========
+       While the diffusion model resolves its canvas, each per-step snapshot
+       replaces the whole bubble (plain text, pre-wrap). The committed answer
+       then re-renders as markdown and the denoising treatment is removed. */
+    .msg.assistant.denoising {
+      white-space: pre-wrap;
+      border-color: var(--accent-soft);
+      animation: denoise-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes denoise-pulse {
+      0%, 100% { opacity: 0.95; }
+      50% { opacity: 0.7; }
+    }
+    .diffusion-badge {
+      margin-top: 0.25rem;
+      font-size: 0.7rem;
+      color: var(--accent);
+      opacity: 0.75;
+      font-variant-numeric: tabular-nums;
     }
 
     /* ========== Modal (document viewer) ========== */
@@ -1428,6 +1503,39 @@
       line-height: 1.6;
       margin-bottom: 0.5rem;
       padding: 0 1rem;
+    }
+    .literature-reminder {
+      background: var(--bg-surface-3);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      max-width: 560px;
+      margin: 0.5rem auto 1.25rem auto;
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-start;
+      line-height: 1.4;
+      text-align: left;
+    }
+    .literature-reminder svg {
+      flex-shrink: 0;
+      color: var(--brand);
+      margin-top: 0.15rem;
+    }
+    .literature-reminder .link-btn {
+      background: none;
+      border: none;
+      color: var(--brand);
+      text-decoration: underline;
+      padding: 0;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: inherit;
+    }
+    .literature-reminder .link-btn:hover {
+      color: var(--brand-hover);
     }
     .topic-grid {
       display: grid;
@@ -2001,7 +2109,11 @@
       </div>
       <div class="section">
         <h3>Literature Sources</h3>
+        <p class="section-hint">By default, all literature sources are enabled. To limit search results to conference-approved literature only, uncheck the other sources.</p>
         <div id="cat-list"></div>
+        <div class="suggest-lit-row" style="margin-top: 0.75rem; display: flex; justify-content: flex-end;">
+          <button id="suggest-lit-btn" class="link-btn" type="button" style="font-size: 0.75rem; background: none; border: none; color: var(--brand); text-decoration: underline; cursor: pointer; padding: 0;">Suggest new literature</button>
+        </div>
       </div>
       <div class="section settings-footer">
         <button id="settings-save-btn" type="button">
@@ -2044,6 +2156,10 @@
   <div id="chat">
     <div id="starter-topics">
       <h2>Start a Conversation</h2>
+      <div class="literature-reminder" id="literature-reminder">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span>By default, Sobriety Copilot searches all recovery literature sources. To limit searches to <strong>conference-approved literature</strong> only, open <button class="link-btn" onclick="document.getElementById('settings-btn').click()">Settings</button> and uncheck the other sources.</span>
+      </div>
       <div class="reflection" id="daily-reflection"></div>
       <div class="topic-grid" id="topic-grid"></div>
     </div>
@@ -2080,6 +2196,18 @@
       <div class="bug-actions">
         <button id="bug-cancel">Cancel</button>
         <button id="bug-submit">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Suggest Literature modal -->
+  <div id="lit-overlay">
+    <div id="lit-modal">
+      <h3>Suggest Literature</h3>
+      <textarea id="lit-text" placeholder="Tell us what recovery book, pamphlet, or literature source you would like added to Sobriety Copilot (e.g. book title, author, AA/NA conference-approved status, etc.)..."></textarea>
+      <div class="lit-actions">
+        <button id="lit-cancel">Cancel</button>
+        <button id="lit-submit">Submit</button>
       </div>
     </div>
   </div>
@@ -2258,7 +2386,6 @@
       categories: "enabledCategories",
       meetingLocation: "sc.meetingLocation",
       tone: "sc.tone",
-      thinkingExpanded: "sc.thinkingExpanded",
     };
     const TONES = [
       { id: "warm", label: "Warm", desc: "Reassuring, conversational" },
@@ -2669,6 +2796,12 @@
     const bugSubmit = document.getElementById("bug-submit");
     const bugCancel = document.getElementById("bug-cancel");
 
+    const suggestLitBtn = document.getElementById("suggest-lit-btn");
+    const litOverlay = document.getElementById("lit-overlay");
+    const litText = document.getElementById("lit-text");
+    const litSubmit = document.getElementById("lit-submit");
+    const litCancel = document.getElementById("lit-cancel");
+
     // ============================================================
     // Storage helpers
     // ============================================================
@@ -2740,16 +2873,6 @@
       });
     }
     renderToneSelector();
-
-    // Thinking panel — always streamed from the server, but the panel
-    // starts collapsed (just the summary chevron) until the user expands
-    // it. Their choice persists across conversations and reloads.
-    function getThinkingExpanded() {
-      return localStorage.getItem(STORAGE_KEYS.thinkingExpanded) === "1";
-    }
-    function setThinkingExpanded(v) {
-      localStorage.setItem(STORAGE_KEYS.thinkingExpanded, v ? "1" : "0");
-    }
 
     // ── Voice picker init ────────────────────────────────────────────
     // Populates from the OS's local Web Speech voices (no network, no
@@ -4005,10 +4128,50 @@
       bugSubmit.disabled = false;
     });
 
+    // Suggest Literature report
+    if (suggestLitBtn) {
+      suggestLitBtn.addEventListener("click", () => {
+        litText.value = "";
+        litOverlay.classList.add("active");
+        litText.focus();
+      });
+    }
+    if (litCancel) {
+      litCancel.addEventListener("click", () => litOverlay.classList.remove("active"));
+    }
+    if (litOverlay) {
+      litOverlay.addEventListener("click", e => { if (e.target === litOverlay) litOverlay.classList.remove("active"); });
+    }
+    if (litSubmit) {
+      litSubmit.addEventListener("click", async () => {
+        const suggestion = litText.value.trim();
+        if (!suggestion) return;
+        litSubmit.disabled = true;
+        try {
+          const res = await fetch("/api/bugs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              description: `[Literature Suggestion] ${suggestion}`,
+              conversation: conversation.slice(-10),
+              url: window.location.href,
+            }),
+          });
+          if (res.ok) {
+            litOverlay.classList.remove("active");
+            showToast("Literature suggestion submitted");
+          } else {
+            showToast("Failed to submit suggestion");
+          }
+        } catch { showToast("Failed to submit suggestion"); }
+        litSubmit.disabled = false;
+      });
+    }
+
     // ============================================================
     // Categories
     // ============================================================
-    const DEFAULT_CATEGORIES = ["conference_approved"];
+    const DEFAULT_CATEGORIES = null;
     let enabledCategories = loadJson(STORAGE_KEYS.categories, undefined);
     if (enabledCategories === undefined) enabledCategories = DEFAULT_CATEGORIES;
     function getActiveCategories() { return enabledCategories; }
@@ -4169,6 +4332,7 @@
         if (crisisOverlay.classList.contains("active")) closeCrisis();
         if (meetingOverlay && meetingOverlay.classList.contains("active")) closeMeeting();
         if (drawer.classList.contains("active")) closeDrawer();
+        if (litOverlay && litOverlay.classList.contains("active")) litOverlay.classList.remove("active");
       }
       if (overlay.classList.contains("active") && modalState.entries.length > 1) {
         const tag = (e.target.tagName || "").toLowerCase();
@@ -4184,16 +4348,15 @@
     });
 
     function compactHighlight(text) {
+      // Send the (normalized) full excerpt: the server anchors its match on
+      // the leading tokens and extends it to the trailing ones, so truncating
+      // here to a dozen words collapses the viewer highlight to one sentence.
       const normalized = (text || "").replace(/\s+/g, " ").trim();
       if (!normalized) return "";
-      const words = normalized.split(" ").slice(0, 12);
-      let compact = words.join(" ");
-      if (compact.length > 180) {
-        const shortened = compact.slice(0, 180);
-        const boundary = shortened.lastIndexOf(" ");
-        compact = (boundary > 60 ? shortened.slice(0, boundary) : shortened).trim();
-      }
-      return compact;
+      if (normalized.length <= 1200) return normalized;
+      const shortened = normalized.slice(0, 1200);
+      const boundary = shortened.lastIndexOf(" ");
+      return (boundary > 600 ? shortened.slice(0, boundary) : shortened).trim();
     }
     function buildRenderUrl(url, highlightText) {
       const renderUrl = url.replace("/api/documents/", "/api/render/");
@@ -4202,12 +4365,15 @@
       return encodeURI(renderUrl) + "?highlight=" + encodeURIComponent(highlight);
     }
     function formatSourceLabel(source, url, labelCounts) {
-      if (!url || (labelCounts.get(source) || 0) < 2) return source;
+      // Chips show the human title ("As Bill Sees It"), not the raw filename
+      // ("As Bill Sees It - Bill W.pdf"); the full filename stays in the tooltip.
+      const title = cleanSourceTitle(source) || source;
+      if (!url || (labelCounts.get(source) || 0) < 2) return title;
       const clean = decodeURIComponent(url).replace(/^\/api\/documents\//, "");
       const parts = clean.split("/").filter(Boolean);
-      if (parts.length < 2) return source;
+      if (parts.length < 2) return title;
       const category = parts[0].replace(/[_-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-      return `${source} (${category})`;
+      return `${title} (${category})`;
     }
     function groupSourcesByDocument(sources) {
       const grouped = new Map();
@@ -4276,6 +4442,7 @@
       a.type = "button";
       a.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span></span>`;
       a.querySelector("span").textContent = entry.label;
+      a.title = entry.source || entry.label;
       a.addEventListener("click", () => openModal(allEntries, index, query));
       return a;
     }
@@ -4765,17 +4932,220 @@
       return row;
     }
 
+    // ── Source name → URL map for inline citation linking ─────────────────────
+    // Maps lowercased source name fragments to their URL, used to mark up
+    // literature references in assistant messages as clickable hyperlinks.
+    // Human-facing work title from a source filename. Strips directory, the
+    // file extension, and a trailing " - <author/fellowship>" suffix, e.g.
+    // "Step Working Guides - NA.pdf" -> "Step Working Guides". Mirrors the
+    // backend _display_title() so the model's title matches what we search for.
+    function cleanSourceTitle(source) {
+      if (!source) return "";
+      let t = String(source).split('/').pop();   // basename
+      t = t.replace(/\.[a-z0-9]+$/i, "");          // strip extension
+      const dash = t.indexOf(" - ");
+      if (dash !== -1) t = t.slice(0, dash);
+      return t.replace(/_/g, " ").trim();
+    }
+
+    function buildSourceNameMap(sources) {
+      const map = new Map();
+      for (const src of sources) {
+        if (!src.url) continue;
+        const title = cleanSourceTitle(src.source);
+        // Only map titles >= 4 chars to avoid overly-generic matches
+        if (title.length >= 4) {
+          map.set(title.toLowerCase(), src.url);
+        }
+      }
+      return map;
+    }
+
+    // Escape special regex characters in a string
+    function preg_quote(str) {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // Build a forgiving regex for a clean title: flexible whitespace and an
+    // optional trailing "s" so "Step Working Guides" also matches the singular
+    // "Step Working Guide" the model often writes.
+    function sourceTitleRegex(titleLower, flags) {
+      const core = titleLower.replace(/s$/, "");   // drop existing plural s
+      const pat = preg_quote(core).replace(/ +/g, "\\s+") + "s?";
+      return new RegExp("\\b" + pat + "\\b", flags);
+    }
+
+    // Filter sources to only those actually referenced in the response text.
+    // A source is "referenced" if its clean title appears in the text.
+    function filterSourcesReferencedInText(sources, text) {
+      if (!text || !sources || sources.length === 0) return sources || [];
+      return sources.filter(s => {
+        const title = cleanSourceTitle(s.source);
+        if (title.length < 4) return false;
+        return sourceTitleRegex(title.toLowerCase(), "i").test(text);
+      });
+    }
+
+    // Sources to show as citation chips: the distinct documents this answer
+    // actually drew on (the retrieved RAG context), most-relevant first and
+    // capped. This is independent of whether the model named them in prose —
+    // naming a title just ADDS an inline underline link via markSourceNames.
+    // (Gating chips on prose mentions hid them entirely, since the model often
+    // writes "the literature says…" without naming a specific work.)
+    function selectCitationSources(sources, limit = 4) {
+      if (!sources || !sources.length) return [];
+      const seen = new Set();
+      const out = [];
+      for (const s of sources) {
+        const key = s.url || cleanSourceTitle(s.source);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push(s);
+        if (out.length >= limit) break;
+      }
+      return out;
+    }
+
+    // Walk all text nodes under root (skipping <a>, <code>, <pre>) and replace
+    // source name mentions with <a class="source-ref" href="...">name</a>.
+    // Accepts either raw text (which it renders via renderMarkdown first)
+    // or already-rendered HTML (detected by the presence of HTML tags).
+    function markSourceNames(html_or_text, sourceNameMap) {
+      if (!sourceNameMap || sourceNameMap.size === 0) return html_or_text;
+
+      // Determine if input is raw text (needs rendering) or HTML
+      const isRawText = !html_or_text.includes('<');
+      const html = isRawText ? renderMarkdown(html_or_text) : html_or_text;
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+
+      const textNodes = [];
+      const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null);
+      let node;
+      while ((node = walker.nextNode())) {
+        textNodes.push(node);
+      }
+
+      for (const textNode of textNodes) {
+        const parent = textNode.parentNode;
+        if (!parent) continue;
+        const tag = parent.tagName;
+        if (tag === 'A' || tag === 'CODE' || tag === 'PRE') continue;
+
+        let text = textNode.textContent;
+        let replaced = false;
+        const parts = [];
+        let lastIndex = 0;
+
+        // Build per-title regexes (sorted longest-first so a long title like
+        // "Alcoholics Anonymous" is tried before a short one), then a combined
+        // pattern. Each match is resolved back to its URL via its own regex,
+        // so plural/singular variants still map to the right source.
+        const entries = Array.from(sourceNameMap.keys())
+          .sort((a, b) => b.length - a.length)
+          .map(name => ({ re: sourceTitleRegex(name, "i"), url: sourceNameMap.get(name) }));
+        if (entries.length === 0) continue;
+
+        const combinedPattern = new RegExp(
+          entries.map(e => e.re.source).join('|'),
+          'gi'
+        );
+
+        const matches = text.matchAll(combinedPattern);
+        for (const m of matches) {
+          const entry = entries.find(e => e.re.test(m[0]));
+          const url = entry && entry.url;
+          if (!url) continue;
+          // Add text before this match
+          if (m.index > lastIndex) {
+            parts.push(document.createTextNode(text.slice(lastIndex, m.index)));
+          }
+          // Add the link. Keep the doc URL in a data attribute (preserved
+          // verbatim through the innerHTML round-trip); wireSourceRefLinks()
+          // later attaches a click handler that opens the in-app viewer modal
+          // instead of navigating to /api/documents/ (which returns an error).
+          const a = document.createElement('a');
+          a.className = 'source-ref';
+          a.setAttribute('data-src-url', url);
+          a.setAttribute('role', 'button');
+          a.textContent = m[0];
+          parts.push(a);
+          lastIndex = m.index + m[0].length;
+          replaced = true;
+        }
+
+        if (replaced) {
+          if (lastIndex < text.length) {
+            parts.push(document.createTextNode(text.slice(lastIndex)));
+          }
+          const frag = document.createDocumentFragment();
+          parts.forEach(p => frag.appendChild(p));
+          parent.replaceChild(frag, textNode);
+        }
+      }
+
+      return doc.body.innerHTML;
+    }
+
+    // After markSourceNames() has rewritten the body HTML, attach click
+    // handlers to the inline source-ref links so they open the in-app viewer
+    // modal (same as the source chips) rather than navigating to the raw
+    // /api/documents/ URL, which intentionally returns an error.
+    function wireSourceRefLinks(container, groupedSources, query) {
+      if (!container || !groupedSources || !groupedSources.length) return;
+      container.querySelectorAll("a.source-ref").forEach(a => {
+        const url = a.getAttribute("data-src-url");
+        let idx = groupedSources.findIndex(e => e.url === url);
+        if (idx < 0) idx = 0;
+        a.addEventListener("click", e => {
+          e.preventDefault();
+          openModal(groupedSources, idx, query);
+        });
+      });
+    }
+
+    // Clickable follow-up question chips rendered under a finished answer.
+    // Only the latest answer keeps them — send() clears stale ones.
+    function buildFollowups(questions) {
+      const row = document.createElement("div");
+      row.className = "followups-row";
+      const label = document.createElement("div");
+      label.className = "followups-label";
+      label.textContent = "Keep exploring";
+      row.appendChild(label);
+      questions.slice(0, 3).forEach(q => {
+        const chip = document.createElement("button");
+        chip.className = "followup-chip";
+        chip.type = "button";
+        chip.textContent = q;
+        chip.addEventListener("click", () => send(q));
+        row.appendChild(chip);
+      });
+      return row;
+    }
+
     function addAssistantMessage(text, sources, regenerateUserText, query) {
       const row = document.createElement("div");
       row.className = "msg-row assistant";
       const div = document.createElement("div");
       div.className = "msg assistant";
-      div.innerHTML = renderMarkdown(text);
+
+      // 1. Chips = the distinct sources this answer drew on (always shown).
+      //    Inline links use the full source set, so any title the model names
+      //    becomes a hyperlink even if it's outside the capped chip list.
+      const citationSources = selectCitationSources(sources);
+      const linkMap = buildSourceNameMap(sources || []);
+      div.innerHTML = linkMap.size > 0 ? markSourceNames(text, linkMap) : renderMarkdown(text);
+      if (linkMap.size > 0) {
+        wireSourceRefLinks(div, groupSourcesByDocument(sources), query || regenerateUserText);
+      }
+
       row.appendChild(div);
-      if (sources && sources.length) {
+      if (citationSources.length) {
         const srcDiv = document.createElement("div");
         srcDiv.className = "sources-row";
-        appendSourceLinks(srcDiv, sources, query || regenerateUserText);
+        appendSourceLinks(srcDiv, citationSources, query || regenerateUserText);
         div.appendChild(srcDiv);
       }
       row.appendChild(buildMessageActions(text, regenerateUserText));
@@ -4830,25 +5200,33 @@
     let _renderRaf = null;
     let _renderPendingTarget = null;
     let _renderPendingText = "";
-    function scheduleStreamingRender(target, text) {
+    let _renderPendingPlain = false;
+    function _paintPendingRender() {
+      if (!_renderPendingTarget) return;
+      if (_renderPendingPlain) {
+        // transient diffusion canvas: plain text (escapes any token noise)
+        _renderPendingTarget.textContent = _renderPendingText;
+      } else {
+        _renderPendingTarget.innerHTML = renderMarkdown(_renderPendingText);
+      }
+      chat.scrollTop = chat.scrollHeight;
+    }
+    function scheduleStreamingRender(target, text, plain = false) {
       _renderPendingTarget = target;
       _renderPendingText = text;
+      _renderPendingPlain = plain;
       if (_renderRaf != null) return;
       _renderRaf = requestAnimationFrame(() => {
         _renderRaf = null;
-        if (!_renderPendingTarget) return;
-        _renderPendingTarget.innerHTML = renderMarkdown(_renderPendingText);
-        chat.scrollTop = chat.scrollHeight;
+        _paintPendingRender();
       });
     }
     function flushStreamingRender() {
       if (_renderRaf != null) { cancelAnimationFrame(_renderRaf); _renderRaf = null; }
-      if (_renderPendingTarget) {
-        _renderPendingTarget.innerHTML = renderMarkdown(_renderPendingText);
-        chat.scrollTop = chat.scrollHeight;
-      }
+      _paintPendingRender();
       _renderPendingTarget = null;
       _renderPendingText = "";
+      _renderPendingPlain = false;
     }
 
     async function send(text, opts = {}) {
@@ -4861,6 +5239,8 @@
       if (!opts.replayingUserText) {
         addUserMessage(text);
       }
+      // Only the most recent answer shows follow-up chips — drop stale ones.
+      document.querySelectorAll(".followups-row").forEach(el => el.remove());
       msg.value = "";
       msg.style.height = "auto";
       hideAC();
@@ -4877,6 +5257,7 @@
             history: conversation.slice(-10),
             categories: getActiveCategories(),
             tone: getTone(),
+            diffusion_view: true,
           }),
         });
         if (!res.ok || !res.body) throw new Error(await readErrorResponse(res));
@@ -4884,43 +5265,31 @@
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let fullText = "";
-        let thinkingText = "";
         let sources = [];
         let expandedQuery = "";
         let assistantRow = null;
         let assistantBody = null;
-        let thinkingPanel = null;
-        let thinkingBody = null;
-        let thinkingStatus = null;
+        let followups = [];
         let buffer = "";
-
-        function ensureThinkingPanel() {
-          if (thinkingPanel) return thinkingPanel;
-          removeTyping();
+        let diffusionBadge = null;
+        let genStats = null;
+        const ensureBubble = () => {
           if (!assistantRow) {
+            removeTyping();
             assistantRow = document.createElement("div");
             assistantRow.className = "msg-row assistant";
             chat.appendChild(assistantRow);
           }
-          thinkingPanel = document.createElement("details");
-          thinkingPanel.className = "msg-thinking";
-          thinkingPanel.open = getThinkingExpanded();
-          const summary = document.createElement("summary");
-          summary.innerHTML = '<span>Thinking</span><span class="thinking-status">streaming…</span>';
-          thinkingStatus = summary.querySelector(".thinking-status");
-          thinkingBody = document.createElement("div");
-          thinkingBody.className = "thinking-body";
-          thinkingPanel.appendChild(summary);
-          thinkingPanel.appendChild(thinkingBody);
-          // Insert above the message (which may not yet exist)
-          assistantRow.insertBefore(thinkingPanel, assistantRow.firstChild);
-          // Persist the user's choice — once they expand the panel here,
-          // every future conversation starts with it open.
-          thinkingPanel.addEventListener("toggle", () => {
-            setThinkingExpanded(thinkingPanel.open);
-          });
-          return thinkingPanel;
-        }
+          if (!assistantBody) {
+            assistantBody = document.createElement("div");
+            assistantBody.className = "msg assistant";
+            assistantRow.appendChild(assistantBody);
+          }
+        };
+        const removeDiffusionBadge = () => {
+          if (diffusionBadge) { diffusionBadge.remove(); diffusionBadge = null; }
+          if (assistantBody) assistantBody.classList.remove("denoising");
+        };
 
         while (true) {
           const { done, value } = await reader.read();
@@ -4934,51 +5303,87 @@
             if (payload.sources) {
               sources = payload.sources;
               if (payload.expanded_query) expandedQuery = payload.expanded_query;
-            } else if (payload.thinking) {
-              ensureThinkingPanel();
-              thinkingText += payload.thinking;
-              thinkingBody.textContent = thinkingText;
-              thinkingBody.scrollTop = thinkingBody.scrollHeight;
-              chat.scrollTop = chat.scrollHeight;
+            } else if (payload.diffusion) {
+              // Per-denoising-pass snapshot of the whole response: replace the
+              // bubble text each frame so the answer visibly resolves in place.
+              // The committed `token` events below remain the canonical text.
+              const frame = payload.diffusion;
+              const canvasText = (frame.content || "").trim();
+              if (canvasText) {
+                ensureBubble();
+                assistantBody.classList.add("denoising");
+                if (!diffusionBadge) {
+                  diffusionBadge = document.createElement("div");
+                  diffusionBadge.className = "diffusion-badge";
+                  assistantRow.appendChild(diffusionBadge);
+                }
+                diffusionBadge.textContent =
+                  `✦ denoising — pass ${(frame.step ?? 0) + 1}/${frame.total ?? "?"}` +
+                  (genStats ? ` · ${genStats.tok_per_sec} tok/s` : "");
+                scheduleStreamingRender(assistantBody, canvasText, true);
+              }
+            } else if (payload.stats) {
+              genStats = payload.stats;
             } else if (payload.token) {
-              if (!assistantRow) {
-                removeTyping();
-                assistantRow = document.createElement("div");
-                assistantRow.className = "msg-row assistant";
-                chat.appendChild(assistantRow);
-              }
-              if (!assistantBody) {
-                assistantBody = document.createElement("div");
-                assistantBody.className = "msg assistant";
-                assistantRow.appendChild(assistantBody);
-                // Mark thinking as finished; we keep it expanded for now so
-                // the user sees the final reasoning lines while the answer
-                // streams in. The auto-collapse fires on `done` below.
-                if (thinkingStatus) thinkingStatus.textContent = "done";
-              }
+              ensureBubble();
+              assistantBody.classList.remove("denoising");
               fullText += payload.token;
               scheduleStreamingRender(assistantBody, fullText);
+            } else if (payload.followups) {
+              followups = Array.isArray(payload.followups) ? payload.followups : [];
             } else if (payload.error) {
+              removeDiffusionBadge();
               flushStreamingRender();
               removeTyping();
               if (!assistantRow) addAssistantMessage("Error: " + payload.error, null, text);
             } else if (payload.done) {
+              // Keep a persistent throughput readout under the answer; just
+              // drop the denoising treatment.
+              if (genStats && assistantRow) {
+                if (assistantBody) assistantBody.classList.remove("denoising");
+                if (!diffusionBadge) {
+                  diffusionBadge = document.createElement("div");
+                  diffusionBadge.className = "diffusion-badge";
+                  assistantRow.appendChild(diffusionBadge);
+                }
+                diffusionBadge.textContent =
+                  `⚡ ${genStats.tok_per_sec} tok/s · ${genStats.completion_tokens} tok · ${(genStats.elapsed_ms / 1000).toFixed(1)}s`;
+              } else {
+                removeDiffusionBadge();
+              }
+              // Re-render the committed answer (markdown) in case the last
+              // scheduled paint was a transient plain-text canvas frame.
+              if (assistantBody && fullText) scheduleStreamingRender(assistantBody, fullText);
               flushStreamingRender();
               const highlightSeed = expandedQuery ? `${text}\n${expandedQuery}` : text;
-              if (assistantRow && sources.length > 0) {
+
+              // Chips = the distinct sources this answer drew on (always shown
+              // when the answer is grounded in retrieved literature). Inline
+              // underline links use the full source set.
+              const citationSources = selectCitationSources(sources);
+              const linkMap = buildSourceNameMap(sources || []);
+              if (linkMap.size > 0 && assistantBody) {
+                assistantBody.innerHTML = markSourceNames(assistantBody.innerHTML, linkMap);
+                wireSourceRefLinks(assistantBody, groupSourcesByDocument(sources), highlightSeed);
+              }
+
+              if (citationSources.length > 0) {
                 const srcDiv = document.createElement("div");
                 srcDiv.className = "sources-row";
-                appendSourceLinks(srcDiv, sources, highlightSeed);
-                assistantBody.appendChild(srcDiv);
+                appendSourceLinks(srcDiv, citationSources, highlightSeed);
+                if (assistantBody) assistantBody.appendChild(srcDiv);
               }
               if (assistantRow) {
                 assistantRow.appendChild(buildMessageActions(fullText, text));
+              }
+              if (assistantRow && followups.length) {
+                assistantRow.appendChild(buildFollowups(followups));
               }
               if (!opts.replayingUserText) conversation.push({ role: "user", content: text });
               conversation.push({
                 role: "assistant",
                 content: fullText,
-                sources,
+                sources: citationSources || [],
                 query: text,
                 highlight_seed: highlightSeed,
               });
@@ -4986,6 +5391,7 @@
             }
           }
         }
+        removeTyping();
         if (!assistantRow && !fullText) addAssistantMessage("(no response)", null, text);
       } catch (err) {
         flushStreamingRender();
@@ -5249,6 +5655,21 @@
     renderConvList();
     renderSavedList();
     renderStarterTopics();
+
+    // The literature-source reminder is useful at first but gets noisy. Show it
+    // for the first few visits, then retire it for good (per-browser).
+    (function retireLiteratureReminder() {
+      const el = document.getElementById("literature-reminder");
+      if (!el) return;
+      const KEY = "sc-lit-reminder-views";
+      let views = 0;
+      try { views = parseInt(localStorage.getItem(KEY) || "0", 10) || 0; } catch {}
+      if (views >= 3) {
+        el.style.display = "none";
+        return;
+      }
+      try { localStorage.setItem(KEY, String(views + 1)); } catch {}
+    })();
 
     // Service worker registration (PWA)
     if ("serviceWorker" in navigator) {

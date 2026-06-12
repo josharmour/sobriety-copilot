@@ -50,7 +50,15 @@ The full set lives in `docker-compose.yml` under `x-app-env`. The ones most wort
 | `RAG_COLLECTION` | `recovery_literature` | ChromaDB collection name |
 | `ENABLE_RERANKER` | `1` | Set to `0` to disable cross-encoder reranking |
 | `RERANKER_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Cross-encoder model name |
+| `ENABLE_HYDE` | `1` | Set to `0` to disable hypothetical passage generation (HyDE) |
 | `USER_MEMORY_DB_PATH` | `/app/user_memory.db` | SQLite path for `UserMemoryManager` |
+
+## Performance Optimization
+
+To make the app run faster, you can disable the CPU-heavy reranker and/or skip the pre-retrieval HyDE LLM query step. In your `.env` file:
+1. Set `ENABLE_HYDE=0` to skip generating hypothetical passages. This saves one entire LLM API call per prompt.
+2. Set `ENABLE_RERANKER=0` to disable cross-encoder reranking (which runs slowly on CPU-bound servers).
+3. Use a smaller or quantized model (e.g. `llama3:8b` or `gemma:2b` instead of larger reasoning models) to reduce token generation latency.
 
 ## Architecture
 
