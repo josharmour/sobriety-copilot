@@ -51,7 +51,13 @@ def repair_hyphenation(text: str) -> str:
 
     # Extract all lowercase standalone alphabetic words (length >= 2) to build a vocabulary
     words = re.findall(r'\b[a-zA-Z]{2,}\b', text)
-    valid_words = {w.lower() for w in words}
+    word_counts = {}
+    for w in words:
+        wl = w.lower()
+        word_counts[wl] = word_counts.get(wl, 0) + 1
+    
+    # A word is considered valid if it appears at least 2 times (avoid split fragment noise)
+    valid_words = {w for w, count in word_counts.items() if count >= 2}
 
     # Match word followed by a hyphen, then spacing/newlines, then another word
     pattern = r'\b([a-zA-Z]+)-\s*(\r?\n\s*|\s+)([a-zA-Z]+)\b'
@@ -106,7 +112,10 @@ def repair_ligatures(text: str) -> str:
         "definition", "define", "final", "finally", "difficult", "difficulty",
         "flourish", "flat", "flight", "flow", "flower", "fluid", "fly", "flying",
         "official", "officer", "office", "efficiency", "efficient", "affliction",
-        "conflict", "inflict", "conflate", "inflate", "deflate", "flu", "flush"
+        "conflict", "inflict", "conflate", "inflate", "deflate", "flu", "flush",
+        "find", "finds", "finding", "findings", "terrific", "profit", "profitable",
+        "flame", "fled", "flee", "fleet", "flesh", "float", "flock", "flood", "floor",
+        "flowed", "flows", "flung", "flurry", "flute", "reflect", "reflection"
     }
 
     # Matches word ending with f[il], followed by one or more whitespace, followed by another word

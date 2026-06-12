@@ -168,7 +168,7 @@ with `can_handle()/extract()` (lines 106-150), `_detect_running_headers` (line 2
 5. `garbage`: doubled-layer residue, lines with <40% alphanumeric chars.
 **Done when:** unit tests classify the D1/D2/D4 literal examples correctly.
 
-### T1.3 Manifest builder for PDFs
+### T1.3 Manifest builder for PDFs — **DONE**
 **Files:** new `src/rag/manifest_builder.py`; reuse the PDF extractor in
 `document_processor.py` for raw page text.
 **Steps:**
