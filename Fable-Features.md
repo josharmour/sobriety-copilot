@@ -72,8 +72,17 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 
 ---
 
-## Overnight log
+## Overnight log (2026-07-06 → 07-07)
 
-(updated as work proceeds)
-- 23:xx — P0 batch landed (permissions, menu, crisis expander). Backend agent running (bugs auth, chat-log gate, online meetings, geocoder, feeds).
-- P1 milestone tracker: local-only state + keytag milestones + starter-view card + settings entry + Android RemoteViews widget (midnight-safe day math in Kotlin, 30-min refresh, tap-to-open, discreet mode).
+All committed to master and deployed. Commits: 6cc7a48 checklist · f9f2e87 P0 fixes · 8bdb024 P1 tracker+widget · 90f9f98 P4 Today/inventory/reminders · b1ccdcf backend (bugs auth, logging gate, online directory, geocoder, feeds) · c0c4cde P2/P3 client · 3dc1610 P6/P7/P8 · 0786762 web build.
+
+**Verified tonight:** `flutter analyze` clean (4 pre-existing warnings only); debug APK builds; web release builds; backend py_compile + synthetic tests for the online-directory schedule math and fellowship filter; live feed probes (OIAA, Virtual NA, Recovery Dharma, CMA); **deployed to the NAS and verified in prod** — /api/health ok, /api/meetings/online serving 10,369 meetings with live-now sorting, GET /api/bugs → 403 without token.
+
+**To test on the phone (debug APK):** milestone tracker (starter-view card + Settings → Recovery tracker; long-press home screen → widgets → Sobriety counter), Today view (menu or under-input button: daily reading, morning/evening practice, evening review with streaks + sponsor share, reminders), meetings sheet (Online now tab with LIVE badges + join flow + anonymity note; radius chips; Dharma/CMA fellowships; report/coverage buttons), study suggestions (opt-in in Settings — needs a few prior questions to trigger), saved-passage share, GPS location (permission now actually in the manifest).
+
+**Known drift found (needs your eyes, not fixed):**
+- `/api/transcribe` and the `images` chat field are used by the app but absent from this repo's backend — prod evidently runs code that never landed in git. Mic + photo-attach still work against prod, but reconcile that code into the repo before it's lost like the mobile source was.
+- CLAUDE.md still documents gemma4:e2b / nomic-embed-text; prod runs deepseek-v4-flash / all-minilm.
+- Pre-existing uncommitted retriever/engine/templates changes remain uncommitted (I didn't touch them); server.py/docker-compose/service.py local hunks rode along in b1ccdcf, noted in its message.
+
+**Deliberately not done:** P5 on-device Gemma (quarter-scale flagship — architecture in the audit report; needs model download + device validation you'd want to be awake for); hosted social features (contradicts zero-egress positioning — export-first sharing shipped instead); reader deep links.
