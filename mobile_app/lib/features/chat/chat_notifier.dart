@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sobriety_copilot_mobile/config/app_config.dart';
 import 'package:sobriety_copilot_mobile/data/models/chat_models.dart';
+import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 
 /// Immutable chat screen state.
@@ -53,16 +54,22 @@ class ChatNotifier extends Notifier<ChatState> {
   /// consumes chatRepository.sendMessage(), folds Sources/Thinking/Token/
   /// Followups/Error/Done into the last assistant message, then persists the
   /// conversation via conversationsProvider. No-op if text is blank or sending.
-  Future<void> sendMessage(String text) async {
+  Future<void> sendMessage(
+    String text, {
+    List<String> images = const [],
+    String? audio,
+    String? audioFormat,
+  }) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty || state.isSending) return;
+    final hasMedia = images.isNotEmpty || (audio != null && audio.isNotEmpty);
+    if ((trimmed.isEmpty && !hasMedia) || state.isSending) return;
 
     final AppConfig config = ref.read(appConfigProvider);
 
     // Prior turns become the history sent to the backend (last ~10).
     final history = List<ChatMessage>.from(state.messages);
 
-    final userMsg = ChatMessage.user(trimmed);
+    final userMsg = ChatMessage.user(trimmed, images: images);
     final placeholder = ChatMessage.assistantPlaceholder(query: trimmed);
 
     state = state.copyWith(
@@ -79,11 +86,18 @@ class ChatNotifier extends Notifier<ChatState> {
 
     void finish() {
       _sub = null;
-      _updateById(assistantId, (m) => m.copyWith(isStreaming: false));
+      _updateById(assistantId, (m) => m.copyWith(isStreaming: false, isDenoising: false));
       state = state.copyWith(isSending: false);
       _persist();
       if (!completer.isCompleted) completer.complete();
     }
+
+    // Local-only tracker context: lets the assistant speak to "day 92"
+    // without the server ever storing the date.
+    final sobriety = ref.read(sobrietyProvider);
+    final clientContext = sobriety.isTracking
+        ? 'They are ${sobriety.daysSober} days sober today.'
+        : null;
 
     final stream = ref.read(chatRepositoryProvider).sendMessage(
           message: trimmed,
@@ -92,6 +106,10 @@ class ChatNotifier extends Notifier<ChatState> {
           tone: config.tone,
           showThinking: config.showThinking,
           userId: config.userId,
+          images: images.isNotEmpty ? images : null,
+          audio: audio,
+          audioFormat: audioFormat,
+          clientContext: clientContext,
         );
 
     _sub = stream.listen(
@@ -116,12 +134,25 @@ class ChatNotifier extends Notifier<ChatState> {
           case TokenEvent(:final text):
             _updateById(
               assistantId,
-              (m) => m.copyWith(text: m.text + text),
+              (m) => m.copyWith(
+                isDenoising: false,
+                text: m.text + text,
+              ),
             );
           case FollowupsEvent(:final items):
             _updateById(
               assistantId,
               (m) => m.copyWith(followups: items),
+            );
+          case DiffusionEvent(:final block, :final step, :final total, :final content):
+            _updateById(
+              assistantId,
+              (m) => m.copyWith(
+                isDenoising: true,
+                diffusionStep: step,
+                diffusionTotal: total,
+                diffusionContent: content,
+              ),
             );
           case ErrorEvent(:final message):
             _updateById(
@@ -130,6 +161,7 @@ class ChatNotifier extends Notifier<ChatState> {
                 text: m.text.isEmpty ? message : m.text,
                 isError: true,
                 isStreaming: false,
+                isDenoising: false,
               ),
             );
             state = state.copyWith(error: message);
@@ -147,6 +179,7 @@ class ChatNotifier extends Notifier<ChatState> {
                 : m.text,
             isError: true,
             isStreaming: false,
+            isDenoising: false,
           ),
         );
         state = state.copyWith(error: e.toString());

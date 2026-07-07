@@ -32,6 +32,10 @@ class HttpChatRepository implements ChatRepository {
     String? tone,
     bool showThinking = false,
     String? userId,
+    List<String>? images,
+    String? audio,
+    String? audioFormat,
+    String? clientContext,
   }) async* {
     final root = baseUrl().replaceAll(RegExp(r'/+$'), '');
     final uri = Uri.parse('$root/api/chat');
@@ -49,6 +53,13 @@ class HttpChatRepository implements ChatRepository {
       'tone': tone,
       'show_thinking': showThinking,
       'user_id': userId,
+      if (images != null && images.isNotEmpty) 'images': images,
+      if (audio != null && audio.isNotEmpty) 'audio': audio,
+      if (audioFormat != null && audioFormat.isNotEmpty) 'audio_format': audioFormat,
+      // Ambient context (e.g. local sobriety day count); the server folds it
+      // into the system prompt and never persists it.
+      if (clientContext != null && clientContext.isNotEmpty)
+        'client_context': clientContext,
     };
 
     final request = http.Request('POST', uri)
@@ -111,6 +122,25 @@ class HttpChatRepository implements ChatRepository {
       }
     } catch (_) {
       yield const ErrorEvent('Connection error. Is the server running?');
+    }
+  }
+
+  @override
+  Future<String> transcribe({required String audio, String? format}) async {
+    final root = baseUrl().replaceAll(RegExp(r'/+$'), '');
+    final uri = Uri.parse('$root/api/transcribe');
+    try {
+      final resp = await client.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'audio': audio, 'format': format}),
+      );
+      if (resp.statusCode < 200 || resp.statusCode >= 300) return '';
+      final obj = json.decode(resp.body);
+      if (obj is Map<String, dynamic>) return (obj['text'] ?? '').toString().trim();
+      return '';
+    } catch (_) {
+      return '';
     }
   }
 

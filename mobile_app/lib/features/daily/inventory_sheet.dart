@@ -24,7 +24,6 @@ class _InventorySheetState extends ConsumerState<InventorySheet> {
   late TextEditingController _reflection;
   late TextEditingController _gratitudeInput;
   late List<String> _gratitude;
-  bool _dirty = false;
 
   @override
   void initState() {
@@ -70,7 +69,6 @@ class _InventorySheetState extends ConsumerState<InventorySheet> {
 
   Future<void> _save() async {
     await ref.read(inventoryProvider.notifier).save(_buildEntry());
-    _dirty = false;
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Saved — good night.')),
@@ -85,7 +83,6 @@ class _InventorySheetState extends ConsumerState<InventorySheet> {
     setState(() {
       _gratitude.add(text);
       _gratitudeInput.clear();
-      _dirty = true;
     });
   }
 
@@ -168,7 +165,6 @@ class _InventorySheetState extends ConsumerState<InventorySheet> {
                         value: _answers[q.id] ?? false,
                         onChanged: (v) => setState(() {
                           _answers[q.id] = v;
-                          _dirty = true;
                         }),
                       ),
                       if ((_answers[q.id] ?? false) == q.unfavorableWhenYes)
@@ -180,7 +176,6 @@ class _InventorySheetState extends ConsumerState<InventorySheet> {
                           child: TextField(
                             controller: _noteControllers[q.id],
                             maxLines: null,
-                            onChanged: (_) => _dirty = true,
                             decoration: const InputDecoration(
                               isDense: true,
                               hintText: 'What happened? (optional)',
@@ -194,7 +189,6 @@ class _InventorySheetState extends ConsumerState<InventorySheet> {
                     TextField(
                       controller: _reflection,
                       maxLines: null,
-                      onChanged: (_) => _dirty = true,
                       decoration: const InputDecoration(
                         isDense: true,
                         hintText: 'A sentence or two…',
@@ -213,7 +207,6 @@ class _InventorySheetState extends ConsumerState<InventorySheet> {
                               label: Text(_gratitude[i]),
                               onDeleted: () => setState(() {
                                 _gratitude.removeAt(i);
-                                _dirty = true;
                               }),
                             ),
                         ],

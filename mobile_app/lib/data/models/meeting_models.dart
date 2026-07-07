@@ -103,15 +103,19 @@ class Meeting {
   final String url; // group/meeting url
   final String website;
   final String conferenceUrl; // online join link (may be "")
+  final String conferenceUrlNotes; // e.g. plain-text passcode instructions
   final String conferencePhone;
   final double lat;
   final double lng;
   final double distanceMi; // server "distance_mi"
   final bool isOnline; // server "is_online"/"online"
   final bool isInperson; // server "is_inperson"
-  final String fellowship; // "AA" | "NA"
+  final String fellowship; // "AA" | "NA" | other fellowship names
   final String region;
   final String location; // venue name
+  // Online-directory extras (/api/meetings/online); null/false elsewhere.
+  final int? startsInMinutes; // minutes until next occurrence (may be < 0)
+  final bool isLiveNow; // started within the live window
 
   const Meeting({
     required this.name,
@@ -125,6 +129,7 @@ class Meeting {
     required this.url,
     required this.website,
     required this.conferenceUrl,
+    this.conferenceUrlNotes = '',
     required this.conferencePhone,
     required this.lat,
     required this.lng,
@@ -134,6 +139,8 @@ class Meeting {
     required this.fellowship,
     required this.region,
     required this.location,
+    this.startsInMinutes,
+    this.isLiveNow = false,
   });
 
   factory Meeting.fromJson(Map<String, dynamic> json) {
@@ -149,6 +156,7 @@ class Meeting {
       url: _asString(json['url']),
       website: _asString(json['website']),
       conferenceUrl: _asString(json['conference_url']),
+      conferenceUrlNotes: _asString(json['conference_url_notes']),
       conferencePhone: _asString(json['conference_phone']),
       lat: _asDouble(json['lat']),
       lng: _asDouble(json['lng']),
@@ -159,6 +167,8 @@ class Meeting {
       fellowship: _asString(json['fellowship']),
       region: _asString(json['region']),
       location: _asString(json['location']),
+      startsInMinutes: _asIntOrNull(json['starts_in_minutes']),
+      isLiveNow: _asBool(json['is_live_now']),
     );
   }
 }
@@ -191,7 +201,9 @@ class MeetingSearchResult {
     }
     return MeetingSearchResult(
       meetings: meetings,
-      totalInRadius: _asInt(json['total_in_radius']),
+      // The online directory reports "total"; the geo search
+      // "total_in_radius".
+      totalInRadius: _asInt(json['total_in_radius'], _asInt(json['total'])),
       feedsTotal: _asInt(json['feeds_total']),
       feedsWithData: _asInt(json['feeds_with_data']),
     );

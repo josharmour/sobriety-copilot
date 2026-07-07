@@ -24,7 +24,7 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 
 - [x] **Local sobriety tracker (all surfaces, shared Dart)** — sobriety date picker (Settings + Today card), day count, next-milestone progress (24h/30/60/90/6mo/9mo/1yr/18mo/multi-year — keytag/chip milestones), stored locally only (SharedPreferences). Server `UserMemoryManager` stays dormant.
 - [x] **Milestone card on the empty/chat state** ("Today" surface) with privacy-conscious copy toggle (show "Day 92" vs full label).
-- [~] **Feed sobriety date into chat context client-side** — server accepts client_context (never persisted); client wiring next (system-prompt note via existing request fields) so the assistant knows day counts without server storage.
+- [x] **Feed sobriety date into chat context client-side** — day count sent as client_context when tracking; server folds into system prompt, never persists (system-prompt note via existing request fields) so the assistant knows day counts without server storage.
 - [x] **Android home-screen widget** — `home_widget` + Jetpack Glance native layer: day count + next milestone; midnight refresh via `workmanager`; discreet-text option. (Widget = Android/iOS only by nature; web/desktop get the in-app card — consistent with surface model.)
 - [x] **Money-saved calculator (optional card)** — daily-spend field in the tracker editor; saved amount shown on the milestone card — daily spend input × days sober.
 
@@ -33,16 +33,16 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 - [x] **Backend: OIAA online-AA feed** (`data.aa-intergroup.org/6436f5a3f03fdecef8459055.json`, Meeting Guide format, ~7.7k meetings with Zoom `conference_url`s) ingested on the existing feed-cache pattern; server-side cache 12–24h.
 - [x] **Backend: Virtual NA BMLT root** (`bmlt.virtual-na.org/main_server/`) for location-agnostic NA online meetings.
 - [x] **Backend: `/api/meetings/online`** — not radius-bound; timezone-aware "happening now / starting soon" sort.
-- [ ] **Flutter: "Online now" tab** in the meetings sheet — live/starting-soon list, join button, `conference_url_notes` passcode with copy button.
-- [ ] **Anonymity interstitial** — one-time dialog before first Zoom launch ("Zoom shows your account name — consider 'First name, last initial', camera off"), persisted dismiss.
-- [ ] **Report-this-meeting affordance** (reuses `/api/bugs` plumbing with a `meeting` tag).
+- [x] **Flutter: "Online now" tab** in the meetings sheet — live/starting-soon list, join button, `conference_url_notes` passcode with copy button.
+- [x] **Anonymity interstitial** — one-time dialog before first Zoom launch ("Zoom shows your account name — consider 'First name, last initial', camera off"), persisted dismiss.
+- [x] **Report-this-meeting affordance** (reuses `/api/bugs` plumbing with a `meeting` tag).
 
 ## P3 — In-person coverage quick wins
 
 - [x] **Geocoder: drop hardcoded `countrycodes=us,ca`** (GEOCODE_COUNTRYCODES env, default worldwide) (server.py ~1574) — currently caps worldwide NA data from the BMLT aggregator. Keep US/CA as ranking preference, not a filter.
-- [ ] **Radius control in the meetings sheet** (client hardcodes 30 mi; server allows 200) — 15/30/60/100/200 selector, persisted.
+- [x] **Radius control in the meetings sheet** (15/30/60/100/200, persisted) (client hardcodes 30 mi; server allows 200) — 15/30/60/100/200 selector, persisted.
 - [x] **Add Recovery Dharma + CMA TSML feeds** (probed live; fellowship filter extended, aa/na/all unchanged) (both verified live) with a `fellowship` field per feed; extend fellowship filter (AA / NA / More / All).
-- [~] **Feed registry notes** — feeds.py header documents the TSML onboarding pattern; 'don't see meetings' affordance still todo — document the `admin-ajax.php?action=meetings` onboarding pattern in feeds.py header; add "Don't see meetings near you?" affordance → bug report tagged `coverage`.
+- [x] **Feed registry notes** — feeds.py header documents TSML onboarding; 'Don't see meetings near you? Tell us' button reports coverage gaps via /api/bugs — document the `admin-ajax.php?action=meetings` onboarding pattern in feeds.py header; add "Don't see meetings near you?" affordance → bug report tagged `coverage`.
 
 ## P4 — Daily practice: meditation/prayer + nightly inventory
 

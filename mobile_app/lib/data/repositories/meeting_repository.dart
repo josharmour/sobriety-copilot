@@ -93,4 +93,49 @@ class MeetingRepository {
     }
     return MeetingSearchResult.fromJson(decoded);
   }
+
+  /// GET /api/meetings/online?fellowship=&max=&day=
+  ///
+  /// Location-agnostic online directory (OIAA + Virtual NA), sorted
+  /// live-now first then soonest-to-start.
+  Future<MeetingSearchResult> onlineMeetings({
+    String? fellowship,
+    int max = 100,
+    int? day,
+  }) async {
+    final params = <String, String>{'max': max.toString()};
+    if (fellowship != null && fellowship.isNotEmpty && fellowship != 'all') {
+      params['fellowship'] = fellowship;
+    }
+    if (day != null) params['day'] = day.toString();
+
+    final uri = Uri.parse('$_base/api/meetings/online')
+        .replace(queryParameters: params);
+    final res = await client.get(uri);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(_errorFor(res));
+    }
+    final decoded = json.decode(res.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Unexpected meetings response.');
+    }
+    return MeetingSearchResult.fromJson(decoded);
+  }
+
+  /// POST /api/bugs — used by "report this listing" and coverage requests.
+  Future<void> report(String description) async {
+    final uri = Uri.parse('$_base/api/bugs');
+    final res = await client.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'description': description,
+        'conversation': const [],
+        'url': 'meetings',
+      }),
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(_errorFor(res));
+    }
+  }
 }
