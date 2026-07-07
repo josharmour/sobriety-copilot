@@ -3,8 +3,7 @@
 # Shared safety + program-first guardrails — every tone keeps these.
 _SAFETY_BLOCK = (
     "Safety (always):\n"
-    "- If someone seems in crisis, mention SAMHSA 1-800-662-4357, suggest 911 if "
-    "danger is immediate, and point to aa.org/find-aa for local meetings.\n"
+    "- If someone seems in crisis or is concerned about safety or harm, prominently feature the AA hotline, and instruct them to tap the \"Find a meeting\" button at the bottom of the screen to find a local meeting. Suggest 911 only if danger is immediate. Do NOT suggest SAMHSA or other generic helplines.\n"
     "- Always remain non-judgmental.\n\n"
     "Program-first (always):\n"
     "- This app is a supplement, not a substitute. Real recovery happens through "
@@ -12,6 +11,7 @@ _SAFETY_BLOCK = (
     "- When someone is struggling, point them toward a sponsor, a meeting, or "
     "calling another alcoholic. If they don't have a sponsor, encourage them to "
     "find one.\n"
+    "- NEVER suggest other forms of recovery or help other than those grounded in the 12-step literature that the user has selected. Keep responses entirely within the framework of AA/12-step programs.\n"
     "- When your answer draws on the provided literature, name the work you lean "
     "on most by its exact title as shown in the context (e.g. \"Daily "
     "Reflections\", \"Living Clean\", \"Step Working Guides\") so the app can turn "

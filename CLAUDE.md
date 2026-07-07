@@ -24,6 +24,12 @@ curl -X POST http://localhost:5000/api/index
 
 # Stop
 docker compose down
+
+# Deploy local changes to production Synology NAS (10.0.0.2) and rebuild
+./deploy.sh
+
+# Watch files and auto-deploy to Synology NAS on save
+./watch_and_deploy.sh
 ```
 
 For evaluation (heavyweight RAGAS deps live in `requirements-eval.txt`,

@@ -78,6 +78,14 @@ TITLE_REFERENCE_BOOST = float(os.environ.get("BOOST_TITLE_REFERENCE", "3.0"))
 # RAG_ENUMERATION_MIN_MARKERS list markers get their score multiplied down.
 ENUMERATION_PENALTY = float(os.environ.get("RAG_ENUMERATION_PENALTY", "0.45"))
 ENUMERATION_MIN_MARKERS = int(os.environ.get("RAG_ENUMERATION_MIN_MARKERS", "5"))
+
+# Header-only chunks (short text after stripping page headers) are structural
+# noise -- they match semantically because their heading happens to live near
+# the query in embedding space, but carry no substantive content. Chunks that
+# are almost all header get their score penalized so real passages outrank them.
+HEADER_PENALTY = float(os.environ.get("RAG_HEADER_PENALTY", "0.35"))
+HEADER_MIN_SUBSTANTIVE_WORDS = int(os.environ.get("RAG_HEADER_MIN_WORDS", "15"))
+
 _ENUMERATION_MARKER = re.compile(
     r"(?:Step|Tradition)\s+(?:One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve)\s*(?:[:.)]|\d{1,3}\b)"
     r"|\b(?:[1-9]|1[0-2])\s*[.)]\s*(?:We\s+admitted|Came\s+to\s+believe|Made\s+a\s+(?:decision|list)"
@@ -89,6 +97,16 @@ _ENUMERATION_MARKER = re.compile(
 # page (counts as several markers on its own).
 _CONTENTS_RE = re.compile(r"\bCONTENTS\b")
 REFERENCED_MAX_PER_SOURCE = int(os.environ.get("RAG_REFERENCED_MAX_PER_SOURCE", "4"))
+
+# Running-header regex (matches PDF repeating headers / page numbers at start
+# of text lines). Copied from server.py so retriever can do its own stripping.
+_PAGE_HEADER_RE = re.compile(
+    r"^(?:"
+    r"[A-Z][A-Z\s\-\.',&]+\d+|"
+    r"\d+\s+[A-Z][A-Z\s\-\.',&]+|"
+    r"[\-•]\s*\w+\s+\d+\s*[\-•]"
+    r")\s*\n",
+)
 
 # Query phrases that name a specific work -> source-filename substrings (lower).
 # Substrings are deliberately specific so "big book" boosts the Big Book itself
@@ -204,6 +222,8 @@ class RAGRetriever:
         return [token.lower() for token in TOKEN_RE.findall(text)]
 
     def refresh_cache(self) -> None:
+        import pickle
+
         self._chunks_by_id = {}
         self._postings = defaultdict(list)
         self._doc_lengths = {}
@@ -214,6 +234,26 @@ class RAGRetriever:
 
         if self._document_count == 0:
             return
+
+        cache_dir = "/home/app/memory"
+        if not os.path.exists(cache_dir):
+            cache_dir = os.path.dirname(os.environ.get("USER_MEMORY_DB_PATH", "/tmp"))
+        cache_file = os.path.join(cache_dir, f"bm25_cache_{self.collection.name}.pkl")
+
+        try:
+            if os.path.exists(cache_file):
+                with open(cache_file, "rb") as f:
+                    cache_data = pickle.load(f)
+                if cache_data.get("document_count") == self._document_count:
+                    self._chunks_by_id = cache_data["chunks_by_id"]
+                    self._postings = defaultdict(list, cache_data["postings"])
+                    self._doc_lengths = cache_data["doc_lengths"]
+                    self._enum_penalty = cache_data.get("enum_penalty", {})
+                    self._avg_doc_length = cache_data["avg_doc_length"]
+                    print(f"[BM25-CACHE] Loaded {self._document_count} chunks from {cache_file} instantly.", flush=True)
+                    return
+        except Exception as e:
+            print(f"[BM25-CACHE-ERR] Failed to load cache from {cache_file}: {e}", flush=True)
 
         total_tokens = 0
         for offset in range(0, self._document_count, CACHE_BATCH_SIZE):
@@ -265,6 +305,22 @@ class RAGRetriever:
         if self._chunks_by_id:
             self._avg_doc_length = total_tokens / len(self._chunks_by_id)
 
+            try:
+                os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+                cache_data = {
+                    "document_count": self._document_count,
+                    "chunks_by_id": self._chunks_by_id,
+                    "postings": dict(self._postings),
+                    "doc_lengths": self._doc_lengths,
+                    "enum_penalty": self._enum_penalty,
+                    "avg_doc_length": self._avg_doc_length,
+                }
+                with open(cache_file, "wb") as f:
+                    pickle.dump(cache_data, f, protocol=pickle.HIGHEST_PROTOCOL)
+                print(f"[BM25-CACHE] Saved {self._document_count} chunks to {cache_file}", flush=True)
+            except Exception as e:
+                print(f"[BM25-CACHE-ERR] Failed to save cache to {cache_file}: {e}", flush=True)
+
     def _keyword_scores(
         self,
         query: str,
@@ -315,6 +371,24 @@ class RAGRetriever:
             cached = ENUMERATION_PENALTY if markers >= ENUMERATION_MIN_MARKERS else 1.0
             self._enum_penalty[chunk_id] = cached
         return cached
+
+    def _is_header_only(self, chunk: CachedChunk) -> bool:
+        """True if the chunk is too short / header-like to be substantive."""
+        text = chunk.text or ""
+        stripped = self._strip_page_headers(text)
+        words = len(re.findall(r"[A-Za-z0-9]+", stripped))
+        if words < HEADER_MIN_SUBSTANTIVE_WORDS and chunk.scale == "small":
+            return True
+        return False
+
+    def _strip_page_headers(self, text: str) -> str:
+        """Remove PDF running headers / page numbers from the start of text."""
+        for _ in range(3):
+            m = _PAGE_HEADER_RE.match(text)
+            if not m:
+                break
+            text = text[m.end():]
+        return text.strip()
 
     def _resolve_chunk(self, chunk_id: str | None, fallback: CachedChunk) -> CachedChunk:
         if chunk_id and chunk_id in self._chunks_by_id:
@@ -380,6 +454,8 @@ class RAGRetriever:
         top_k: int = 8,
         categories: list[str] | None = None,
         embedding_query: str | None = None,
+        model_mode: str | None = None,
+        enable_reranker: bool | None = None,
     ) -> list[RetrievalResult]:
         """Retrieve top-k chunks for a query.
 
@@ -442,6 +518,8 @@ class RAGRetriever:
                 (SEMANTIC_WEIGHT * semantic_score) + (KEYWORD_WEIGHT * keyword_score)
             ) * SCALE_BOOST.get(chunk.scale, 1.0) * category_boost * title_boost \
                 * self._enumeration_penalty(chunk_id, chunk)
+            if self._is_header_only(chunk):
+                hybrid_score *= HEADER_PENALTY
             combined_scores[chunk_id] = hybrid_score
 
         ranked_ids = sorted(combined_scores, key=combined_scores.get, reverse=True)
@@ -464,9 +542,14 @@ class RAGRetriever:
         source_counts: dict[str, int] = defaultdict(int)
         bucket_indexes = {bucket: 0 for bucket in BUCKET_ORDER}
 
-        # Oversample the diversity-filtered pool when a reranker will trim it
-        # back: give the cross-encoder real choices instead of a fixed top_k.
-        target_k = top_k * reranker.oversample_factor()
+        # Respect payload override if provided; otherwise use the environment default.
+        if enable_reranker is not None:
+            use_reranker = enable_reranker
+        else:
+            use_reranker = reranker.is_enabled()
+
+        oversample = reranker.oversample_factor() if use_reranker else 1
+        target_k = top_k * oversample
 
         def _source_cap(source: str) -> int:
             if _source_is_referenced(source, referenced_sources):
@@ -509,7 +592,7 @@ class RAGRetriever:
                 continue
             _add(candidate)
 
-        if reranker.is_enabled() and len(retrieval_results) > 1:
+        if use_reranker and len(retrieval_results) > 1:
             # Re-apply the priors the cross-encoder is blind to: category
             # (conference-approved literature) and any work the query named.
             rerank_boosts = [
@@ -559,3 +642,52 @@ class RAGRetriever:
             chars_used += len(section)
 
         return "\n\n---\n\n".join(sections)
+
+    def query_anchored_excerpt(self, text: str, query: str, context_chars: int = 250) -> str:
+        """Instance version that delegates to the module-level function."""
+        return _query_anchored_excerpt(text, query, context_chars)
+
+
+def _query_anchored_excerpt(text: str, query: str, context_chars: int = 250) -> str:
+    """Extract ~context_chars around the best query-term hit within text.
+
+    Standalone module-level version so server.py can use it
+    without coupling to a RAGRetriever instance.
+    Falls back to the first 500 chars if no query tokens match.
+    """
+    if not text or not query:
+        if text:
+            return text[:min(len(text), 500)]
+        return text
+
+    _stopwords = QUERY_STOPWORDS
+    query_terms = [
+        t for t in re.findall(r"[A-Za-z0-9]+", query.lower())
+        if len(t) > 2 and t not in _stopwords
+    ]
+    if not query_terms:
+        return text[:min(len(text), 500)]
+
+    lower = text.lower()
+    best_pos = 0
+    best_score = 0
+    window = context_chars // 2
+    for pos in range(0, len(lower), 50):
+        end = min(pos + window, len(lower))
+        score = sum(1 for t in query_terms if t in lower[pos:end])
+        if score > best_score:
+            best_score = score
+            best_pos = pos
+
+    if best_score == 0:
+        return text[:min(len(text), 500)]
+
+    start = max(0, best_pos - 30)
+    end = min(len(text), start + context_chars)
+    excerpt = text[start:end].strip()
+    if start > 0:
+        excerpt = "... " + excerpt
+    if end < len(text):
+        excerpt = excerpt + " ..."
+    return excerpt
+

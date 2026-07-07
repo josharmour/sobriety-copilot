@@ -5,6 +5,7 @@
 - RAG-powered chat over A.A./recovery literature.
 - Deployed at 10.0.0.2 (Port 5000 app, Port 8090 public).
 - Uses Ollama by default for local LLM inference.
+- Deployment scripts exist locally: `deploy.sh` syncs code changes to the Synology NAS (10.0.0.2) via a tar stream over SSH and rebuilds docker containers. `watch_and_deploy.sh` can run locally to automatically trigger deployment on changes.
 
 ## Project Purpose
 Recovery-based AI assistant with RAG over 12-step literature.

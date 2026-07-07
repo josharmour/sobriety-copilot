@@ -34,7 +34,7 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() not in ("0", "false", "no", "off", "")
 
 
-ENABLE_RERANKER = _env_bool("ENABLE_RERANKER", True)
+ENABLE_RERANKER = _env_bool("ENABLE_RERANKER", False)
 RERANKER_MODEL = os.environ.get("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
 RERANK_OVERSAMPLE = max(1, int(os.environ.get("RERANK_OVERSAMPLE", "3")))
 

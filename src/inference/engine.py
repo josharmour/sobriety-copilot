@@ -1,4 +1,4 @@
-"""Inference engine for locally-hosted Gemma 4 via OpenAI-compatible API."""
+"""Inference engine for locally-hosted LLM via OpenAI-compatible API."""
 
 import os
 from collections.abc import Generator
@@ -11,15 +11,15 @@ from src.prompts.templates import SYSTEM_MESSAGE
 class InferenceEngine:
     """Connects to a locally-hosted LLM exposed via an OpenAI-compatible API.
 
-    Works with Ollama, vLLM, llama.cpp server, or any OpenAI-compatible endpoint.
-    Default configuration targets Ollama running Gemma 4.
+    Works with Ollama, vLLM, or any OpenAI-compatible endpoint.
+    Default configuration targets vLLM serving DeepSeek V4.
     """
 
     def __init__(
         self,
-        base_url: str = "http://localhost:11434/v1",
-        model: str = "gemma4:e2b",
-        api_key: str = "ollama",
+        base_url: str = "http://10.0.0.10:8002/v1",
+        model: str = "dsv4",
+        api_key: str = "",
     ):
         self.client = OpenAI(base_url=base_url, api_key=api_key)
         self.model = model
@@ -29,8 +29,7 @@ class InferenceEngine:
         except ValueError:
             self.keep_alive = keep_alive
         # Ollama defaults num_ctx to 2048, which silently truncates long RAG
-        # prompts. Gemma 4 supports 128K; 32K is a safe headroom for our
-        # context window without blowing up VRAM. Override via env if needed.
+        # prompts. Set to 32K for headroom without blowing up VRAM.
         # On vLLM this is set at server start, not per-request.
         try:
             self.num_ctx = int(os.environ.get("OLLAMA_NUM_CTX", "32768"))
@@ -52,9 +51,8 @@ class InferenceEngine:
         if self.backend == "ollama":
             return {"keep_alive": self.keep_alive, "options": {"num_ctx": self.num_ctx}}
         if self.backend == "vllm":
-            # Gemma 4 reasoning models on vLLM only emit `<think>...</think>`
-            # (which the `--reasoning-parser=gemma4` flag splits into
-            # `delta.reasoning`) when the chat template is invoked with
+            # vLLM reasoning models emit ` thinking... response`
+            # when the chat template is invoked with
             # `enable_thinking=True`. We ALWAYS send the kwarg explicitly:
             # omitting it lets the server's --default-chat-template-kwargs win,
             # so a server defaulting to thinking-on can't be turned off and
@@ -117,21 +115,20 @@ class InferenceEngine:
         enable_thinking: bool | None = None,
         continue_text: str | None = None,
         n_blocks: int | None = None,
+        user_content: list[dict] | None = None,
     ) -> Generator[tuple[str, str], None, None]:
         """Stream both reasoning and content as tagged (kind, text) pairs.
 
-        For thinking-model variants (e.g. gemma4:e2b), reasoning is emitted on
+        Multimodal: pass `user_content` (an OpenAI content-parts list, e.g.
+        [{"type":"text",...}, {"type":"image_url",...}, {"type":"input_audio",...}])
+        to replace the plain-string user turn — used to attach photos/audio. When
+        None the user turn is the plain `prompt` string (text-only path).
+
+        For thinking-model variants, reasoning is emitted on
         `delta.reasoning` before the visible content. Callers can choose to
         forward the reasoning to the user or discard it.
-
-        Diffusion-backend extras (iterative grounding): `continue_text` resumes
-        generation from previously committed raw answer text; `n_blocks` caps
-        how many diffusion blocks this call generates. The stream then also
-        yields ("raw", text) — the request-local committed raw text (replace
-        semantics, feed back as continue_text) — and ("finish", reason) where
-        reason is "length" when the block budget ran out before the answer did.
         """
-        messages = self._build_messages(prompt, history, system_message)
+        messages = self._build_messages(prompt, history, system_message, user_content)
         extra = self._extra_body(enable_thinking)
         if continue_text:
             extra["continue_text"] = continue_text
@@ -149,10 +146,6 @@ class InferenceEngine:
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
-            # Diffusion backends (serve_diffusiongemma) stream a per-step canvas
-            # snapshot dict {block, step, total, reasoning, content} alongside
-            # the standard deltas. Replace semantics: each frame is the full
-            # response so far, not an append.
             diffusion = getattr(delta, "diffusion", None)
             if diffusion:
                 yield ("diffusion", diffusion)
@@ -174,10 +167,9 @@ class InferenceEngine:
                 yield ("finish", finish)
 
     def warmup(self) -> None:
-        """Issue a tiny completion so Ollama loads and pins the chat model.
+        """Issue a tiny completion to verify the endpoint is reachable.
 
-        Harmless on vLLM (which keeps weights loaded indefinitely) — just
-        verifies the endpoint is reachable.
+        Harmless on vLLM (which keeps weights loaded indefinitely).
         """
         self.client.chat.completions.create(
             model=self.model,
@@ -192,9 +184,11 @@ class InferenceEngine:
         prompt: str,
         history: list[dict] | None,
         system_message: str | None = None,
+        user_content: list[dict] | None = None,
     ) -> list[dict]:
         messages = [{"role": "system", "content": system_message or SYSTEM_MESSAGE}]
         if history:
             messages.extend(history)
-        messages.append({"role": "user", "content": prompt})
+        # Multimodal user turn (image/audio parts) overrides the plain-string prompt.
+        messages.append({"role": "user", "content": user_content if user_content is not None else prompt})
         return messages
