@@ -41,6 +41,9 @@ x-app-env: &app-env
   # Optional comma-separated Nominatim country filter (e.g. "us,ca").
   # Empty = worldwide, matching the NA aggregator's coverage.
   GEOCODE_COUNTRYCODES: "${GEOCODE_COUNTRYCODES:-}"
+  # Forward chat photo attachments to the LLM as vision content parts.
+  # Enable once the deployed model is confirmed multimodal.
+  LLM_SUPPORTS_IMAGES: "${LLM_SUPPORTS_IMAGES:-0}"
   PIP_NO_CACHE_DIR: "1"
   OMP_NUM_THREADS: "1"
   MKL_NUM_THREADS: "1"

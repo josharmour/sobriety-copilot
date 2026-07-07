@@ -77,6 +77,13 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 - [x] **Crash fix (01:30)**: the Tensor-G5 NPU model build CHECK-aborts natively in flutter_gemma 0.13.6's LiteRT runtime (`Unknown model type: tf_lite_mtp_aux`) — NPU rung removed, G5 file deleted from device, standard model re-pushed. GPU/CPU chain retained. Do not re-add NPU until the plugin ships a newer litertlm runtime.
 - [x] **Private Mode indicator**: app-bar 'Private' shield chip + settings status card ("Answering on this device").
 
+## P5 phase 2 + drift fix (2026-07-07 morning)
+- [x] **Drift fix**: committed the long-uncommitted src changes (prompts, retriever, reranker default off, docs) as their own commit; refreshed CLAUDE.md to match prod (dsv4/all-minilm models, new endpoints, Flutter static/, no /api/transcribe). Recovered the Jun-27 worker image to confirm — prod never had a transcribe endpoint; dictation was always meant to be on-device.
+- [x] **Image chat wired server-side**: /api/chat now forwards photo attachments to the LLM as OpenAI image_url content parts behind `LLM_SUPPORTS_IMAGES` (default 0 — flip once the deployed model is confirmed multimodal). The app was already sending `images`; they were silently dropped.
+- [x] **On-device ASR (replaces /api/transcribe)**: sherpa-onnx streaming Zipformer EN (122 MB, GitHub release) with the same download/extract lifecycle as neural voices; transcription runs in an isolate. Mic uses on-device ASR when installed, server fallback otherwise. Settings → Private Mode → "On-device voice dictation" download tile. Fully offline, private dictation.
+- [ ] APK ABI splits to trim 400 MB fat APK for Play (deferred).
+- [ ] EmbeddingGemma vector retrieval (BM25 works well; vectors are a refinement, deferred).
+
 ## Owner-directed changes (2026-07-07 late night)
 - [x] **Excerpt-only reader**: the offline reader now shows a bounded study excerpt (±30 blocks around the cited passage, or the opening for book taps) bracketed by purchase notices — study aide, never full-book reproduction. Search still spans the whole pack.
 - [x] **Starter-prompt rotation**: pool grown to ~240 prompts (bigger buckets + evergreens merged into every draw) with a persisted 60-prompt no-repeat window — no more nightly "help me settle down enough to sleep" reruns. Study-suggestion cards and conversation follow-ups unaffected.

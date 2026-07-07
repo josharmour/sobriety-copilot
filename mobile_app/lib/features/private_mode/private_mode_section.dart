@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:sobriety_copilot_mobile/features/asr/asr_manager.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/local_chat_repository.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/model_manager.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
@@ -188,9 +189,86 @@ class PrivateModeSection extends ConsumerWidget {
               ],
             ),
         },
+        const _VoiceDictationTile(),
         const SizedBox(height: AppSpacing.xl),
       ],
     );
+  }
+}
+
+/// On-device voice dictation model (sherpa-onnx ASR). Optional and separate
+/// from the LLM: it replaces server transcription so the mic works offline
+/// and privately even without Private Mode's chat model.
+class _VoiceDictationTile extends ConsumerWidget {
+  const _VoiceDictationTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!privateModeSupported) return const SizedBox.shrink();
+    final asr = ref.watch(asrManagerProvider);
+    final notifier = ref.read(asrManagerProvider.notifier);
+
+    switch (asr.state) {
+      case AsrInstallState.notInstalled:
+      case AsrInstallState.error:
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(
+            asr.state == AsrInstallState.error
+                ? Icons.error_outline
+                : Icons.mic_none,
+            color: asr.state == AsrInstallState.error ? AppColors.error : null,
+          ),
+          title: const Text('On-device voice dictation'),
+          subtitle: Text(
+            asr.state == AsrInstallState.error
+                ? (asr.error ?? 'Download failed')
+                : '$kAsrDownloadMB MB · dictate offline, nothing uploaded',
+          ),
+          trailing: TextButton(
+            onPressed: notifier.download,
+            child: Text(
+                asr.state == AsrInstallState.error ? 'Retry' : 'Download'),
+          ),
+        );
+      case AsrInstallState.downloading:
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+          title: Text(
+              'Downloading voice model… ${(asr.progress * 100).toStringAsFixed(0)}%'),
+          subtitle: LinearProgressIndicator(
+            value: asr.progress > 0 ? asr.progress : null,
+          ),
+        );
+      case AsrInstallState.extracting:
+        return const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+          title: Text('Installing voice model…'),
+        );
+      case AsrInstallState.installed:
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          leading: const Icon(Icons.mic, color: AppColors.accent),
+          title: const Text('Voice dictation on-device'),
+          subtitle: const Text('The mic transcribes locally · tap to remove'),
+          trailing: IconButton(
+            icon: const Icon(Icons.delete_outline, size: 20),
+            tooltip: 'Remove',
+            onPressed: notifier.delete,
+          ),
+        );
+    }
   }
 }
 

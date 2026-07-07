@@ -27,6 +27,8 @@ import 'package:sobriety_copilot_mobile/features/sheets/settings_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/sheets/library_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/library/offline_reader.dart';
 import 'package:sobriety_copilot_mobile/config/capabilities.dart';
+import 'package:sobriety_copilot_mobile/features/asr/asr_manager.dart';
+import 'package:sobriety_copilot_mobile/features/asr/asr_service.dart';
 import 'package:sobriety_copilot_mobile/features/daily/study_themes.dart';
 import 'package:sobriety_copilot_mobile/features/daily/today_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
@@ -325,11 +327,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (path == null) return;
     setState(() => _isTranscribing = true);
     try {
-      final bytes = await File(path).readAsBytes();
-      final dataUrl = 'data:audio/wav;base64,${base64Encode(bytes)}';
-      final text = await ref
-          .read(chatRepositoryProvider)
-          .transcribe(audio: dataUrl, format: 'wav');
+      // On-device first (private, offline). Falls back to the server only
+      // when the dictation model isn't installed.
+      final asrDir = ref.read(asrManagerProvider.notifier).installedDir();
+      final String text;
+      if (asrDir != null) {
+        text = await transcribeWavFile(wavPath: path, modelDir: asrDir);
+      } else {
+        final bytes = await File(path).readAsBytes();
+        final dataUrl = 'data:audio/wav;base64,${base64Encode(bytes)}';
+        text = await ref
+            .read(chatRepositoryProvider)
+            .transcribe(audio: dataUrl, format: 'wav');
+      }
       if (!mounted) return;
       if (text.isNotEmpty) {
         final existing = _input.text.trim();

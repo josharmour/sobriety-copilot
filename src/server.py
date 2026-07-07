@@ -140,6 +140,10 @@ class ChatRequest(BaseModel):
     # Ambient context supplied by the client (e.g. the local-only sobriety
     # tracker's day count). Folded into the system prompt, never persisted.
     client_context: str | None = None
+    # Photo attachments as data URLs. Forwarded to the LLM as OpenAI
+    # image_url content parts when LLM_SUPPORTS_IMAGES=1; otherwise dropped
+    # (the app was already sending these; they were silently ignored).
+    images: list[str] | None = None
 
 
 class IndexRequest(BaseModel):
@@ -1390,6 +1394,15 @@ def chat(payload: ChatRequest):
             merged_results = list(results)
             seen_chunks = {(r.source, (r.excerpt or r.text or "")[:80]) for r in results}
             cur_prompt = prompt
+            # Multimodal: attach photos as OpenAI content parts when the
+            # backend model supports vision (LLM_SUPPORTS_IMAGES=1).
+            user_content = None
+            if LLM_SUPPORTS_IMAGES and payload.images:
+                user_content = [{"type": "text", "text": prompt}] + [
+                    {"type": "image_url", "image_url": {"url": img}}
+                    for img in payload.images[:4]
+                    if isinstance(img, str) and img.startswith("data:image/")
+                ]
             raw_answer = ""   # verbatim committed text (incl. thought tags) fed back as continue_text
             agg_tokens = 0
             gen_t0 = time.monotonic()
@@ -1403,6 +1416,7 @@ def chat(payload: ChatRequest):
                     system_message=sys_msg,
                     continue_text=raw_answer or None,
                     n_blocks=1,
+                    user_content=user_content if block_i == 0 else None,
                 ):
                     if kind == "diffusion":
                         # Per-denoising-step snapshot of the WHOLE answer so far
@@ -1521,6 +1535,10 @@ BUG_REPORT_TTL = 60 * 60 * 24 * 30  # 30 days
 # Opt-in server-side transcript storage (debugging only). Default OFF: the
 # deployed privacy policy promises chat history lives on-device only.
 STORE_CHAT_HISTORY = os.environ.get("STORE_CHAT_HISTORY", "0") == "1"
+
+# Forward photo attachments to the LLM as vision content parts. Off by
+# default — flip after confirming the deployed model accepts image input.
+LLM_SUPPORTS_IMAGES = os.environ.get("LLM_SUPPORTS_IMAGES", "0") == "1"
 
 
 @app.post("/api/bugs")
