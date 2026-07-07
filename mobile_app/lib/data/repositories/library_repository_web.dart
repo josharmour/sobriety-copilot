@@ -31,4 +31,10 @@ class LibraryRepository {
   Future<Map<String, dynamic>?> getManifest(String docId) async => null;
 
   Future<List<OfflineSearchResult>> search(String query) async => [];
+
+  /// No offline vectors on web.
+  Future<({String blob, String idx, String meta})?> vectorFiles() async => null;
+
+  Future<OfflineSearchResult?> getBlock(String docId, String blockId) async =>
+      null;
 }

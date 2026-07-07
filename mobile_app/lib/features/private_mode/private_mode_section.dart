@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:sobriety_copilot_mobile/features/asr/asr_manager.dart';
+import 'package:sobriety_copilot_mobile/features/private_mode/embedding_manager.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/local_chat_repository.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/model_manager.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
@@ -189,10 +190,91 @@ class PrivateModeSection extends ConsumerWidget {
               ],
             ),
         },
+        const _SemanticSearchTile(),
         const _VoiceDictationTile(),
         const SizedBox(height: AppSpacing.xl),
       ],
     );
+  }
+}
+
+/// Optional semantic-search embedder (EmbeddingGemma). When installed,
+/// Private Mode fuses keyword (BM25) with meaning-based retrieval so answers
+/// cite passages even when the wording differs. Only shown once the LLM is
+/// installed (it's an enhancement of that path).
+class _SemanticSearchTile extends ConsumerWidget {
+  const _SemanticSearchTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!privateModeSupported) return const SizedBox.shrink();
+    final model = ref.watch(privateModelProvider);
+    if (model.phase != PrivateModelPhase.installed) {
+      return const SizedBox.shrink();
+    }
+    final embed = ref.watch(embeddingManagerProvider);
+    final notifier = ref.read(embeddingManagerProvider.notifier);
+    final theme = Theme.of(context);
+
+    switch (embed.phase) {
+      case EmbedPhase.notInstalled:
+      case EmbedPhase.error:
+        final err = embed.phase == EmbedPhase.error;
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(err ? Icons.error_outline : Icons.auto_awesome_outlined,
+              color: err ? AppColors.error : null),
+          title: const Text('Smarter search (semantic)'),
+          subtitle: Text(
+            err
+                ? (embed.error ?? 'Download failed')
+                : 'Match by meaning, not just keywords · ~190 MB',
+          ),
+          trailing: TextButton(
+            onPressed: notifier.download,
+            child: Text(err ? 'Retry' : 'Add'),
+          ),
+        );
+      case EmbedPhase.downloading:
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+          title: Text(
+              'Downloading semantic model… ${(embed.progress * 100).toStringAsFixed(0)}%'),
+          subtitle: LinearProgressIndicator(
+            value: embed.progress > 0 ? embed.progress : null,
+          ),
+          trailing: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: notifier.cancel,
+          ),
+        );
+      case EmbedPhase.installed:
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          leading: const Icon(Icons.auto_awesome, color: AppColors.accent),
+          title: const Text('Semantic search on'),
+          subtitle: Text(
+            'Private answers match by meaning',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          trailing: IconButton(
+            icon: const Icon(Icons.delete_outline, size: 20),
+            tooltip: 'Remove',
+            onPressed: () async {
+              await LocalChatRepository.releaseSemantic();
+              await notifier.delete();
+            },
+          ),
+        );
+    }
   }
 }
 

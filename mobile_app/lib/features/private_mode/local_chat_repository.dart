@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 
@@ -8,8 +10,21 @@ import 'package:sobriety_copilot_mobile/data/models/chat_models.dart';
 import 'package:sobriety_copilot_mobile/data/repositories/chat_repository_interface.dart';
 import 'package:sobriety_copilot_mobile/data/repositories/library_repository.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/crisis_interceptor.dart';
+import 'package:sobriety_copilot_mobile/features/private_mode/embedding_manager.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/local_prompts.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/model_manager.dart';
+import 'package:sobriety_copilot_mobile/features/private_mode/vector_index.dart';
+
+/// One retrieved block, unified across BM25 and vector search.
+class _RetrievedBlock {
+  final String docId;
+  final String blockId;
+  final String heading;
+  final String text;
+  final double score; // fused rank score (higher = better)
+  const _RetrievedBlock(
+      this.docId, this.blockId, this.heading, this.text, this.score);
+}
 
 /// Fully on-device chat: Gemma 4 E2B (flutter_gemma / LiteRT-LM) for
 /// generation, the offline library pack's FTS5 index for retrieval. No
@@ -89,6 +104,99 @@ class LocalChatRepository implements ChatRepository {
         await m.close();
       } catch (_) {}
     }
+    await releaseSemantic();
+  }
+
+  // ── Semantic retrieval (EmbeddingGemma + shipped vectors) ─────────────────
+  static EmbeddingModel? _embedder;
+  static Future<EmbeddingModel?>? _embedderLoading;
+  static VectorIndex? _vectorIndex;
+  static Future<VectorIndex?>? _vectorLoading;
+  static bool _semanticUnavailable = false;
+
+  /// Loads the query embedder + shipped vector index once; returns true when
+  /// semantic search is usable. Absent files (embedder not downloaded, or a
+  /// v1 pack without vectors) simply disable it — BM25 still runs.
+  Future<bool> _ensureSemantic() async {
+    if (_semanticUnavailable) return false;
+    if (_embedder != null && _vectorIndex != null) return true;
+
+    _embedderLoading ??= () async {
+      try {
+        final files = await EmbeddingManagerNotifier.resolveFiles();
+        if (files == null) return null;
+        await FlutterGemma.installEmbedder()
+            .modelFromFile(files.$1)
+            .tokenizerFromFile(files.$2)
+            .install();
+        return await FlutterGemma.getActiveEmbedder();
+      } catch (e) {
+        if (kDebugMode) debugPrint('[PrivateMode] embedder load failed: $e');
+        return null;
+      } finally {
+        _embedderLoading = null;
+      }
+    }();
+    _vectorLoading ??= () async {
+      try {
+        final vf = await library.vectorFiles();
+        if (vf == null) return null;
+        return await VectorIndex.load(
+            blobPath: vf.blob, idxPath: vf.idx, metaPath: vf.meta);
+      } catch (e) {
+        if (kDebugMode) debugPrint('[PrivateMode] vector load failed: $e');
+        return null;
+      } finally {
+        _vectorLoading = null;
+      }
+    }();
+
+    _embedder = await _embedderLoading;
+    _vectorIndex = await _vectorLoading;
+    final ok = _embedder != null && _vectorIndex != null;
+    if (!ok) _semanticUnavailable = true;
+    return ok;
+  }
+
+  static Future<void> releaseSemantic() async {
+    _semanticUnavailable = false;
+    final e = _embedder;
+    _embedder = null;
+    _vectorIndex?.dispose();
+    _vectorIndex = null;
+    if (e != null) {
+      try {
+        await e.close();
+      } catch (_) {}
+    }
+  }
+
+  /// Embeds the query and returns its int8-quantized unit vector (matching
+  /// the precompute in scripts/build_pack_vectors.py), or null on failure.
+  Future<Int8List?> _embedQuery(String query) async {
+    final embedder = _embedder;
+    if (embedder == null) return null;
+    try {
+      final raw = await embedder.generateEmbedding(
+        query,
+        taskType: TaskType.retrievalQuery,
+      );
+      var norm = 0.0;
+      for (final v in raw) {
+        norm += v * v;
+      }
+      norm = math.sqrt(norm);
+      if (norm == 0) return null;
+      final q = Int8List(raw.length);
+      for (var i = 0; i < raw.length; i++) {
+        final s = (raw[i] / norm) * VectorIndex.scale;
+        q[i] = s.round().clamp(-127, 127);
+      }
+      return q;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[PrivateMode] query embed failed: $e');
+      return null;
+    }
   }
 
   /// FTS5 MATCH treats many characters as syntax; quote each word so raw
@@ -122,6 +230,85 @@ class LocalChatRepository implements ChatRepository {
     return words.map((w) => '"$w"').join(' OR ');
   }
 
+  /// Hybrid retrieval: BM25 (keyword) fused with EmbeddingGemma vector
+  /// (semantic) via reciprocal rank fusion. Either leg alone still works —
+  /// vector search is skipped when the embedder/vectors aren't installed.
+  Future<List<_RetrievedBlock>> _retrieve(String message) async {
+    if (!await library.isPackInstalled) return const [];
+
+    // BM25 leg (with the single-term fallback that already ships).
+    final ftsQuery = _ftsQuery(message);
+    var bm25 = ftsQuery.isEmpty
+        ? const <OfflineSearchResult>[]
+        : await library.search(ftsQuery);
+    if (bm25.isEmpty && ftsQuery.isNotEmpty) {
+      final pooled = <OfflineSearchResult>[];
+      final seen = <String>{};
+      for (final w in _contentWords(message).take(3)) {
+        for (final h in await library.search('"$w"')) {
+          if (seen.add('${h.docId}/${h.blockId}')) pooled.add(h);
+        }
+        if (pooled.length >= 20) break;
+      }
+      bm25 = pooled;
+    }
+
+    // Vector leg.
+    var vec = const <VectorHit>[];
+    if (await _ensureSemantic()) {
+      final q = await _embedQuery(message);
+      if (q != null) {
+        vec = await _vectorIndex!.search(q, topK: 20);
+      }
+    }
+    if (kDebugMode) {
+      debugPrint('[PrivateMode] bm25=${bm25.length} vec=${vec.length}');
+    }
+
+    // Reciprocal rank fusion (k=60). Cache block text/heading as we see it.
+    const k = 60;
+    final scores = <String, double>{};
+    final text = <String, String>{};
+    final heading = <String, String>{};
+    final ids = <String, (String, String)>{};
+    String key(String d, String b) => '$d/$b';
+
+    for (var i = 0; i < bm25.length; i++) {
+      final h = bm25[i];
+      final kk = key(h.docId, h.blockId);
+      scores[kk] = (scores[kk] ?? 0) + 1.0 / (k + i + 1);
+      text[kk] = h.text;
+      heading[kk] = h.heading;
+      ids[kk] = (h.docId, h.blockId);
+    }
+    for (var i = 0; i < vec.length; i++) {
+      final h = vec[i];
+      final kk = key(h.docId, h.blockId);
+      scores[kk] = (scores[kk] ?? 0) + 1.0 / (k + i + 1);
+      ids[kk] = (h.docId, h.blockId);
+    }
+
+    final ranked = scores.keys.toList()
+      ..sort((a, b) => scores[b]!.compareTo(scores[a]!));
+
+    final out = <_RetrievedBlock>[];
+    for (final kk in ranked.take(_maxContextChunks)) {
+      var t = text[kk];
+      var hd = heading[kk] ?? '';
+      if (t == null) {
+        // Vector-only hit — fetch its text from the pack.
+        final (d, b) = ids[kk]!;
+        final block = await library.getBlock(d, b);
+        if (block == null) continue;
+        t = block.text;
+        hd = block.heading;
+      }
+      final (d, b) = ids[kk]!;
+      out.add(_RetrievedBlock(d, b, hd, t, scores[kk]!));
+    }
+    return out;
+  }
+
   @override
   Stream<ChatEvent> sendMessage({
     required String message,
@@ -141,45 +328,14 @@ class LocalChatRepository implements ChatRepository {
       //    model, mirroring the server prompt's helpline-first rule.
       final crisis = isCrisisMessage(message);
 
-      // 2. Retrieval from the offline pack (BM25 via FTS5).
+      // 2. Hybrid retrieval from the offline pack (BM25 + EmbeddingGemma
+      //    vectors, fused). No network anywhere in this path.
       var sources = const <Source>[];
       var context = '';
-      final ftsQuery = _ftsQuery(message);
-      final packInstalled = await library.isPackInstalled;
-      // Retrieval diagnostics — debug builds only (query terms are
-      // user content; a privacy-first app keeps them out of release logs).
-      if (kDebugMode) {
-        debugPrint('[PrivateMode] packInstalled=$packInstalled '
-            'ftsQuery=${ftsQuery.isEmpty ? '(empty)' : ftsQuery}');
-      }
-      if (ftsQuery.isNotEmpty && packInstalled) {
-        var allHits = await library.search(ftsQuery);
-        if (kDebugMode) {
-          debugPrint('[PrivateMode] hits=${allHits.length}'
-              '${allHits.isEmpty ? '' : ' first=${allHits.first.docId}'}');
-        }
-        if (allHits.isEmpty) {
-          // Fallback: the combined query found nothing (or errored) —
-          // probe the strongest terms one at a time and pool the results.
-          final pooled = <OfflineSearchResult>[];
-          final seen = <String>{};
-          for (final w in _contentWords(message).take(3)) {
-            final termHits = await library.search('"$w"');
-            if (kDebugMode) {
-              debugPrint('[PrivateMode] term "$w" hits=${termHits.length}');
-            }
-            for (final h in termHits) {
-              if (seen.add('${h.docId}/${h.blockId}')) pooled.add(h);
-            }
-            if (pooled.length >= _maxContextChunks) break;
-          }
-          allHits = pooled;
-        }
-        final hits = allHits.take(_maxContextChunks);
+      final hits = await _retrieve(message);
+      if (hits.isNotEmpty) {
         final books = await library.getBooks();
-        final titles = {
-          for (final b in books) b.docId: b.title,
-        };
+        final titles = {for (final b in books) b.docId: b.title};
         final srcs = <Source>[];
         final ctx = StringBuffer();
         var rank = 0;
@@ -194,7 +350,6 @@ class LocalChatRepository implements ChatRepository {
           ctx.writeln();
           srcs.add(Source(
             source: title,
-            // Rank-derived ordering signal (BM25 has no 0..1 similarity).
             similarity: (0.9 - rank * 0.07).clamp(0.5, 1.0),
             url: '',
             excerpt: text.trim(),

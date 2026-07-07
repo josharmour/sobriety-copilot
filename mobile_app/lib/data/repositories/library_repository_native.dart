@@ -42,6 +42,27 @@ class LibraryRepository {
     return p.join(dbDir, 'offline_search.db');
   }
 
+  /// Directory holding the precomputed EmbeddingGemma vectors (v2+ packs).
+  Future<String> get _vectorsDir async {
+    final docDir = await getApplicationDocumentsDirectory();
+    final dir = Directory(p.join(docDir.path, 'vectors'));
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir.path;
+  }
+
+  /// Paths to the shipped vector blob + row index if the installed pack
+  /// carries them (v2+), else null. Aligned: idx line N ↔ blob row N.
+  Future<({String blob, String idx, String meta})?> vectorFiles() async {
+    final dir = await _vectorsDir;
+    final blob = File(p.join(dir, 'vectors.i8'));
+    final idx = File(p.join(dir, 'vectors.idx'));
+    final meta = File(p.join(dir, 'vectors.meta.json'));
+    if (await blob.exists() && await idx.exists() && await meta.exists()) {
+      return (blob: blob.path, idx: idx.path, meta: meta.path);
+    }
+    return null;
+  }
+
   int get localPackVersion => prefs.getInt(_prefPackVersion) ?? 0;
   int get localPackDocCount => prefs.getInt(_prefPackDocCount) ?? 0;
 
@@ -114,12 +135,15 @@ class LibraryRepository {
 
     final dbDestPath = await _dbPath;
     final mDir = await _manifestsDir;
+    final vDir = await _vectorsDir;
 
-    // Remove old manifests
-    final dir = Directory(mDir);
-    if (await dir.exists()) {
-      await dir.delete(recursive: true);
-      await dir.create();
+    // Remove old manifests + vectors so a downgrade to a no-vectors pack
+    // doesn't leave stale semantic data behind.
+    for (final d in [Directory(mDir), Directory(vDir)]) {
+      if (await d.exists()) {
+        await d.delete(recursive: true);
+        await d.create();
+      }
     }
 
     int docCount = 0;
@@ -140,6 +164,13 @@ class LibraryRepository {
           final mFileName = file.name.substring('manifests/'.length);
           final mFile = File(p.join(mDir, mFileName));
           await mFile.writeAsBytes(data);
+        } else if (file.name.startsWith('vectors/') ||
+            file.name.startsWith('vectors.')) {
+          // v2+ semantic-retrieval blob (vectors.i8 / .idx / .meta.json).
+          final vName = file.name.contains('/')
+              ? file.name.substring(file.name.indexOf('/') + 1)
+              : file.name;
+          await File(p.join(vDir, vName)).writeAsBytes(data);
         }
       }
     }
@@ -220,10 +251,34 @@ class LibraryRepository {
         text: r['text'] as String? ?? '',
       )).toList();
     } catch (e) {
-      // Surface search failures in dev; FTS problems must never be silent
-      // again (Android's platform SQLite lacking fts5 hid for weeks).
       if (kDebugMode) debugPrint('[LibrarySearch] query failed: $e');
       return [];
+    }
+  }
+
+  /// Fetches a single block's heading + text by id (for vector hits, which
+  /// carry only doc_id/block_id). Linear scan on the FTS table, but only a
+  /// handful of lookups per query.
+  Future<OfflineSearchResult?> getBlock(String docId, String blockId) async {
+    if (!await isPackInstalled) return null;
+    try {
+      final db = await _database;
+      final rows = await db.rawQuery(
+        'SELECT doc_id, block_id, heading, text FROM blocks '
+        'WHERE doc_id = ? AND block_id = ? LIMIT 1',
+        [docId, blockId],
+      );
+      if (rows.isEmpty) return null;
+      final r = rows.first;
+      return OfflineSearchResult(
+        docId: r['doc_id'] as String? ?? '',
+        blockId: r['block_id'] as String? ?? '',
+        heading: r['heading'] as String? ?? '',
+        text: r['text'] as String? ?? '',
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('[LibrarySearch] getBlock failed: $e');
+      return null;
     }
   }
 }

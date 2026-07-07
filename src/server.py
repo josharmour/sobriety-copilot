@@ -1979,6 +1979,30 @@ p {{ margin: 0.75em 0; }}
     return HTMLResponse(page)
 
 
+@app.get("/api/private/embedder/{part}")
+def private_embedder(part: str):
+    """Serve the EmbeddingGemma files for Private Mode semantic search.
+
+    Self-hosted mirror (Gemma Terms permit redistribution) so users need no
+    HuggingFace account. Files live in packs/embedder/ (read-only mount),
+    dropped there out-of-band — they are deliberately not in git.
+    """
+    names = {
+        "model": "embeddinggemma.tflite",
+        "tokenizer": "embeddinggemma-tokenizer.model",
+    }
+    if part not in names:
+        raise HTTPException(status_code=404, detail="unknown part")
+    path = os.path.join(BASE_DIR, "packs", "embedder", names[part])
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="embedder not hosted")
+    return FileResponse(
+        path,
+        media_type="application/octet-stream",
+        filename=names[part],
+    )
+
+
 @app.get("/api/packs/latest")
 def get_latest_pack():
     import glob
