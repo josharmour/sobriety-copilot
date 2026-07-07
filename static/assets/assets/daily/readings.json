@@ -1,0 +1,170 @@
+{
+  "_comment": "Daily readings rotation. All content is US public domain (pre-1931 works, the 1939 first-edition Big Book text, prayers never under copyright) or original to this app. Index = dayOfYear % entries.length.",
+  "morning_practice": {
+    "title": "On Awakening",
+    "body": "On awakening let us think about the twenty-four hours ahead. We consider our plans for the day. Before we begin, we ask God to direct our thinking, especially asking that it be divorced from self-pity, dishonest or self-seeking motives.\n\nIn thinking about our day we may face indecision. We may not be able to determine which course to take. Here we ask God for inspiration, an intuitive thought or a decision. We relax and take it easy. We don't struggle.",
+    "source": "Alcoholics Anonymous, 1st ed. (1939), Into Action"
+  },
+  "evening_practice": {
+    "title": "When We Retire at Night",
+    "body": "When we retire at night, we constructively review our day. Were we resentful, selfish, dishonest or afraid? Do we owe an apology? Have we kept something to ourselves which should be discussed with another person at once? Were we kind and loving toward all? What could we have done better? Were we thinking of ourselves most of the time? Or were we thinking of what we could do for others, of what we could pack into the stream of life?\n\nAfter making our review we ask God's forgiveness and inquire what corrective measures should be taken.",
+    "source": "Alcoholics Anonymous, 1st ed. (1939), Into Action"
+  },
+  "entries": [
+    {
+      "title": "The Serenity Prayer",
+      "body": "God, grant me the serenity to accept the things I cannot change, courage to change the things I can, and wisdom to know the difference.",
+      "source": "Reinhold Niebuhr (traditional form)"
+    },
+    {
+      "title": "One Day at a Time",
+      "body": "Nobody stays sober for a lifetime in a single act. We stay sober from one morning to one night, and we do it again tomorrow. Whatever yesterday held and whatever tomorrow threatens, the only day you are asked to handle is this one.",
+      "source": "Original reflection"
+    },
+    {
+      "title": "The Prayer of St. Francis",
+      "body": "Lord, make me an instrument of your peace: where there is hatred, let me sow love; where there is injury, pardon; where there is doubt, faith; where there is despair, hope; where there is darkness, light; where there is sadness, joy.\n\nO divine Master, grant that I may not so much seek to be consoled as to console, to be understood as to understand, to be loved as to love. For it is in giving that we receive, it is in pardoning that we are pardoned, and it is in dying that we are born to eternal life.",
+      "source": "Anonymous, first published 1912"
+    },
+    {
+      "title": "The Third Step Prayer",
+      "body": "God, I offer myself to Thee — to build with me and to do with me as Thou wilt. Relieve me of the bondage of self, that I may better do Thy will. Take away my difficulties, that victory over them may bear witness to those I would help of Thy Power, Thy Love, and Thy Way of life. May I do Thy will always!",
+      "source": "Alcoholics Anonymous, 1st ed. (1939), How It Works"
+    },
+    {
+      "title": "As a Man Thinketh",
+      "body": "A man is literally what he thinks, his character being the complete sum of all his thoughts. Every action springs first from thought. Guard the garden of the mind: weed out the wrong, useless, and impure thoughts, and cultivate the flowers and fruits of right, useful, and pure ones.",
+      "source": "James Allen, As a Man Thinketh (1903)"
+    },
+    {
+      "title": "The Seventh Step Prayer",
+      "body": "My Creator, I am now willing that you should have all of me, good and bad. I pray that you now remove from me every single defect of character which stands in the way of my usefulness to you and my fellows. Grant me strength, as I go out from here, to do your bidding.",
+      "source": "Alcoholics Anonymous, 1st ed. (1939), Into Action"
+    },
+    {
+      "title": "Fear Not Tomorrow",
+      "body": "Take therefore no thought for the morrow: for the morrow shall take thought for the things of itself. Sufficient unto the day is the evil thereof.",
+      "source": "Matthew 6:34 (KJV)"
+    },
+    {
+      "title": "The Promises",
+      "body": "If we are painstaking about this phase of our development, we will be amazed before we are half way through. We are going to know a new freedom and a new happiness. We will not regret the past nor wish to shut the door on it. We will comprehend the word serenity and we will know peace. No matter how far down the scale we have gone, we will see how our experience can benefit others.",
+      "source": "Alcoholics Anonymous, 1st ed. (1939), Into Action"
+    },
+    {
+      "title": "The Greatest Thing in the World",
+      "body": "Love suffereth long, and is kind; love envieth not; love vaunteth not itself. There is nothing love cannot face; there is no limit to its faith, its hope, and its endurance. Patience, kindness, generosity, humility, courtesy, unselfishness, good temper, guilelessness, sincerity — these make up the supreme gift.",
+      "source": "Henry Drummond, The Greatest Thing in the World (1874)"
+    },
+    {
+      "title": "Resentment",
+      "body": "Resentment is the number one offender. It destroys more alcoholics than anything else. From it stem all forms of spiritual disease. When we hold a resentment we give another person free rent in our head and let yesterday spend today. The inventory is how we serve the eviction notice.",
+      "source": "After Alcoholics Anonymous, 1st ed. (1939), How It Works — with original commentary"
+    },
+    {
+      "title": "Be Still",
+      "body": "Be still, and know that I am God.",
+      "source": "Psalm 46:10 (KJV)"
+    },
+    {
+      "title": "Half Measures",
+      "body": "Half measures availed us nothing. We stood at the turning point. We asked His protection and care with complete abandon. Recovery does not require perfection today — it requires honesty, open-mindedness, and willingness. Bring those three and the program does the rest.",
+      "source": "After Alcoholics Anonymous, 1st ed. (1939), How It Works — with original commentary"
+    },
+    {
+      "title": "The Shepherd",
+      "body": "The Lord is my shepherd; I shall not want. He maketh me to lie down in green pastures: he leadeth me beside the still waters. He restoreth my soul. Yea, though I walk through the valley of the shadow of death, I will fear no evil.",
+      "source": "Psalm 23 (KJV)"
+    },
+    {
+      "title": "Serenity Is Not a Destination",
+      "body": "Serenity is not the absence of the storm but a way of standing in it. Each time you choose not to pick up, not to answer the resentment, not to say the cutting thing, you practice the calm you are asking for. Practice is prayer with its sleeves rolled up.",
+      "source": "Original reflection"
+    },
+    {
+      "title": "Calamity of the Mind",
+      "body": "The circumstances which a man encounters with suffering are the result of his own mental inharmony. Men do not attract that which they want, but that which they are. The soul attracts that which it secretly harbours; that which it loves, and also that which it fears.",
+      "source": "James Allen, As a Man Thinketh (1903)"
+    },
+    {
+      "title": "Sought Through Prayer",
+      "body": "We sought through prayer and meditation to improve our conscious contact with God as we understood Him, praying only for knowledge of His will for us and the power to carry that out. It works — it really does.",
+      "source": "Alcoholics Anonymous, 1st ed. (1939)"
+    },
+    {
+      "title": "The Amends We Owe Ourselves",
+      "body": "Some of the hardest amends are the quiet ones: going to bed at a decent hour, telling the truth about how you feel, asking for help before the wheels come off. You are also on your eighth-step list. Treat yourself like someone you are responsible for helping.",
+      "source": "Original reflection"
+    },
+    {
+      "title": "Faith Without Works",
+      "body": "Faith without works is dead. Carry the message; do not merely admire it. A kind word to a newcomer, a chair stacked after the meeting, a phone answered on the third ring at midnight — these are the works that keep faith alive.",
+      "source": "After James 2:26 (KJV) and Alcoholics Anonymous, 1st ed. (1939) — with original commentary"
+    },
+    {
+      "title": "Trudging the Road",
+      "body": "We trudge the road of happy destiny — trudge, because some days the road is uphill and the shoes pinch; happy, because we do not walk it alone, and because we know where it goes. Give freely of what you find, and join us.",
+      "source": "After Alcoholics Anonymous, 1st ed. (1939), A Vision For You — with original commentary"
+    },
+    {
+      "title": "The Doubter's Prayer",
+      "body": "You do not need a perfect faith to pray; you need only enough willingness to try. 'God, if you're there, help me stay sober today' has kept more people sober than certainty ever has. Doubt is not a disqualification — it is a doorway.",
+      "source": "Original reflection"
+    },
+    {
+      "title": "Dominion Over Circumstance",
+      "body": "Men are anxious to improve their circumstances, but are unwilling to improve themselves; they therefore remain bound. The man who does not shrink from self-crucifixion can never fail to accomplish the object upon which his heart is set.",
+      "source": "James Allen, As a Man Thinketh (1903)"
+    },
+    {
+      "title": "HALT",
+      "body": "Hungry, angry, lonely, tired — four horsemen of the relapse. None of them is cured by willpower; all of them are cured by a sandwich, a phone call, a meeting, or a nap. Before you diagnose yourself with a spiritual crisis, check the basics.",
+      "source": "Original reflection (traditional slogan)"
+    },
+    {
+      "title": "Love and Tolerance",
+      "body": "Love and tolerance of others is our code. We have ceased fighting anything or anyone — even alcohol. For by this time sanity will have returned, and we will seldom be interested in liquor. We feel as though we had been placed in a position of neutrality — safe and protected.",
+      "source": "Alcoholics Anonymous, 1st ed. (1939), Into Action"
+    },
+    {
+      "title": "The Newcomer's Gift",
+      "body": "The newcomer thinks the old-timer keeps them sober. It is the other way round. Every newcomer hands the room a mirror: this is where the road goes if I forget. If you are new, know that your presence is not a burden — it is the battery the whole meeting runs on.",
+      "source": "Original reflection"
+    },
+    {
+      "title": "First Things First",
+      "body": "Whatever else this day asks of you — the job, the family, the errands, the amends — it asks one thing first: do not pick up. Everything else on the list is negotiable, reschedulable, or survivable. The first thing is not. First things first.",
+      "source": "Original reflection (traditional slogan)"
+    },
+    {
+      "title": "Strength in Weakness",
+      "body": "My grace is sufficient for thee: for my strength is made perfect in weakness.",
+      "source": "2 Corinthians 12:9 (KJV)"
+    },
+    {
+      "title": "The Rooms",
+      "body": "Somewhere within a few miles of you, a folding chair is waiting with your name on nobody's list and everybody's welcome. The coffee will be bad and the acceptance will be complete. There is no problem so large that a meeting cannot shrink it to a size you can carry.",
+      "source": "Original reflection"
+    },
+    {
+      "title": "Serenity of Mind",
+      "body": "Calmness of mind is one of the beautiful jewels of wisdom. The calm man, having learned how to govern himself, knows how to adapt himself to others. The more tranquil a man becomes, the greater is his success, his influence, his power for good.",
+      "source": "James Allen, As a Man Thinketh (1903)"
+    },
+    {
+      "title": "Progress, Not Perfection",
+      "body": "No one among us has been able to maintain anything like perfect adherence to these principles. We are not saints. The point is, that we are willing to grow along spiritual lines. The principles we have set down are guides to progress. We claim spiritual progress rather than spiritual perfection.",
+      "source": "Alcoholics Anonymous, 1st ed. (1939), How It Works"
+    },
+    {
+      "title": "Anonymity",
+      "body": "Anonymity is not shame wearing a disguise; it is the discipline of putting principles before personalities. In the rooms you are not your job title, your record, or your worst night. You are simply another friend of Bill's, and that is enough.",
+      "source": "Original reflection"
+    },
+    {
+      "title": "This Too Shall Pass",
+      "body": "The craving lies about its own duration; it always claims to be permanent. Time it once and you will learn its secret — it crests and breaks like a wave, usually within minutes. You do not have to outlast forever. You only have to outlast the wave.",
+      "source": "Original reflection (traditional slogan)"
+    }
+  ]
+}
