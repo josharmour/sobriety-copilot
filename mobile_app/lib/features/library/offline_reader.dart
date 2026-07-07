@@ -21,9 +21,16 @@ class OfflineReaderScreen extends ConsumerStatefulWidget {
 }
 
 class _OfflineReaderScreenState extends ConsumerState<OfflineReaderScreen> {
+  /// Study-excerpt window: blocks shown on each side of the cited passage.
+  /// The app is a study aide, not a reproduction of the book — the reader
+  /// deliberately shows only an excerpt and urges purchase of the full work.
+  static const int _excerptRadius = 30;
+
   bool _loading = true;
   String? _error;
   List<dynamic> _blocks = [];
+  bool _moreBefore = false;
+  bool _moreAfter = false;
   final Map<String, GlobalKey> _blockKeys = {};
   bool _hasScrolled = false;
 
@@ -44,16 +51,31 @@ class _OfflineReaderScreenState extends ConsumerState<OfflineReaderScreen> {
         });
         return;
       }
-      
+
       final blocksList = manifest['blocks'] as List<dynamic>? ?? [];
-      
+
       // Filter out headers, footers, garbage
       final filteredBlocks = blocksList.where((b) {
         final type = b['type']?.toString();
         return type != 'page_header' && type != 'page_footer' && type != 'garbage';
       }).toList();
 
-      for (final b in filteredBlocks) {
+      // Excerpt window centered on the cited passage (or the start of the
+      // book when opened without a citation).
+      var anchor = 0;
+      final targets = widget.highlightBlockIds;
+      if (targets != null && targets.isNotEmpty) {
+        final idx = filteredBlocks.indexWhere(
+          (b) => targets.contains(b['id']?.toString()),
+        );
+        if (idx >= 0) anchor = idx;
+      }
+      final start = (anchor - _excerptRadius).clamp(0, filteredBlocks.length);
+      final end =
+          (anchor + _excerptRadius + 1).clamp(0, filteredBlocks.length);
+      final windowed = filteredBlocks.sublist(start, end);
+
+      for (final b in windowed) {
         final id = b['id']?.toString();
         if (id != null) {
           _blockKeys[id] = GlobalKey();
@@ -61,7 +83,9 @@ class _OfflineReaderScreenState extends ConsumerState<OfflineReaderScreen> {
       }
 
       setState(() {
-        _blocks = filteredBlocks;
+        _blocks = windowed;
+        _moreBefore = start > 0;
+        _moreAfter = end < filteredBlocks.length;
         _loading = false;
       });
 
@@ -130,8 +154,16 @@ class _OfflineReaderScreenState extends ConsumerState<OfflineReaderScreen> {
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-      itemCount: _blocks.length,
-      itemBuilder: (context, index) {
+      // Purchase/study notices bracket the excerpt.
+      itemCount: _blocks.length + 2,
+      itemBuilder: (context, rawIndex) {
+        if (rawIndex == 0) {
+          return _buildExcerptNotice(theme, top: true);
+        }
+        if (rawIndex == _blocks.length + 1) {
+          return _buildExcerptNotice(theme, top: false);
+        }
+        final index = rawIndex - 1;
         final block = _blocks[index] as Map<String, dynamic>;
         final id = block['id']?.toString() ?? '';
         final type = block['type']?.toString() ?? 'paragraph';
@@ -164,6 +196,44 @@ class _OfflineReaderScreenState extends ConsumerState<OfflineReaderScreen> {
         }
         return blockWidget;
       },
+    );
+  }
+
+  Widget _buildExcerptNotice(ThemeData theme, {required bool top}) {
+    final truncated = top ? _moreBefore : _moreAfter;
+    return Container(
+      margin: EdgeInsets.only(
+        top: top ? 0 : AppSpacing.xl,
+        bottom: top ? AppSpacing.xl : AppSpacing.xxl,
+      ),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.gold.withValues(alpha: 0.08),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(AppSpacing.radius),
+      ),
+      child: Column(
+        children: [
+          Text(
+            truncated
+                ? 'Study excerpt — the rest of this book is not shown.'
+                : 'Study excerpt',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'This app is a study aide. Please purchase the full book at your '
+            'local meeting, intergroup office, or from the publisher.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.8),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

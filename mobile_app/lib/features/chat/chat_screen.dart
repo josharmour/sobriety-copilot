@@ -887,7 +887,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 // Starter / empty state
 // ════════════════════════════════════════════════════════════════════════════
 
-class _StarterView extends StatefulWidget {
+class _StarterView extends ConsumerStatefulWidget {
   final void Function(String prompt) onPick;
   final List<StudySuggestion> studySuggestions;
   const _StarterView({
@@ -896,22 +896,24 @@ class _StarterView extends StatefulWidget {
   });
 
   @override
-  State<_StarterView> createState() => _StarterViewState();
+  ConsumerState<_StarterView> createState() => _StarterViewState();
 }
 
-class _StarterViewState extends State<_StarterView> {
+class _StarterViewState extends ConsumerState<_StarterView> {
   late final List<String> _prompts;
 
   @override
   void initState() {
     super.initState();
-    _prompts = starterPromptsForNow().toList()..shuffle();
+    // Rotation with a persisted no-repeat window — a fresh hand of prompts
+    // every empty-chat view, no repeats until the pool cycles.
+    _prompts = pickStarterPrompts(ref.read(sharedPreferencesProvider));
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final prompts = _prompts.take(5).toList();
+    final prompts = _prompts;
     final reflection = reflectionForToday();
     return Container(
       decoration: const BoxDecoration(

@@ -38,27 +38,26 @@ class LocalChatRepository implements ChatRepository {
     if (existing != null) return Future.value(existing);
     return _loading ??= () async {
       try {
-        // Fastest rung first: the Pixel Tensor-NPU build when sideloaded,
-        // then the standard file on GPU, then CPU. A bare session is opened
-        // and closed per attempt to force native engine init, so a failing
-        // backend falls through here instead of erroring mid-chat.
-        final npuFile = await PrivateModelNotifier.resolveNpuModelFile();
+        // Standard model on GPU, CPU as fallback. NOTE: do NOT add an NPU
+        // rung with the Tensor-G5 model build — its tf_lite_mtp_aux component
+        // CHECK-aborts natively in the LiteRT runtime bundled with
+        // flutter_gemma 0.13.6 (kills the whole app; not catchable here).
+        // Revisit when the plugin ships litertlm-android > 0.10.0.
         final stdFile = await PrivateModelNotifier.resolveModelFile();
-        final attempts = <(String, PreferredBackend)>[
-          if (npuFile != null) (npuFile.path, PreferredBackend.npu),
-          if (stdFile != null) (stdFile.path, PreferredBackend.gpu),
-          if (stdFile != null) (stdFile.path, PreferredBackend.cpu),
-        ];
-        if (attempts.isEmpty) {
+        if (stdFile == null) {
           throw StateError('Model file not found — download it in Settings.');
         }
+        final attempts = <PreferredBackend>[
+          PreferredBackend.gpu,
+          PreferredBackend.cpu,
+        ];
         Object? lastError;
-        for (final (path, backend) in attempts) {
+        for (final backend in attempts) {
           try {
             await FlutterGemma.installModel(
               modelType: ModelType.gemmaIt,
               fileType: ModelFileType.litertlm,
-            ).fromFile(path).install();
+            ).fromFile(stdFile.path).install();
             final model = await FlutterGemma.getActiveModel(
               maxTokens: 4096,
               preferredBackend: backend,

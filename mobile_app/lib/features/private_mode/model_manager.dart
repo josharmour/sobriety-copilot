@@ -20,11 +20,9 @@ const String kPrivateModelUrl =
     'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm';
 const int kPrivateModelBytes = 2588147712; // exact size, used to verify
 
-/// Optional Pixel-optimized variant (Tensor G5 NPU build of the same model).
-/// Not downloaded in-app (v1); honored when sideloaded next to the standard
-/// file. When present, inference tries the NPU first and falls back cleanly.
-const String kPrivateModelFileNpu = 'gemma-4-E2B-it_Google_Tensor_G5.litertlm';
-const int kPrivateModelBytesNpu = 3953110901;
+// NOTE: the Tensor-G5 NPU build (gemma-4-E2B-it_Google_Tensor_G5.litertlm)
+// is NOT supported: its tf_lite_mtp_aux component hard-aborts the LiteRT
+// runtime bundled with flutter_gemma 0.13.6. Revisit on a newer runtime.
 
 /// Private Mode is Android-only for now: the plugin's mobile engines are
 /// battle-tested there; desktop runs a JVM sidecar we haven't validated and
@@ -91,24 +89,9 @@ class PrivateModelNotifier extends Notifier<PrivateModelState> {
     return null;
   }
 
-  /// The NPU-optimized variant, if sideloaded (external-files dir only).
-  static Future<File?> resolveNpuModelFile() async {
-    try {
-      final ext = await getExternalStorageDirectory();
-      if (ext == null) return null;
-      final file = File(p.join(ext.path, kPrivateModelFileNpu));
-      if (await file.exists() &&
-          await file.length() == kPrivateModelBytesNpu) {
-        return file;
-      }
-    } catch (_) {}
-    return null;
-  }
-
   Future<void> _probe() async {
     try {
-      if (await resolveModelFile() != null ||
-          await resolveNpuModelFile() != null) {
+      if (await resolveModelFile() != null) {
         state = const PrivateModelState(PrivateModelPhase.installed);
       }
     } catch (_) {

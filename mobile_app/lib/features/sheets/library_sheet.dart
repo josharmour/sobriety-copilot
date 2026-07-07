@@ -436,7 +436,7 @@ class _LibrarySheetState extends ConsumerState<LibrarySheet> {
             ),
             ...list.map((b) => ListTile(
               title: Text(b.title),
-              subtitle: Text('${b.author} · ${b.blocksCount} sections'),
+              subtitle: Text('${b.author} · study excerpts — search to explore'),
               leading: const Icon(Icons.book_outlined),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
