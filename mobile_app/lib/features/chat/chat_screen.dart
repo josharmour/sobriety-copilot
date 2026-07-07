@@ -26,6 +26,7 @@ import 'package:sobriety_copilot_mobile/features/sheets/meetings_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/sheets/settings_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/sheets/library_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/library/offline_reader.dart';
+import 'package:sobriety_copilot_mobile/features/daily/today_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
@@ -43,7 +44,16 @@ class ChatScreen extends ConsumerStatefulWidget {
 }
 
 /// Menu actions surfaced by the app-bar overflow menu.
-enum _MenuAction { saved, library, meetings, crisis, altRecovery, settings, about }
+enum _MenuAction {
+  today,
+  saved,
+  library,
+  meetings,
+  crisis,
+  altRecovery,
+  settings,
+  about,
+}
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _input = TextEditingController();
@@ -387,6 +397,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<void> _openMenu(_MenuAction action) async {
     switch (action) {
+      case _MenuAction.today:
+        await showAppSheet(context, const TodaySheet());
       case _MenuAction.saved:
         await showAppSheet(context, const SavedPassagesSheet());
       case _MenuAction.library:
@@ -475,6 +487,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           PopupMenuButton<_MenuAction>(
             onSelected: _openMenu,
             itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: _MenuAction.today,
+                child: ListTile(
+                  leading: Icon(Icons.wb_twilight_outlined),
+                  title: Text('Today'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
               PopupMenuItem(
                 value: _MenuAction.saved,
                 child: ListTile(
@@ -719,17 +739,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ],
             ),
             const SizedBox(height: AppSpacing.xs),
-            TextButton.icon(
-              icon: const Icon(Icons.groups_outlined, size: 14),
-              label: const Text('Find a meeting'),
-              style: TextButton.styleFrom(
-                foregroundColor: theme.colorScheme.onSurfaceVariant,
-                minimumSize: Size.zero,
-                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                textStyle: theme.textTheme.bodySmall,
-              ),
-              onPressed: () => _openMenu(_MenuAction.meetings),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton.icon(
+                  icon: const Icon(Icons.groups_outlined, size: 14),
+                  label: const Text('Find a meeting'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.onSurfaceVariant,
+                    minimumSize: Size.zero,
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: theme.textTheme.bodySmall,
+                  ),
+                  onPressed: () => _openMenu(_MenuAction.meetings),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.wb_twilight_outlined, size: 14),
+                  label: const Text('Today'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.onSurfaceVariant,
+                    minimumSize: Size.zero,
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: theme.textTheme.bodySmall,
+                  ),
+                  onPressed: () => _openMenu(_MenuAction.today),
+                ),
+              ],
             ),
           ],
         ),

@@ -46,14 +46,14 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 
 ## P4 — Daily practice: meditation/prayer + nightly inventory
 
-- [ ] **"Today" view** (new sheet/surface hosting: daily reading, milestone card, inventory entry point).
-- [ ] **Daily reading content (PD-only)** — rotation built from public-domain material: Big Book 1st-ed. morning/evening practice (pp. 86–88 text), Serenity Prayer, St. Francis Prayer, curated pre-1931 devotional excerpts + original reflections. Link-outs to aa.org Daily Reflections / na.org Just for Today for the copyrighted readers.
-- [ ] **Nightly inventory (10th/11th step)** — the p86 review as ~10 yes/no toggles + optional free text per flagged item + gratitude list; history calendar with streaks; local SQLite only.
-- [ ] **Reminders** — `flutter_local_notifications`: separate channels (morning reading / nightly review), user-chosen times, Android 13 `POST_NOTIFICATIONS` requested in context, discreet copy ("Time to check in").
+- [x] **"Today" view** (new sheet/surface hosting: daily reading, milestone card, inventory entry point).
+- [x] **Daily reading content (PD-only)** — 31-entry rotation in assets/daily/readings.json + Big Book 1st-ed. morning/evening practice + aa.org/na.org link-outs — rotation built from public-domain material: Big Book 1st-ed. morning/evening practice (pp. 86–88 text), Serenity Prayer, St. Francis Prayer, curated pre-1931 devotional excerpts + original reflections. Link-outs to aa.org Daily Reflections / na.org Just for Today for the copyrighted readers.
+- [x] **Nightly inventory (10th/11th step)** — the p86 review as ~10 yes/no toggles + optional free text per flagged item + gratitude list; history calendar with streaks; local SQLite only.
+- [x] **Reminders** — `flutter_local_notifications`: separate channels (morning reading / nightly review), user-chosen times, Android 13 `POST_NOTIFICATIONS` requested in context, discreet copy ("Time to check in").
 
 ## P7 — Sharing (export-first; no hosted community)
 
-- [ ] **`share_plus`** — share saved passages with proper citation formatting; share inventory/gratitude summaries (the sponsor workflow).
+- [~] **`share_plus`** — inventory/gratitude sponsor export and daily-reading share DONE; saved-passage citation share still todo.
 - [ ] Deep-link scheme back into the reader — deferred unless time allows.
 
 ## P6 — Proactive study prompts (local-only interim version)
