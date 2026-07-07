@@ -169,19 +169,6 @@ class _LibrarySheetState extends ConsumerState<LibrarySheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Drag handle
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: theme.dividerColor,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          
           // Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -442,8 +429,8 @@ class _LibrarySheetState extends ConsumerState<LibrarySheet> {
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: theme.brightness == Brightness.dark
-                      ? const Color(0xFF4EC3B1)
-                      : const Color(0xFF264653),
+                      ? AppColors.accent
+                      : AppColors.brand,
                 ),
               ),
             ),

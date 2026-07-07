@@ -105,6 +105,11 @@ class ChatMessage {
   final String? query; // the user prompt this answer responds to
   final String? highlightSeed; // text used to deep-link sources (query[+hyde])
   final DateTime createdAt;
+  final bool isDenoising; // true while the diffusion engine is denoising
+  final int? diffusionStep; // current step of denoising
+  final int? diffusionTotal; // total steps of denoising
+  final String? diffusionContent; // transient visual snapshot text
+  final List<String> imageThumbs; // user-attached photo data URLs (for display)
 
   const ChatMessage({
     required this.id,
@@ -118,13 +123,20 @@ class ChatMessage {
     this.query,
     this.highlightSeed,
     required this.createdAt,
+    this.isDenoising = false,
+    this.diffusionStep,
+    this.diffusionTotal,
+    this.diffusionContent,
+    this.imageThumbs = const [],
   });
 
-  factory ChatMessage.user(String text) => ChatMessage(
+  factory ChatMessage.user(String text, {List<String> images = const []}) =>
+      ChatMessage(
         id: _genId(),
         role: 'user',
         text: text,
         createdAt: DateTime.now(),
+        imageThumbs: images,
       );
 
   factory ChatMessage.assistantPlaceholder({String? query}) => ChatMessage(
@@ -134,6 +146,7 @@ class ChatMessage {
         isStreaming: true,
         query: query,
         createdAt: DateTime.now(),
+        isDenoising: false,
       );
 
   ChatMessage copyWith({
@@ -145,6 +158,11 @@ class ChatMessage {
     bool? isError,
     String? query,
     String? highlightSeed,
+    bool? isDenoising,
+    int? diffusionStep,
+    int? diffusionTotal,
+    String? diffusionContent,
+    List<String>? imageThumbs,
   }) {
     return ChatMessage(
       id: id,
@@ -158,6 +176,11 @@ class ChatMessage {
       query: query ?? this.query,
       highlightSeed: highlightSeed ?? this.highlightSeed,
       createdAt: createdAt,
+      isDenoising: isDenoising ?? this.isDenoising,
+      diffusionStep: diffusionStep ?? this.diffusionStep,
+      diffusionTotal: diffusionTotal ?? this.diffusionTotal,
+      diffusionContent: diffusionContent ?? this.diffusionContent,
+      imageThumbs: imageThumbs ?? this.imageThumbs,
     );
   }
 
@@ -179,6 +202,13 @@ class ChatMessage {
       highlightSeed: json['highlightSeed']?.toString(),
       createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
           DateTime.now(),
+      isDenoising: json['isDenoising'] == true,
+      diffusionStep: json['diffusionStep'] as int?,
+      diffusionTotal: json['diffusionTotal'] as int?,
+      diffusionContent: json['diffusionContent']?.toString(),
+      imageThumbs: (json['imageThumbs'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList(),
     );
   }
 
@@ -194,6 +224,11 @@ class ChatMessage {
         if (query != null) 'query': query,
         if (highlightSeed != null) 'highlightSeed': highlightSeed,
         'createdAt': createdAt.toIso8601String(),
+        'isDenoising': isDenoising,
+        if (diffusionStep != null) 'diffusionStep': diffusionStep,
+        if (diffusionTotal != null) 'diffusionTotal': diffusionTotal,
+        if (diffusionContent != null) 'diffusionContent': diffusionContent,
+        if (imageThumbs.isNotEmpty) 'imageThumbs': imageThumbs,
       };
 
   /// {"role": role, "content": text} for the /api/chat history array.
@@ -339,6 +374,15 @@ sealed class ChatEvent {
           .toList();
       return FollowupsEvent(items);
     }
+    if (json.containsKey('diffusion')) {
+      final diff = json['diffusion'] as Map<String, dynamic>? ?? const {};
+      return DiffusionEvent(
+        block: _asInt(diff['block']),
+        step: _asInt(diff['step']),
+        total: _asInt(diff['total']),
+        content: (diff['content'] ?? '').toString(),
+      );
+    }
     return null;
   }
 }
@@ -368,6 +412,20 @@ class FollowupsEvent extends ChatEvent {
   const FollowupsEvent(this.items);
 }
 
+class DiffusionEvent extends ChatEvent {
+  final int block;
+  final int step;
+  final int total;
+  final String content;
+
+  const DiffusionEvent({
+    required this.block,
+    required this.step,
+    required this.total,
+    required this.content,
+  });
+}
+
 class ErrorEvent extends ChatEvent {
   final String message;
   const ErrorEvent(this.message);
@@ -386,6 +444,12 @@ double _asDouble(dynamic v) {
   if (v is num) return v.toDouble();
   if (v is String) return double.tryParse(v) ?? 0.0;
   return 0.0;
+}
+
+int _asInt(dynamic v) {
+  if (v is num) return v.toInt();
+  if (v is String) return int.tryParse(v) ?? 0;
+  return 0;
 }
 
 final Random _rng = Random();

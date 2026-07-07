@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
 
-/// Calming recovery palette (teal/sage). Same names for light & dark usage.
+/// Lighthouse palette — deep navy, bright cyan, warm gold (Play Store assets).
+/// Same names for light & dark usage.
 abstract class AppColors {
-  static const Color brand = Color(0xFF264653); // deep teal
-  static const Color accent = Color(0xFF2A9D8F); // calming green-teal
-  static const Color accentSoft = Color(0xFFE6F4F1);
+  static const Color brand = Color(0xFF0D1B2A);  // deep navy
+  static const Color accent = Color(0xFF48B8D0);  // bright cyan (lighthouse beam)
+  static const Color accentSoft = Color(0xFFE0F2F7); // tinted
+  static const Color gold = Color(0xFFF4A261);    // warm gold (accent callout)
   static const Color error = Color(0xFFE76F51);
-  static const Color lightBg = Color(0xFFF7FAF9);
+  static const Color lightBg = Color(0xFFF4F7FA);  // cool light gray-blue
   static const Color lightSurface = Color(0xFFFFFFFF);
   static const Color lightText = Color(0xFF1A1A2E);
   static const Color lightTextSecondary = Color(0xFF52606D);
-  static const Color darkBg = Color(0xFF0D1117);
-  static const Color darkSurface = Color(0xFF161B22);
+  static const Color darkBg = Color(0xFF0A0F1A);    // deeper navy
+  static const Color darkSurface = Color(0xFF121B2A); // navy surface
   static const Color darkText = Color(0xFFE8EAED);
   static const Color darkTextSecondary = Color(0xFF9DA7B3);
+
+  /// Highlight background for literature reader blocks. Always readable.
+  static Color highlightBg(bool isDark) =>
+      isDark ? const Color(0xFF1A3345) : const Color(0xFFD0E8F2);
 }
 
 abstract class AppSpacing {
@@ -34,7 +40,7 @@ abstract class AppTypography {
   static const double title = 20;
 }
 
-/// Builds the Material 3 light theme using the calming teal/sage palette.
+/// Builds the Material 3 light theme using the lighthouse navy/cyan palette.
 ThemeData buildLightTheme() {
   final colorScheme =
       ColorScheme.fromSeed(
@@ -57,7 +63,7 @@ ThemeData buildLightTheme() {
   );
 }
 
-/// Builds the Material 3 dark theme using the calming teal/sage palette.
+/// Builds the Material 3 dark theme using the lighthouse navy/cyan palette.
 ThemeData buildDarkTheme() {
   final colorScheme =
       ColorScheme.fromSeed(

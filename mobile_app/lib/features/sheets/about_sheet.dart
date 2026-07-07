@@ -9,6 +9,8 @@ import 'package:sobriety_copilot_mobile/widgets.dart';
 /// Surfaces what the app is, who it serves, and the important caveats:
 /// it is an educational companion built on recovery literature, NOT a
 /// substitute for professional help, and it is privacy-respecting.
+///
+/// Only the AA 24-Hour Helpline is listed as a crisis resource.
 class AboutSheet extends StatelessWidget {
   const AboutSheet({super.key});
 
@@ -86,7 +88,7 @@ class AboutSheet extends StatelessWidget {
             Text(
               'Sobriety Copilot helps you explore recovery literature in a '
               'warm, conversational way. Ask a question and it answers using '
-              'passages drawn from the program’s books and pamphlets, '
+              'passages drawn from the program\'s books and pamphlets, '
               'always citing where each idea comes from so you can read more.',
               style: theme.textTheme.bodyMedium,
             ),
@@ -100,8 +102,8 @@ class AboutSheet extends StatelessWidget {
               child: Text(
                 'This app is not a substitute for professional help, medical '
                 'advice, therapy, or a sponsor. It is an educational companion '
-                'only. If you are in crisis or may be in danger, call 911, or '
-                'reach SAMHSA’s free 24/7 helpline at 1-800-662-4357.',
+                'only. If you are in crisis or need to talk to someone now, call '
+                'the AA 24-Hour Helpline at (212) 647-1680.',
                 style: theme.textTheme.bodyMedium,
               ),
             ),
@@ -133,26 +135,25 @@ class AboutSheet extends StatelessWidget {
 
             const SectionHeader('Crisis resources'),
             const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                AppChip(
-                  label: 'SAMHSA 1-800-662-4357',
-                  icon: Icons.call_outlined,
-                  onTap: () => _launch('tel:18006624357'),
-                ),
-                AppChip(
-                  label: '988 Lifeline',
-                  icon: Icons.call_outlined,
-                  onTap: () => _launch('tel:988'),
-                ),
-                AppChip(
-                  label: '911',
-                  icon: Icons.emergency_outlined,
-                  onTap: () => _launch('tel:911'),
-                ),
-              ],
+            _NoticeCard(
+              icon: Icons.support_agent,
+              color: AppColors.accent,
+              child: Text(
+                'AA 24-Hour Helpline — (212) 647-1680.\n'
+                'Free, confidential, answered by a sober AA member 24/7.',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+
+            const SectionHeader('Other paths to recovery'),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'While this app focuses on 12-step recovery literature, '
+              'we recognize that different paths work for different people. '
+              'If you are exploring other programs, resources like SMART Recovery '
+              'and Refuge Recovery are also available to support you.',
+              style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: AppSpacing.xl),
 

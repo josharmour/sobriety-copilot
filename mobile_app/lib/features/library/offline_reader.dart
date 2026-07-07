@@ -232,18 +232,20 @@ class _OfflineReaderScreenState extends ConsumerState<OfflineReaderScreen> {
     );
 
     if (isHighlighted) {
-      final highlightColor = theme.brightness == Brightness.dark
-          ? const Color(0xFF1F4A3E)
-          : const Color(0xFFD4F5E9);
+      final isDark = theme.brightness == Brightness.dark;
+      final hlBg = AppColors.highlightBg(isDark);
+      // Force contrasting text color so highlighting is always readable
+      // regardless of the block type (heading, footnote, etc.).
+      final hlTextColor = isDark ? Colors.white : AppColors.lightText;
       content = Container(
         decoration: BoxDecoration(
-          color: highlightColor,
+          color: hlBg,
           borderRadius: BorderRadius.circular(4),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: Text(
           type == 'list' ? '• $text' : text,
-          style: style,
+          style: style?.copyWith(color: hlTextColor),
         ),
       );
     }
