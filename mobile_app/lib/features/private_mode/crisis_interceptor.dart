@@ -6,28 +6,23 @@
 /// Keyword-based on purpose: predictable, auditable, offline.
 library;
 
-const List<String> _crisisPhrases = [
-  'kill myself',
-  'killing myself',
-  'suicide',
-  'suicidal',
-  'end my life',
-  'end it all',
-  'want to die',
-  'wanna die',
-  'better off dead',
-  'hurt myself',
-  'harm myself',
-  'self harm',
-  'self-harm',
-  'overdose',
-  'od on',
+final List<RegExp> _crisisPatterns = [
+  RegExp(r'\bkill(ing)?\s+myself\b'),
+  RegExp(r'\bsuicid(e|al)\b'),
+  RegExp(r'\bend\s+(my\s+life|it\s+all)\b'),
+  RegExp(r'\b(want|wanna)\s+to\s+die\b'),
+  RegExp(r'\bbetter\s+off\s+dead\b'),
+  RegExp(r'\b(hurt|harm)(ing)?\s+myself\b'),
+  RegExp(r'\bself[\s-]?harm\b'),
+  RegExp(r'\boverdos(e|ing|ed)\b'),
 ];
 
-/// Returns true when [message] contains a crisis cue.
+/// Returns true when [message] contains a crisis cue. Word-boundary regexes
+/// on purpose — bare substrings misfire badly here (e.g. "od on" inside
+/// "god on", common in recovery talk).
 bool isCrisisMessage(String message) {
   final lower = message.toLowerCase();
-  return _crisisPhrases.any(lower.contains);
+  return _crisisPatterns.any((p) => p.hasMatch(lower));
 }
 
 /// Fixed, model-independent crisis note (mirrors the server prompt's

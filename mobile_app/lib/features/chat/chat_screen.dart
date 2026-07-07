@@ -81,6 +81,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Tracks the last assistant message we auto-read so TTS fires only once.
   String? _autoReadId;
 
+  /// Bumped on new-chat so the starter view remounts with fresh suggestions.
+  int _starterGeneration = 0;
+
   @override
   void initState() {
     super.initState();
@@ -428,6 +431,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ref.read(chatNotifierProvider.notifier).startNew();
     _input.clear();
     _hideSuggestions();
+    // Remount the starter view so a fresh hand of suggestions is drawn —
+    // tapping the title / new-conversation repeatedly cycles the rotation.
+    setState(() => _starterGeneration++);
   }
 
   // ── Source detail ────────────────────────────────────────────────────────────
@@ -613,6 +619,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               Expanded(
                 child: chat.isEmpty
                     ? _StarterView(
+                        key: ValueKey(_starterGeneration),
                         onPick: _send,
                         studySuggestions: ref.watch(studySuggestionsProvider),
                       )
@@ -891,6 +898,7 @@ class _StarterView extends ConsumerStatefulWidget {
   final void Function(String prompt) onPick;
   final List<StudySuggestion> studySuggestions;
   const _StarterView({
+    super.key,
     required this.onPick,
     this.studySuggestions = const [],
   });

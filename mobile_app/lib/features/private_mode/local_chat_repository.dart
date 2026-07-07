@@ -92,14 +92,30 @@ class LocalChatRepository implements ChatRepository {
   /// FTS5 MATCH treats many characters as syntax; quote each word so raw
   /// user text can't produce a query error (library.search returns [] on
   /// exceptions, silently losing retrieval).
-  String _ftsQuery(String message) {
+  static const Set<String> _stopwords = {
+    'the', 'and', 'for', 'that', 'this', 'with', 'from', 'what', 'when',
+    'where', 'which', 'who', 'whom', 'why', 'how', 'does', 'did', 'has',
+    'have', 'had', 'was', 'were', 'are', 'you', 'your', 'not', 'but',
+    'about', 'into', 'out', 'can', 'could', 'should', 'would', 'say',
+    'says', 'tell', 'show', 'help', 'please',
+  };
+
+  /// Content words only, longest first, capped — big OR unions over
+  /// stopwords rank poorly and have misbehaved on-device.
+  List<String> _contentWords(String message) {
     final words = message
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
         .split(RegExp(r'\s+'))
-        .where((w) => w.length > 2)
-        .take(12)
-        .toList();
+        .where((w) => w.length > 2 && !_stopwords.contains(w))
+        .toSet()
+        .toList()
+      ..sort((x, y) => y.length.compareTo(x.length));
+    return words.take(6).toList();
+  }
+
+  String _ftsQuery(String message) {
+    final words = _contentWords(message);
     if (words.isEmpty) return '';
     return words.map((w) => '"$w"').join(' OR ');
   }
@@ -127,8 +143,33 @@ class LocalChatRepository implements ChatRepository {
       var sources = const <Source>[];
       var context = '';
       final ftsQuery = _ftsQuery(message);
-      if (ftsQuery.isNotEmpty && await library.isPackInstalled) {
-        final hits = (await library.search(ftsQuery)).take(_maxContextChunks);
+      final packInstalled = await library.isPackInstalled;
+      // Retrieval diagnostics — shows in `adb logcat` as "I flutter:".
+      // ignore: avoid_print
+      print('[PrivateMode] packInstalled=$packInstalled '
+          'ftsQuery=${ftsQuery.isEmpty ? '(empty)' : ftsQuery}');
+      if (ftsQuery.isNotEmpty && packInstalled) {
+        var allHits = await library.search(ftsQuery);
+        // ignore: avoid_print
+        print('[PrivateMode] hits=${allHits.length}'
+            '${allHits.isEmpty ? '' : ' first=${allHits.first.docId}'}');
+        if (allHits.isEmpty) {
+          // Fallback: the combined query found nothing (or errored) —
+          // probe the strongest terms one at a time and pool the results.
+          final pooled = <OfflineSearchResult>[];
+          final seen = <String>{};
+          for (final w in _contentWords(message).take(3)) {
+            final termHits = await library.search('"$w"');
+            // ignore: avoid_print
+            print('[PrivateMode] term "$w" hits=${termHits.length}');
+            for (final h in termHits) {
+              if (seen.add('${h.docId}/${h.blockId}')) pooled.add(h);
+            }
+            if (pooled.length >= _maxContextChunks) break;
+          }
+          allHits = pooled;
+        }
+        final hits = allHits.take(_maxContextChunks);
         final books = await library.getBooks();
         final titles = {
           for (final b in books) b.docId: b.title,
@@ -181,15 +222,22 @@ class LocalChatRepository implements ChatRepository {
           '${m.role == 'user' ? 'Person' : 'You'}: ${text.trim()}',
         );
       }
+      // The small model mentions anything it's given — only pass the sober
+      // day count when the question is actually about sobriety time.
+      final wantsDayCount = RegExp(
+        r'\b(day|days|sober|sobriety|clean|milestone|birthday|anniversary|how\s+long|how\s+am\s+i\s+doing)\b',
+        caseSensitive: false,
+      ).hasMatch(message);
+      final scopedClientContext = wantsDayCount ? clientContext : null;
       final userMessage = context.isNotEmpty
           ? localUserMessage(
               context: context,
               question: message,
-              clientContext: clientContext,
+              clientContext: scopedClientContext,
             )
           : localNoContextMessage(
               question: message,
-              clientContext: clientContext,
+              clientContext: scopedClientContext,
             );
       final fullMessage = historyBlock.isEmpty
           ? userMessage
