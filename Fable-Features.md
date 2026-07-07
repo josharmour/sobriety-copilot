@@ -65,10 +65,14 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 - [x] **Desktop offline library** — `sqflite_common_ffi` factory init on Windows/Linux at startup.
 - [x] **Graceful capability gating** (camera/OCR/mic hidden on web+desktop via capabilities.dart; gallery attach stays everywhere) — hide OCR/camera/mic buttons on surfaces where the plugin can't work instead of runtime snackbars.
 
-## P5 — On-device Gemma "Private Mode" (scaffold only overnight)
+## P5 — On-device Gemma "Private Mode" (BUILT 2026-07-07)
 
-- [!] **Not buildable/testable overnight** (2.6 GB model download, device GPU validation, pack-vector export pipeline). Report §3-P5 has the full architecture: Gemma 4 E2B `.litertlm` 4-bit via `flutter_gemma`, EmbeddingGemma query embedder, pack-shipped precomputed vectors, opt-in self-hosted download, RAM gating; sherpa-onnx ASR replaces `/api/transcribe`.
-- [ ] Stretch if core list finishes: `LocalChatRepository` skeleton behind a hidden flag + design notes, no user-visible UI.
+- [x] **Model**: Gemma 4 E2B-it `.litertlm` (2.59 GB, Apache 2.0, ungated HF CDN — URL verified) via flutter_gemma 0.13.6 (LiteRT-LM engine, GPU backend, OpenCL manifest entries).
+- [x] **Download manager**: opt-in in-Settings download (progress, cancel, size-verified, resumable-safe .part), delete; sideload path via app external-files dir for testing.
+- [x] **LocalChatRepository**: implements the existing ChatRepository — FTS5/BM25 retrieval from the offline pack (sanitized MATCH query, category-aware titles), condensed on-device prompt port per tone, history folding under a small token budget, streaming TokenEvents, Sources with docId/blockIds that deep-link into the offline reader, Gemma 4 thinking mode wired to the reasoning panel.
+- [x] **Deterministic crisis interceptor** — keyword layer independent of the model, helpline-first block prepended before generation.
+- [x] **Provider switch**: chat flips to on-device when the toggle is on AND the model is installed; falls back to server otherwise. Android-only surface for now.
+- [ ] Phase 2: EmbeddingGemma vector retrieval (flutter_gemma has embedder + sqlite vector store APIs; needs an ungated embedder file or HF-token flow), sherpa-onnx ASR to replace /api/transcribe, ABI splits to trim the 400 MB APK for Play.
 
 ---
 

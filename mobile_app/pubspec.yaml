@@ -63,6 +63,7 @@ dependencies:
   flutter_timezone: ^5.1.0
   share_plus: ^13.2.0
   sqflite_common_ffi: ^2.4.0+3
+  flutter_gemma: ^0.13.6
 
 dev_dependencies:
   flutter_test:

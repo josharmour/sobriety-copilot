@@ -14,6 +14,8 @@ import 'package:sobriety_copilot_mobile/data/repositories/library_repository.dar
 import 'package:sobriety_copilot_mobile/features/chat/chat_notifier.dart';
 import 'package:sobriety_copilot_mobile/features/chat/conversations.dart';
 import 'package:sobriety_copilot_mobile/features/chat/saved_passages.dart';
+import 'package:sobriety_copilot_mobile/features/private_mode/local_chat_repository.dart';
+import 'package:sobriety_copilot_mobile/features/private_mode/model_manager.dart';
 import 'package:sobriety_copilot_mobile/features/tts/tts_service.dart';
 import 'package:sobriety_copilot_mobile/features/tts/voice_manager.dart';
 
@@ -46,8 +48,18 @@ final appConfigProvider =
 /// base URL in settings takes effect immediately without rebuilding them.
 String _baseUrl(Ref ref) => ref.read(appConfigProvider).baseUrl;
 
-/// Streaming chat repository (`POST /api/chat`).
+/// Streaming chat repository. Server-backed by default; switches to the
+/// fully on-device LocalChatRepository when Private Mode is enabled AND the
+/// local model file is installed. Consumers `ref.read` this at send time
+/// (chat_notifier), so flipping the toggle takes effect on the next message.
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
+  final privateMode =
+      ref.watch(appConfigProvider.select((c) => c.privateMode));
+  final modelReady =
+      ref.watch(privateModelProvider.select((s) => s.isInstalled));
+  if (privateMode && modelReady && privateModeSupported) {
+    return LocalChatRepository(library: ref.watch(libraryRepositoryProvider));
+  }
   return HttpChatRepository(
     client: ref.watch(httpClientProvider),
     baseUrl: () => _baseUrl(ref),

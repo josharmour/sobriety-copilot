@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sobriety_copilot_mobile/config/app_config.dart';
 import 'package:sobriety_copilot_mobile/data/models/meeting_models.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
+import 'package:sobriety_copilot_mobile/features/private_mode/private_mode_section.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
 import 'package:sobriety_copilot_mobile/features/tts/neural_voices.dart';
 import 'package:sobriety_copilot_mobile/features/tts/voice_manager.dart';
@@ -72,6 +73,8 @@ class SettingsSheet extends ConsumerWidget {
                   children: [
                     const _ServerStatusCard(),
                     const SizedBox(height: AppSpacing.lg),
+
+                    const PrivateModeSection(),
 
                     const SectionHeader('Response tone'),
                     const SizedBox(height: AppSpacing.xs),

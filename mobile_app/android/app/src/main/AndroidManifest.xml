@@ -14,6 +14,10 @@
         android:label="Sobriety Copilot"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- GPU inference for the on-device model (flutter_gemma). -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false"/>
+        <uses-native-library android:name="libOpenCL-car.so" android:required="false"/>
+        <uses-native-library android:name="libOpenCL-pixel.so" android:required="false"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

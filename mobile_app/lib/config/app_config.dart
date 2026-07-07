@@ -75,6 +75,9 @@ class AppConfig {
   // Opt-in "continue your study" cards derived on-device from local
   // conversation history. Never sent anywhere.
   final bool studySuggestions; // default false
+  // Private Mode: answer with the on-device model instead of the server.
+  // Only takes effect once the local model is downloaded and ready.
+  final bool privateMode; // default false
   final String voiceId; // kSystemVoiceId or a NeuralVoice id
   final String userId; // stable per-install id (uuid-ish), never empty
 
@@ -85,6 +88,7 @@ class AppConfig {
     required this.showThinking,
     required this.ttsEnabled,
     this.studySuggestions = false,
+    this.privateMode = false,
     required this.voiceId,
     required this.userId,
   });
@@ -99,6 +103,7 @@ class AppConfig {
       showThinking: false,
       ttsEnabled: false,
       studySuggestions: false,
+      privateMode: false,
       voiceId: kSystemVoiceId,
       userId: id,
     );
@@ -111,6 +116,7 @@ class AppConfig {
     bool? showThinking,
     bool? ttsEnabled,
     bool? studySuggestions,
+    bool? privateMode,
     String? voiceId,
     String? userId,
   }) {
@@ -121,6 +127,7 @@ class AppConfig {
       showThinking: showThinking ?? this.showThinking,
       ttsEnabled: ttsEnabled ?? this.ttsEnabled,
       studySuggestions: studySuggestions ?? this.studySuggestions,
+      privateMode: privateMode ?? this.privateMode,
       voiceId: voiceId ?? this.voiceId,
       userId: userId ?? this.userId,
     );
@@ -160,6 +167,7 @@ class AppConfig {
       showThinking: json['showThinking'] as bool? ?? false,
       ttsEnabled: json['ttsEnabled'] as bool? ?? false,
       studySuggestions: json['studySuggestions'] as bool? ?? false,
+      privateMode: json['privateMode'] as bool? ?? false,
       voiceId: (json['voiceId'] as String?) ?? kSystemVoiceId,
       userId: userId,
     );
@@ -173,6 +181,7 @@ class AppConfig {
       'showThinking': showThinking,
       'ttsEnabled': ttsEnabled,
       'studySuggestions': studySuggestions,
+      'privateMode': privateMode,
       'voiceId': voiceId,
       'userId': userId,
     };
@@ -271,6 +280,11 @@ class AppConfigNotifier extends Notifier<AppConfig> {
 
   Future<void> setStudySuggestions(bool value) async {
     state = state.copyWith(studySuggestions: value);
+    await _persist();
+  }
+
+  Future<void> setPrivateMode(bool value) async {
+    state = state.copyWith(privateMode: value);
     await _persist();
   }
 
