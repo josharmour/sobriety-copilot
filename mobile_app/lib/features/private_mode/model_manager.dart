@@ -20,6 +20,12 @@ const String kPrivateModelUrl =
     'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm';
 const int kPrivateModelBytes = 2588147712; // exact size, used to verify
 
+/// Optional Pixel-optimized variant (Tensor G5 NPU build of the same model).
+/// Not downloaded in-app (v1); honored when sideloaded next to the standard
+/// file. When present, inference tries the NPU first and falls back cleanly.
+const String kPrivateModelFileNpu = 'gemma-4-E2B-it_Google_Tensor_G5.litertlm';
+const int kPrivateModelBytesNpu = 3953110901;
+
 /// Private Mode is Android-only for now: the plugin's mobile engines are
 /// battle-tested there; desktop runs a JVM sidecar we haven't validated and
 /// web can't hold a 2.6 GB model.
@@ -65,19 +71,19 @@ class PrivateModelNotifier extends Notifier<PrivateModelState> {
   /// download target, or the app's external-files dir (sideload target —
   /// `adb push <file> /sdcard/Android/data/<pkg>/files/` for testing).
   static Future<File?> resolveModelFile() async {
-    final candidates = <String>[await modelPath()];
+    final candidates = <(String, int)>[(await modelPath(), kPrivateModelBytes)];
     try {
       final ext = await getExternalStorageDirectory();
       if (ext != null) {
-        candidates.add(p.join(ext.path, kPrivateModelFile));
+        candidates.add((p.join(ext.path, kPrivateModelFile), kPrivateModelBytes));
       }
     } catch (_) {
       // External storage unavailable; only the download target applies.
     }
-    for (final path in candidates) {
+    for (final (path, bytes) in candidates) {
       final file = File(path);
       try {
-        if (await file.exists() && await file.length() == kPrivateModelBytes) {
+        if (await file.exists() && await file.length() == bytes) {
           return file;
         }
       } catch (_) {}
@@ -85,9 +91,24 @@ class PrivateModelNotifier extends Notifier<PrivateModelState> {
     return null;
   }
 
+  /// The NPU-optimized variant, if sideloaded (external-files dir only).
+  static Future<File?> resolveNpuModelFile() async {
+    try {
+      final ext = await getExternalStorageDirectory();
+      if (ext == null) return null;
+      final file = File(p.join(ext.path, kPrivateModelFileNpu));
+      if (await file.exists() &&
+          await file.length() == kPrivateModelBytesNpu) {
+        return file;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> _probe() async {
     try {
-      if (await resolveModelFile() != null) {
+      if (await resolveModelFile() != null ||
+          await resolveNpuModelFile() != null) {
         state = const PrivateModelState(PrivateModelPhase.installed);
       }
     } catch (_) {

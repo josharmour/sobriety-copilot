@@ -38,22 +38,40 @@ class LocalChatRepository implements ChatRepository {
     if (existing != null) return Future.value(existing);
     return _loading ??= () async {
       try {
-        // Downloaded location or the adb-sideload location — whichever holds
-        // a complete file.
-        final file = await PrivateModelNotifier.resolveModelFile();
-        if (file == null) {
+        // Fastest rung first: the Pixel Tensor-NPU build when sideloaded,
+        // then the standard file on GPU, then CPU. A bare session is opened
+        // and closed per attempt to force native engine init, so a failing
+        // backend falls through here instead of erroring mid-chat.
+        final npuFile = await PrivateModelNotifier.resolveNpuModelFile();
+        final stdFile = await PrivateModelNotifier.resolveModelFile();
+        final attempts = <(String, PreferredBackend)>[
+          if (npuFile != null) (npuFile.path, PreferredBackend.npu),
+          if (stdFile != null) (stdFile.path, PreferredBackend.gpu),
+          if (stdFile != null) (stdFile.path, PreferredBackend.cpu),
+        ];
+        if (attempts.isEmpty) {
           throw StateError('Model file not found — download it in Settings.');
         }
-        await FlutterGemma.installModel(
-          modelType: ModelType.gemmaIt,
-          fileType: ModelFileType.litertlm,
-        ).fromFile(file.path).install();
-        final model = await FlutterGemma.getActiveModel(
-          maxTokens: 4096,
-          preferredBackend: PreferredBackend.gpu,
-        );
-        _model = model;
-        return model;
+        Object? lastError;
+        for (final (path, backend) in attempts) {
+          try {
+            await FlutterGemma.installModel(
+              modelType: ModelType.gemmaIt,
+              fileType: ModelFileType.litertlm,
+            ).fromFile(path).install();
+            final model = await FlutterGemma.getActiveModel(
+              maxTokens: 4096,
+              preferredBackend: backend,
+            );
+            final probe = await model.createSession();
+            await probe.close();
+            _model = model;
+            return model;
+          } catch (e) {
+            lastError = e;
+          }
+        }
+        throw StateError('Could not load the on-device model: $lastError');
       } finally {
         _loading = null;
       }
