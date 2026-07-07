@@ -153,6 +153,16 @@ class SettingsSheet extends ConsumerWidget {
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
+                      value: config.studySuggestions,
+                      title: const Text('Continue-your-study suggestions'),
+                      subtitle: const Text(
+                        'Suggest study topics from your recent questions. '
+                        'Computed on this device only — nothing is uploaded.',
+                      ),
+                      onChanged: (v) => notifier.setStudySuggestions(v),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
                       value: config.ttsEnabled,
                       title: const Text('Read answers aloud'),
                       subtitle: const Text(

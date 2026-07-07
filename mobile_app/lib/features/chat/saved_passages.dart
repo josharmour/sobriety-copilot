@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:sobriety_copilot_mobile/data/models/chat_models.dart';
@@ -15,6 +16,14 @@ const int _kMaxSavedPassages = 100;
 /// Stable identity for a saved [Source]: its document key plus the excerpt.
 /// Mirrors the web app, which de-dupes saved passages by passage text.
 String _savedKey(Source s) => '${s.documentKey}::${s.excerpt}';
+
+/// Citation-formatted share text for a passage (the sponsor/text-a-friend
+/// workflow): quoted excerpt, title, printed page when known.
+String shareTextFor(Source s) {
+  final page = s.page?.toString() ?? '';
+  final cite = page.isNotEmpty ? '${s.title}, p. $page' : s.title;
+  return '"${s.excerpt.trim()}"\n— $cite';
+}
 
 /// Riverpod notifier backing the saved/bookmarked passages list.
 ///
@@ -164,6 +173,9 @@ class SavedPassagesSheet extends ConsumerWidget {
                     onOpen: s.url.isEmpty
                         ? null
                         : () => _open(context, s, config.baseUrl),
+                    onShare: () => SharePlus.instance.share(
+                      ShareParams(text: shareTextFor(s)),
+                    ),
                     onRemove: () =>
                         ref.read(savedPassagesProvider.notifier).remove(s),
                   );
@@ -179,11 +191,13 @@ class SavedPassagesSheet extends ConsumerWidget {
 class _SavedPassageTile extends StatelessWidget {
   final Source source;
   final VoidCallback? onOpen;
+  final VoidCallback onShare;
   final VoidCallback onRemove;
 
   const _SavedPassageTile({
     required this.source,
     required this.onOpen,
+    required this.onShare,
     required this.onRemove,
   });
 
@@ -221,6 +235,13 @@ class _SavedPassageTile extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 18,
+                    tooltip: 'Share',
+                    onPressed: onShare,
+                    icon: const Icon(Icons.ios_share),
                   ),
                   IconButton(
                     visualDensity: VisualDensity.compact,

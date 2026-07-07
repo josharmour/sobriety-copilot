@@ -23,25 +23,21 @@ const List<ToneOption> kTones = [
 const String kDefaultTone = 'brief';
 
 /// All literature category ids (order = display order).
+/// Synced with the directories in the server's documents/ folder:
+///   conference_approved, books_about_aa, other_anonymous, related_nonfiction
 const List<String> kAllCategories = [
-  'aa',
-  'na',
   'other_anonymous',
   'conference_approved',
   'books_about_aa',
   'related_nonfiction',
-  'uncategorized',
 ];
 
 /// Human labels for category ids.
 const Map<String, String> kCategoryLabels = {
-  'aa': 'Alcoholics Anonymous',
-  'na': 'Narcotics Anonymous',
   'other_anonymous': 'Other Anonymous Fellowships',
   'conference_approved': 'Conference-Approved Literature',
   'books_about_aa': 'Books About A.A.',
   'related_nonfiction': 'Related Nonfiction',
-  'uncategorized': 'Uncategorized',
 };
 
 const String kDefaultBaseUrl = 'https://sobrietycopilot.com';
@@ -76,6 +72,9 @@ class AppConfig {
   final Set<String> enabledCategories; // subset of kAllCategories; default = all
   final bool showThinking; // default false
   final bool ttsEnabled; // default false
+  // Opt-in "continue your study" cards derived on-device from local
+  // conversation history. Never sent anywhere.
+  final bool studySuggestions; // default false
   final String voiceId; // kSystemVoiceId or a NeuralVoice id
   final String userId; // stable per-install id (uuid-ish), never empty
 
@@ -85,6 +84,7 @@ class AppConfig {
     required this.enabledCategories,
     required this.showThinking,
     required this.ttsEnabled,
+    this.studySuggestions = false,
     required this.voiceId,
     required this.userId,
   });
@@ -98,6 +98,7 @@ class AppConfig {
       enabledCategories: kAllCategories.toSet(),
       showThinking: false,
       ttsEnabled: false,
+      studySuggestions: false,
       voiceId: kSystemVoiceId,
       userId: id,
     );
@@ -109,6 +110,7 @@ class AppConfig {
     Set<String>? enabledCategories,
     bool? showThinking,
     bool? ttsEnabled,
+    bool? studySuggestions,
     String? voiceId,
     String? userId,
   }) {
@@ -118,6 +120,7 @@ class AppConfig {
       enabledCategories: enabledCategories ?? this.enabledCategories,
       showThinking: showThinking ?? this.showThinking,
       ttsEnabled: ttsEnabled ?? this.ttsEnabled,
+      studySuggestions: studySuggestions ?? this.studySuggestions,
       voiceId: voiceId ?? this.voiceId,
       userId: userId ?? this.userId,
     );
@@ -156,6 +159,7 @@ class AppConfig {
       enabledCategories: cats,
       showThinking: json['showThinking'] as bool? ?? false,
       ttsEnabled: json['ttsEnabled'] as bool? ?? false,
+      studySuggestions: json['studySuggestions'] as bool? ?? false,
       voiceId: (json['voiceId'] as String?) ?? kSystemVoiceId,
       userId: userId,
     );
@@ -168,6 +172,7 @@ class AppConfig {
       'enabledCategories': enabledCategories.toList()..sort(),
       'showThinking': showThinking,
       'ttsEnabled': ttsEnabled,
+      'studySuggestions': studySuggestions,
       'voiceId': voiceId,
       'userId': userId,
     };
@@ -261,6 +266,11 @@ class AppConfigNotifier extends Notifier<AppConfig> {
 
   Future<void> setTtsEnabled(bool value) async {
     state = state.copyWith(ttsEnabled: value);
+    await _persist();
+  }
+
+  Future<void> setStudySuggestions(bool value) async {
+    state = state.copyWith(studySuggestions: value);
     await _persist();
   }
 

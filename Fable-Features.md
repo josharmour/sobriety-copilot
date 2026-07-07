@@ -53,17 +53,17 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 
 ## P7 — Sharing (export-first; no hosted community)
 
-- [~] **`share_plus`** — inventory/gratitude sponsor export and daily-reading share DONE; saved-passage citation share still todo.
-- [ ] Deep-link scheme back into the reader — deferred unless time allows.
+- [x] **`share_plus`** — sponsor export of inventories, daily-reading share, and citation-formatted saved-passage share (title + printed page).
+- [ ] Deep-link scheme back into the reader — deferred.
 
 ## P6 — Proactive study prompts (local-only interim version)
 
-- [ ] **Keyword/taxonomy theme extraction** over recent local conversation queries (steps 1–12, resentment, fear, amends, cravings, sponsorship, gratitude, …) → "Continue your study" starter cards on the empty state. Opt-in toggle in Settings, one-tap clear-history. No network, no new deps. (EmbeddingGemma clustering upgrade rides with P5 later.)
+- [x] **Keyword/taxonomy theme extraction** (13-theme recovery taxonomy, last 60 local user messages, opt-in toggle in Settings, accent 'Continue your study' cards on the starter view) over recent local conversation queries (steps 1–12, resentment, fear, amends, cravings, sponsorship, gratitude, …) → "Continue your study" starter cards on the empty state. Opt-in toggle in Settings, one-tap clear-history. No network, no new deps. (EmbeddingGemma clustering upgrade rides with P5 later.)
 
 ## P8 — Surface parity
 
-- [ ] **Desktop offline library** — `sqflite_common_ffi` init on Windows/Linux so packs/FTS/reader work on desktop.
-- [ ] **Graceful capability gating** — hide OCR/camera/mic buttons on surfaces where the plugin can't work instead of runtime snackbars.
+- [x] **Desktop offline library** — `sqflite_common_ffi` factory init on Windows/Linux at startup.
+- [x] **Graceful capability gating** (camera/OCR/mic hidden on web+desktop via capabilities.dart; gallery attach stays everywhere) — hide OCR/camera/mic buttons on surfaces where the plugin can't work instead of runtime snackbars.
 
 ## P5 — On-device Gemma "Private Mode" (scaffold only overnight)
 

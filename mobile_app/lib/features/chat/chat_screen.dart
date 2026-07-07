@@ -26,6 +26,8 @@ import 'package:sobriety_copilot_mobile/features/sheets/meetings_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/sheets/settings_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/sheets/library_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/library/offline_reader.dart';
+import 'package:sobriety_copilot_mobile/config/capabilities.dart';
+import 'package:sobriety_copilot_mobile/features/daily/study_themes.dart';
 import 'package:sobriety_copilot_mobile/features/daily/today_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
@@ -210,23 +212,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take a photo'),
-              subtitle: const Text('Ask about what the photo shows'),
-              onTap: () => Navigator.pop(ctx, 'camera'),
-            ),
+            if (supportsCameraAndOcr)
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take a photo'),
+                subtitle: const Text('Ask about what the photo shows'),
+                onTap: () => Navigator.pop(ctx, 'camera'),
+              ),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
               title: const Text('Choose a photo'),
               onTap: () => Navigator.pop(ctx, 'gallery'),
             ),
-            ListTile(
-              leading: const Icon(Icons.document_scanner_outlined),
-              title: const Text('Scan text'),
-              subtitle: const Text('Read text from a page into the box'),
-              onTap: () => Navigator.pop(ctx, 'scan'),
-            ),
+            if (supportsCameraAndOcr)
+              ListTile(
+                leading: const Icon(Icons.document_scanner_outlined),
+                title: const Text('Scan text'),
+                subtitle: const Text('Read text from a page into the box'),
+                onTap: () => Navigator.pop(ctx, 'scan'),
+              ),
           ],
         ),
       ),
@@ -562,7 +566,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             children: [
               Expanded(
                 child: chat.isEmpty
-                    ? _StarterView(onPick: _send)
+                    ? _StarterView(
+                        onPick: _send,
+                        studySuggestions: ref.watch(studySuggestionsProvider),
+                      )
                     : _buildMessageList(chat, config),
               ),
               if (_suggestVisible) _buildSuggestions(config),
@@ -681,21 +688,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   tooltip: 'Attach a photo or scan text',
                   onPressed: _showAttachSheet,
                 ),
-                _isTranscribing
-                    ? const IconButton(
-                        onPressed: null,
-                        icon: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                if (supportsMicInput)
+                  _isTranscribing
+                      ? const IconButton(
+                          onPressed: null,
+                          icon: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : IconButton(
+                          icon:
+                              Icon(_isRecording ? Icons.stop : Icons.mic_none),
+                          color:
+                              _isRecording ? theme.colorScheme.error : null,
+                          tooltip:
+                              _isRecording ? 'Stop recording' : 'Voice input',
+                          onPressed: _toggleMic,
                         ),
-                      )
-                    : IconButton(
-                        icon: Icon(_isRecording ? Icons.stop : Icons.mic_none),
-                        color: _isRecording ? theme.colorScheme.error : null,
-                        tooltip: _isRecording ? 'Stop recording' : 'Voice input',
-                        onPressed: _toggleMic,
-                      ),
                 Expanded(
                   child: TextField(
                     controller: _input,
@@ -832,7 +843,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
 class _StarterView extends StatefulWidget {
   final void Function(String prompt) onPick;
-  const _StarterView({required this.onPick});
+  final List<StudySuggestion> studySuggestions;
+  const _StarterView({
+    required this.onPick,
+    this.studySuggestions = const [],
+  });
 
   @override
   State<_StarterView> createState() => _StarterViewState();
@@ -925,6 +940,58 @@ class _StarterViewState extends State<_StarterView> {
                     const SizedBox(height: AppSpacing.md),
                     const MilestoneCard(),
                     const SizedBox(height: AppSpacing.xl),
+                    if (widget.studySuggestions.isNotEmpty) ...[
+                      Center(
+                        child: Text(
+                          'Continue your study',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      ...widget.studySuggestions.map(
+                        (s) => Padding(
+                          padding:
+                              const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints:
+                                  const BoxConstraints(maxWidth: 600),
+                              child: SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    alignment: Alignment.centerLeft,
+                                    foregroundColor: Colors.white,
+                                    side: const BorderSide(
+                                        color: AppColors.accent),
+                                    backgroundColor:
+                                        Colors.black.withAlpha(120),
+                                    padding:
+                                        const EdgeInsets.all(AppSpacing.lg),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                          AppSpacing.radius),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.auto_stories,
+                                      size: 16, color: AppColors.accent),
+                                  label: Text(
+                                    '${s.themeLabel}: ${s.prompt}',
+                                    textAlign: TextAlign.left,
+                                  ),
+                                  onPressed: () => widget.onPick(s.prompt),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
                     ...prompts.map(
                       (p) => Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
