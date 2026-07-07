@@ -242,6 +242,7 @@ class _ServerStatusCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final health = ref.watch(healthProvider);
     final scheme = Theme.of(context).colorScheme;
+    final privateActive = ref.watch(privateModeActiveProvider);
 
     Widget row(Color color, IconData icon, String title, String? subtitle) {
       return Row(
@@ -276,6 +277,21 @@ class _ServerStatusCard extends ConsumerWidget {
             onPressed: () => ref.invalidate(healthProvider),
           ),
         ],
+      );
+    }
+
+    if (privateActive) {
+      return Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: row(
+            AppColors.accent,
+            Icons.shield_outlined,
+            'Private Mode',
+            'Answering on this device · nothing leaves this phone',
+          ),
+        ),
       );
     }
 

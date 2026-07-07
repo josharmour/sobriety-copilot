@@ -48,16 +48,23 @@ final appConfigProvider =
 /// base URL in settings takes effect immediately without rebuilding them.
 String _baseUrl(Ref ref) => ref.read(appConfigProvider).baseUrl;
 
-/// Streaming chat repository. Server-backed by default; switches to the
-/// fully on-device LocalChatRepository when Private Mode is enabled AND the
-/// local model file is installed. Consumers `ref.read` this at send time
-/// (chat_notifier), so flipping the toggle takes effect on the next message.
-final chatRepositoryProvider = Provider<ChatRepository>((ref) {
+/// True when chat is actually answering on-device: the Private Mode toggle
+/// is on AND the model file is installed AND this surface supports it.
+/// Single source of truth for both the repository switch and the UI badge.
+final privateModeActiveProvider = Provider<bool>((ref) {
   final privateMode =
       ref.watch(appConfigProvider.select((c) => c.privateMode));
   final modelReady =
       ref.watch(privateModelProvider.select((s) => s.isInstalled));
-  if (privateMode && modelReady && privateModeSupported) {
+  return privateMode && modelReady && privateModeSupported;
+});
+
+/// Streaming chat repository. Server-backed by default; switches to the
+/// fully on-device LocalChatRepository when Private Mode is active.
+/// Consumers `ref.read` this at send time (chat_notifier), so flipping the
+/// toggle takes effect on the next message.
+final chatRepositoryProvider = Provider<ChatRepository>((ref) {
+  if (ref.watch(privateModeActiveProvider)) {
     return LocalChatRepository(library: ref.watch(libraryRepositoryProvider));
   }
   return HttpChatRepository(

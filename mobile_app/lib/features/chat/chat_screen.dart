@@ -480,7 +480,53 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
         title: GestureDetector(
           onTap: _newChat,
-          child: const Text('Sobriety Copilot'),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Flexible(
+                child: Text('Sobriety Copilot', overflow: TextOverflow.fade),
+              ),
+              if (ref.watch(privateModeActiveProvider)) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Tooltip(
+                  message:
+                      'Private Mode — answering on this phone. Nothing leaves the device.',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                    onTap: () => _openMenu(_MenuAction.settings),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withValues(alpha: 0.15),
+                        border: Border.all(color: AppColors.accent),
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusLg),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.shield_outlined,
+                              size: 13, color: AppColors.accent),
+                          SizedBox(width: 3),
+                          Text(
+                            'Private',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.accent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
         actions: [
           IconButton(
