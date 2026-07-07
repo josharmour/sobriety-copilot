@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
+
 import 'package:flutter_gemma/flutter_gemma.dart';
 
 import 'package:sobriety_copilot_mobile/data/models/chat_models.dart';
@@ -144,15 +146,18 @@ class LocalChatRepository implements ChatRepository {
       var context = '';
       final ftsQuery = _ftsQuery(message);
       final packInstalled = await library.isPackInstalled;
-      // Retrieval diagnostics — shows in `adb logcat` as "I flutter:".
-      // ignore: avoid_print
-      print('[PrivateMode] packInstalled=$packInstalled '
-          'ftsQuery=${ftsQuery.isEmpty ? '(empty)' : ftsQuery}');
+      // Retrieval diagnostics — debug builds only (query terms are
+      // user content; a privacy-first app keeps them out of release logs).
+      if (kDebugMode) {
+        debugPrint('[PrivateMode] packInstalled=$packInstalled '
+            'ftsQuery=${ftsQuery.isEmpty ? '(empty)' : ftsQuery}');
+      }
       if (ftsQuery.isNotEmpty && packInstalled) {
         var allHits = await library.search(ftsQuery);
-        // ignore: avoid_print
-        print('[PrivateMode] hits=${allHits.length}'
-            '${allHits.isEmpty ? '' : ' first=${allHits.first.docId}'}');
+        if (kDebugMode) {
+          debugPrint('[PrivateMode] hits=${allHits.length}'
+              '${allHits.isEmpty ? '' : ' first=${allHits.first.docId}'}');
+        }
         if (allHits.isEmpty) {
           // Fallback: the combined query found nothing (or errored) —
           // probe the strongest terms one at a time and pool the results.
@@ -160,8 +165,9 @@ class LocalChatRepository implements ChatRepository {
           final seen = <String>{};
           for (final w in _contentWords(message).take(3)) {
             final termHits = await library.search('"$w"');
-            // ignore: avoid_print
-            print('[PrivateMode] term "$w" hits=${termHits.length}');
+            if (kDebugMode) {
+              debugPrint('[PrivateMode] term "$w" hits=${termHits.length}');
+            }
             for (final h in termHits) {
               if (seen.add('${h.docId}/${h.blockId}')) pooled.add(h);
             }

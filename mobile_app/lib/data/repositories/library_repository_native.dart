@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
@@ -208,16 +209,6 @@ class LibraryRepository {
     if (!await isPackInstalled) return [];
     try {
       final db = await _database;
-      // Diagnostics: separates "empty table / bad extraction" from
-      // "MATCH failed" (e.g. missing FTS5 module).
-      try {
-        final count = await db.rawQuery('SELECT count(*) AS c FROM blocks');
-        // ignore: avoid_print
-        print('[LibrarySearch] blocks count=${count.first['c']}');
-      } catch (e) {
-        // ignore: avoid_print
-        print('[LibrarySearch] count query failed: $e');
-      }
       final List<Map<String, dynamic>> rows = await db.rawQuery(
         'SELECT doc_id, block_id, heading, text FROM blocks WHERE blocks MATCH ? ORDER BY rank LIMIT 30',
         [query]
@@ -229,8 +220,9 @@ class LibraryRepository {
         text: r['text'] as String? ?? '',
       )).toList();
     } catch (e) {
-      // ignore: avoid_print
-      print('[LibrarySearch] MATCH query failed: $e');
+      // Surface search failures in dev; FTS problems must never be silent
+      // again (Android's platform SQLite lacking fts5 hid for weeks).
+      if (kDebugMode) debugPrint('[LibrarySearch] query failed: $e');
       return [];
     }
   }

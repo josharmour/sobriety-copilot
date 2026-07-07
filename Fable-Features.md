@@ -73,6 +73,7 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 - [x] **Deterministic crisis interceptor** — keyword layer independent of the model, helpline-first block prepended before generation.
 - [x] **Provider switch**: chat flips to on-device when the toggle is on AND the model is installed; falls back to server otherwise. Android-only surface for now.
 - [ ] Phase 2: EmbeddingGemma vector retrieval (flutter_gemma has embedder + sqlite vector store APIs; needs an ungated embedder file or HF-token flow), sherpa-onnx ASR to replace /api/transcribe, ABI splits to trim the 400 MB APK for Play.
+- [x] **Sources/citations FIXED (morning)**: root cause was Android's platform SQLite shipping without FTS5 — every offline pack search failed silently on-device ('no such module: fts5'). Now bundling SQLite via sqlite3_flutter_libs, search DB opened through the FFI factory on all platforms. Confirmed on-device: 115,673 blocks indexed, 30 hits on a live query.
 - [x] **Crash fix (01:30)**: the Tensor-G5 NPU model build CHECK-aborts natively in flutter_gemma 0.13.6's LiteRT runtime (`Unknown model type: tf_lite_mtp_aux`) — NPU rung removed, G5 file deleted from device, standard model re-pushed. GPU/CPU chain retained. Do not re-add NPU until the plugin ships a newer litertlm runtime.
 - [x] **Private Mode indicator**: app-bar 'Private' shield chip + settings status card ("Answering on this device").
 
