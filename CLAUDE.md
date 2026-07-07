@@ -47,14 +47,16 @@ The full set lives in `docker-compose.yml` under `x-app-env`. The ones most wort
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_BASE_URL` | `http://host.docker.internal:11434/v1` | OpenAI-compatible LLM endpoint |
-| `LLM_MODEL` | `gemma4:e2b` | Chat model name |
-| `EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model name (Ollama) |
+| `LLM_BASE_URL` | `http://10.0.0.10:8002/v1` | OpenAI-compatible LLM endpoint (vLLM box) |
+| `LLM_MODEL` | `dsv4` | Chat model (deepseek-v4-flash, diffusion backend) |
+| `EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model name (prod runs `all-minilm`) |
 | `CHROMA_HOST` / `CHROMA_PORT` | `chroma` / `8000` | ChromaDB HTTP endpoint |
 | `REDIS_URL` | `redis://redis:6379/0` | Celery broker / job store |
 | `DOCUMENTS_DIR` | `/app/documents` | Mounted from `./documents` (read-only) |
 | `RAG_COLLECTION` | `recovery_literature` | ChromaDB collection name |
-| `ENABLE_RERANKER` | `1` | Set to `0` to disable cross-encoder reranking |
+| `ENABLE_RERANKER` | `0` | Cross-encoder reranking (off by default — CPU-heavy) |
+| `STORE_CHAT_HISTORY` | `0` | Server-side chat transcript storage (privacy default: off) |
+| `GEOCODE_COUNTRYCODES` | *(empty)* | Optional Nominatim country filter; empty = worldwide |
 | `RERANKER_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Cross-encoder model name |
 | `ENABLE_HYDE` | `1` | Set to `0` to disable hypothetical passage generation (HyDE) |
 | `USER_MEMORY_DB_PATH` | `/app/user_memory.db` | SQLite path for `UserMemoryManager` |
@@ -68,7 +70,8 @@ To make the app run faster, you can disable the CPU-heavy reranker and/or skip t
 
 ## Architecture
 
-- **`src/server.py`** — FastAPI app. Endpoints: `/api/chat` (SSE streaming with HyDE + hybrid retrieval), `/api/suggest`, `/api/explain-snippet[s-batch]`, `/api/meetings`, `/api/geocode`, `/api/index` (Celery), `/api/bugs`, `/api/health`, `/api/render/...`.
+- **`src/server.py`** — FastAPI app. Endpoints: `/api/chat` (SSE streaming with HyDE + hybrid retrieval; accepts `client_context` for device-supplied notes, never persisted), `/api/suggest`, `/api/explain-snippet[s-batch]`, `/api/meetings` (geo search), `/api/meetings/online` (worldwide online directory: OIAA + Virtual NA, live-now sorting), `/api/geocode`, `/api/packs/*` (offline library packs), `/api/doc/{id}` + `/api/render/...` (readers), `/api/index` (Celery), `/api/bugs` (GET requires X-Admin-Token = BUG_ADMIN_TOKEN), `/api/health`.
+  There is NO `/api/transcribe` and never was — voice dictation is on-device (sherpa-onnx ASR in the Flutter app).
 - **`src/inference/engine.py`** — OpenAI-compatible streaming client. Splits `thinking` vs `token` chunks for the show-thinking UI.
 - **`src/rag/`** —
   - `retriever.py`: hybrid retrieval (cosine semantic + BM25 keyword + category boosts + scale diversity); optional cross-encoder reranking on the final candidates.
@@ -80,7 +83,8 @@ To make the app run faster, you can disable the CPU-heavy reranker and/or skip t
 - **`src/tasks/`** — Celery app, `indexing` task, Redis-backed `job_store` for shadow-collection indexing.
 - **`src/meetings/`** — A.A./N.A. meeting feeds (BMLT) and geocoded search.
 - **`src/render_cache.py`** — On-disk PDF/EPUB text extraction cache used by `/api/render`.
-- **`static/`** — PWA frontend (single-page `index.html` + manifest + service worker). Served directly by nginx, not FastAPI.
+- **`static/`** — the **Flutter web build** of `mobile_app/` (the hand-written PWA is retired). Rebuild with `cd mobile_app && ../flutter/bin/flutter build web --release && cp -R build/web/. ../static/` (preserves the hand-maintained `privacy.html`). Served by nginx.
+- **`mobile_app/`** — the single Flutter codebase for every surface (Android on Play, web at sobrietycopilot.com, desktop). Android builds: vendored SDK at `../flutter/bin/flutter`, `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64`, `flutter build apk --release`. Private Mode (on-device Gemma 4 E2B via flutter_gemma + offline-pack FTS retrieval) lives in `lib/features/private_mode/` — see Fable-Features.md for its constraints (no Tensor-G5 NPU model; bundled SQLite required for FTS5).
 - **`tests/eval_rag.py`** — Out-of-band RAGAS evaluation harness (faithfulness, answer relevancy, context precision/recall). Not run in the image.
 
 ## Domain considerations
