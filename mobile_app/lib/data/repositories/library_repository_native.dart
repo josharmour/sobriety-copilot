@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactoryFfi;
 
 import 'package:sobriety_copilot_mobile/data/repositories/library_models.dart';
 
@@ -152,11 +153,19 @@ class LibraryRepository {
     await prefs.setInt(_prefPackDocCount, docCount);
   }
 
-  /// Open/initialize the SQLite database connection
+  /// Open/initialize the SQLite database connection.
+  ///
+  /// Opened through the FFI factory on purpose: the pack's index is FTS5 and
+  /// Android's platform SQLite ships without the fts5 module ("no such
+  /// module: fts5"), so the bundled SQLite (sqlite3_flutter_libs) must serve
+  /// this database on every platform.
   Future<Database> get _database async {
     if (_db != null && _db!.isOpen) return _db!;
     final path = await _dbPath;
-    _db = await openDatabase(path, readOnly: true);
+    _db = await databaseFactoryFfi.openDatabase(
+      path,
+      options: OpenDatabaseOptions(readOnly: true),
+    );
     return _db!;
   }
 

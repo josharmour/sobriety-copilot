@@ -64,6 +64,7 @@ dependencies:
   share_plus: ^13.2.0
   sqflite_common_ffi: ^2.4.0+3
   flutter_gemma: ^0.13.6
+  sqlite3_flutter_libs: ^0.6.0+eol
 
 dev_dependencies:
   flutter_test:
