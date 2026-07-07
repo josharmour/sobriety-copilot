@@ -1,4 +1,4 @@
-package com.example.sobriety_copilot_mobile
+package com.sobrietycopilot.app
 
 import io.flutter.embedding.android.FlutterActivity
 

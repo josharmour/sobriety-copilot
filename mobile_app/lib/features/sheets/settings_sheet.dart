@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:sobriety_copilot_mobile/config/app_config.dart';
 import 'package:sobriety_copilot_mobile/data/models/meeting_models.dart';
+import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
+import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
 import 'package:sobriety_copilot_mobile/features/tts/neural_voices.dart';
 import 'package:sobriety_copilot_mobile/features/tts/voice_manager.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
@@ -115,6 +117,28 @@ class SettingsSheet extends ConsumerWidget {
                         onChanged: (_) => notifier.toggleCategory(id),
                       ),
                     ),
+                    const SizedBox(height: AppSpacing.xl),
+
+                    const SectionHeader('Recovery tracker'),
+                    Builder(builder: (context) {
+                      final tracker = ref.watch(sobrietyProvider);
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.emoji_events_outlined),
+                        title: Text(
+                          tracker.isTracking
+                              ? 'Day ${tracker.daysSober}'
+                              : 'Track your sober time',
+                        ),
+                        subtitle: Text(
+                          tracker.isTracking
+                              ? 'Tap to edit · stored only on this device'
+                              : 'Day count, milestones, and a home-screen widget',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => showTrackerEditor(context, ref),
+                      );
+                    }),
                     const SizedBox(height: AppSpacing.xl),
 
                     const SectionHeader('Reading & voice'),

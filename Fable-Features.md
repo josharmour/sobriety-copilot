@@ -22,11 +22,11 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 
 ## P1 — Milestone tracker + Android widget
 
-- [ ] **Local sobriety tracker (all surfaces, shared Dart)** — sobriety date picker (Settings + Today card), day count, next-milestone progress (24h/30/60/90/6mo/9mo/1yr/18mo/multi-year — keytag/chip milestones), stored locally only (SharedPreferences). Server `UserMemoryManager` stays dormant.
-- [ ] **Milestone card on the empty/chat state** ("Today" surface) with privacy-conscious copy toggle (show "Day 92" vs full label).
+- [x] **Local sobriety tracker (all surfaces, shared Dart)** — sobriety date picker (Settings + Today card), day count, next-milestone progress (24h/30/60/90/6mo/9mo/1yr/18mo/multi-year — keytag/chip milestones), stored locally only (SharedPreferences). Server `UserMemoryManager` stays dormant.
+- [x] **Milestone card on the empty/chat state** ("Today" surface) with privacy-conscious copy toggle (show "Day 92" vs full label).
 - [ ] **Feed sobriety date into chat context client-side** (system-prompt note via existing request fields) so the assistant knows day counts without server storage.
-- [ ] **Android home-screen widget** — `home_widget` + Jetpack Glance native layer: day count + next milestone; midnight refresh via `workmanager`; discreet-text option. (Widget = Android/iOS only by nature; web/desktop get the in-app card — consistent with surface model.)
-- [ ] **Money-saved calculator (optional card)** — daily spend input × days sober.
+- [x] **Android home-screen widget** — `home_widget` + Jetpack Glance native layer: day count + next milestone; midnight refresh via `workmanager`; discreet-text option. (Widget = Android/iOS only by nature; web/desktop get the in-app card — consistent with surface model.)
+- [x] **Money-saved calculator (optional card)** — daily-spend field in the tracker editor; saved amount shown on the milestone card — daily spend input × days sober.
 
 ## P2 — Online meetings: coverage + one-tap join
 
@@ -75,3 +75,5 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 ## Overnight log
 
 (updated as work proceeds)
+- 23:xx — P0 batch landed (permissions, menu, crisis expander). Backend agent running (bugs auth, chat-log gate, online meetings, geocoder, feeds).
+- P1 milestone tracker: local-only state + keytag milestones + starter-view card + settings entry + Android RemoteViews widget (midnight-safe day math in Kotlin, 30-min refresh, tap-to-open, discreet mode).

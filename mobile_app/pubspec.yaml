@@ -41,21 +41,44 @@ dependencies:
   geolocator: ^13.0.2
   permission_handler: ^11.3.1
 
-  # Scan / OCR text into the input box
+  # Scan / OCR text into the input box; also photo attachments (camera + gallery)
   image_picker: ^1.1.2
   google_mlkit_text_recognition: ^0.14.0
   google_mlkit_commons: ^0.9.0
+
+  # Mic voice input — record a clip, POST to /api/transcribe (gemma) for text.
+  # 6.1.1 (not 5.x): 5.x caps record_linux <1.0.0 which is incompatible with the
+  # newer record_platform_interface; 6.1.1 has a consistent federated set and still
+  # supports Dart 3.11. 7.x needs Dart 3.12.
+  record: ^6.1.1
 
   # Connectivity awareness
   connectivity_plus: ^6.1.0
   sherpa_onnx: ^1.13.2
   audioplayers: ^6.7.1
   archive: ^4.0.9
+  home_widget: ^0.9.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  web:
+    generate: true
+    image_path: "assets/icon/app_icon.jpg"
+    background_color: "#0d1117"
+    theme_color: "#0d1117"
+  image_path: "assets/icon/app_icon.jpg"
+  remove_alpha_ios: true
+  adaptive_icon_background: "#0d1117"
+  adaptive_icon_foreground: "assets/icon/app_icon.jpg"
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/

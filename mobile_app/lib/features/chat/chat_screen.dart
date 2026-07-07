@@ -26,6 +26,7 @@ import 'package:sobriety_copilot_mobile/features/sheets/meetings_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/sheets/settings_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/sheets/library_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/library/offline_reader.dart';
+import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/widgets.dart';
@@ -882,6 +883,8 @@ class _StarterViewState extends State<_StarterView> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: AppSpacing.md),
+                    const MilestoneCard(),
                     const SizedBox(height: AppSpacing.xl),
                     ...prompts.map(
                       (p) => Padding(
