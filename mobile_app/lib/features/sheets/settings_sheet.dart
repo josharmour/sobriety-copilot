@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,7 +10,7 @@ import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/widgets.dart';
 
-/// Settings bottom sheet: baseUrl, response tone, literature categories,
+/// Settings bottom sheet: response tone, literature categories,
 /// show-thinking toggle, and read-aloud (TTS) toggle. Changes persist
 /// immediately via [appConfigProvider] (mirrors the web app's
 /// "Changes save automatically").
@@ -32,7 +33,6 @@ class SettingsSheet extends ConsumerWidget {
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const _SheetHandle(),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.lg,
@@ -70,13 +70,6 @@ class SettingsSheet extends ConsumerWidget {
                   children: [
                     const _ServerStatusCard(),
                     const SizedBox(height: AppSpacing.lg),
-
-                    const SectionHeader('Server'),
-                    _BaseUrlField(
-                      initialValue: config.baseUrl,
-                      onSubmitted: (value) => notifier.setBaseUrl(value),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
 
                     const SectionHeader('Response tone'),
                     const SizedBox(height: AppSpacing.xs),
@@ -269,7 +262,7 @@ class _ServerStatusCard extends ConsumerWidget {
         AppColors.error,
         Icons.error_outline,
         'Connection error',
-        'Is the server running? Check the base URL below.',
+        'Check your internet connection, then tap refresh to retry.',
       ),
     );
 
@@ -283,67 +276,7 @@ class _ServerStatusCard extends ConsumerWidget {
   }
 }
 
-class _BaseUrlField extends StatefulWidget {
-  final String initialValue;
-  final ValueChanged<String> onSubmitted;
 
-  const _BaseUrlField({
-    required this.initialValue,
-    required this.onSubmitted,
-  });
-
-  @override
-  State<_BaseUrlField> createState() => _BaseUrlFieldState();
-}
-
-class _BaseUrlFieldState extends State<_BaseUrlField> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialValue);
-    _focusNode = FocusNode();
-    _focusNode.addListener(() {
-      if (!_focusNode.hasFocus) {
-        _commit();
-      }
-    });
-  }
-
-  void _commit() {
-    final value = _controller.text.trim();
-    if (value.isNotEmpty && value != widget.initialValue) {
-      widget.onSubmitted(value);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: _controller,
-      focusNode: _focusNode,
-      keyboardType: TextInputType.url,
-      textInputAction: TextInputAction.done,
-      autocorrect: false,
-      decoration: InputDecoration(
-        labelText: 'Server base URL',
-        hintText: kDefaultBaseUrl,
-        prefixIcon: const Icon(Icons.link),
-        border: const OutlineInputBorder(),
-      ),
-      onSubmitted: (_) => _commit(),
-    );
-  }
-}
 
 class _ToneTile extends StatelessWidget {
   final ToneOption tone;
@@ -438,7 +371,7 @@ class _VoicePicker extends ConsumerWidget {
           selected: config.voiceId == kSystemVoiceId,
           onTap: () => configNotifier.setVoiceId(kSystemVoiceId),
         ),
-        ...kNeuralVoices.map((v) {
+        if (!kIsWeb) ...kNeuralVoices.map((v) {
           final status = statuses[v.id] ?? VoiceStatus.notInstalled;
           final selected = config.voiceId == v.id && status.isInstalled;
 

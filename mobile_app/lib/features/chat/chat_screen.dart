@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sobriety_copilot_mobile/features/tts/tts_service.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:sobriety_copilot_mobile/features/chat/ocr_scanner.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:sobriety_copilot_mobile/config/app_config.dart';
@@ -50,6 +54,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   String _suggestQuery = '';
   bool _suggestVisible = false;
 
+  /// Queued photo attachments as `data:image/...;base64,...` URLs.
+  final List<String> _pendingImages = [];
+
+  /// Mic voice input (record → POST /api/transcribe → fill the input box).
+  final AudioRecorder _recorder = AudioRecorder();
+  bool _isRecording = false;
+  bool _isTranscribing = false;
+
   /// Id of the message currently being read aloud (null = none).
   String? _speakingId;
 
@@ -74,6 +86,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _input.dispose();
     _scroll.dispose();
     _inputFocus.dispose();
+    _recorder.dispose();
     _tts.onDone = null;
     _tts.stop();
     super.dispose();
@@ -87,16 +100,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<void> _send([String? text]) async {
     final value = (text ?? _input.text).trim();
-    if (value.isEmpty) return;
+    final images = List<String>.from(_pendingImages);
+    if (value.isEmpty && images.isEmpty) return;
     final state = ref.read(chatNotifierProvider);
     if (state.isSending) return;
 
     _input.clear();
+    if (_pendingImages.isNotEmpty) setState(() => _pendingImages.clear());
     _hideSuggestions();
     FocusScope.of(context).unfocus();
 
     // Fire and forget; the notifier folds the SSE stream into state.
-    unawaited(ref.read(chatNotifierProvider.notifier).sendMessage(value));
+    unawaited(ref
+        .read(chatNotifierProvider.notifier)
+        .sendMessage(value, images: images));
     _scrollToBottomSoon();
   }
 
@@ -152,15 +169,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _scanText() async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final picker = ImagePicker();
-      final file = await picker.pickImage(source: ImageSource.camera);
-      if (file == null) return;
-      final recognizer = TextRecognizer();
-      final recognized = await recognizer.processImage(
-        InputImage.fromFilePath(file.path),
-      );
-      await recognizer.close();
-      final text = recognized.text.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final text = await scanTextFromCamera();
+      if (text == null) return;
       if (text.isEmpty) {
         messenger.showSnackBar(
           const SnackBar(content: Text('No text found in the image.')),
@@ -175,6 +185,152 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       messenger.showSnackBar(
         SnackBar(content: Text('Could not scan text: $e')),
       );
+    }
+  }
+
+  // ── Photo attachments ────────────────────────────────────────────────────────
+
+  /// Attach menu: take/choose a photo (sent to the model), or scan text (OCR
+  /// into the input box).
+  Future<void> _showAttachSheet() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              subtitle: const Text('Ask about what the photo shows'),
+              onTap: () => Navigator.pop(ctx, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose a photo'),
+              onTap: () => Navigator.pop(ctx, 'gallery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.document_scanner_outlined),
+              title: const Text('Scan text'),
+              subtitle: const Text('Read text from a page into the box'),
+              onTap: () => Navigator.pop(ctx, 'scan'),
+            ),
+          ],
+        ),
+      ),
+    );
+    switch (action) {
+      case 'camera':
+        await _pickImage(ImageSource.camera);
+        break;
+      case 'gallery':
+        await _pickImage(ImageSource.gallery);
+        break;
+      case 'scan':
+        await _scanText();
+        break;
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      if (_pendingImages.length >= 4) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Up to 4 photos at a time.')),
+        );
+        return;
+      }
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        imageQuality: 82,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      final ext = file.path.split('.').last.toLowerCase();
+      final mime = ext == 'png' ? 'image/png' : 'image/jpeg';
+      final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
+      if (!mounted) return;
+      setState(() => _pendingImages.add(dataUrl));
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not attach photo: $e')),
+      );
+    }
+  }
+
+  // ── Mic voice input (local transcription via gemma) ──────────────────────────
+
+  Future<void> _toggleMic() async {
+    if (_isTranscribing) return;
+    if (_isRecording) {
+      await _finishRecording();
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      if (!await _recorder.hasPermission()) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Microphone permission denied')),
+        );
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.wav';
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.wav,
+          sampleRate: 16000,
+          numChannels: 1,
+        ),
+        path: path,
+      );
+      if (!mounted) return;
+      setState(() => _isRecording = true);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not record: $e')));
+    }
+  }
+
+  Future<void> _finishRecording() async {
+    final messenger = ScaffoldMessenger.of(context);
+    String? path;
+    try {
+      path = await _recorder.stop();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _isRecording = false);
+    if (path == null) return;
+    setState(() => _isTranscribing = true);
+    try {
+      final bytes = await File(path).readAsBytes();
+      final dataUrl = 'data:audio/wav;base64,${base64Encode(bytes)}';
+      final text = await ref
+          .read(chatRepositoryProvider)
+          .transcribe(audio: dataUrl, format: 'wav');
+      if (!mounted) return;
+      if (text.isNotEmpty) {
+        final existing = _input.text.trim();
+        _input.text = existing.isEmpty ? text : '$existing $text';
+        _input.selection =
+            TextSelection.collapsed(offset: _input.text.length);
+        _inputFocus.requestFocus();
+        _onInputChanged(_input.text);
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(content: Text("Didn't catch that — try again.")),
+        );
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not transcribe: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isTranscribing = false);
     }
   }
 
@@ -259,12 +415,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // ── Source detail ────────────────────────────────────────────────────────────
 
-  Future<void> _showSourceDetail(Source source) async {
+  Future<void> _showSourceDetail(Source source, List<Source> allSources) async {
     final baseUrl = ref.read(appConfigProvider).baseUrl;
     final saved = ref.read(savedPassagesProvider.notifier);
     await showAppSheet(
       context,
-      _SourceDetailSheet(source: source, baseUrl: baseUrl, savedNotifier: saved),
+      _SourceDetailSheet(
+        initialSource: source,
+        allSources: allSources,
+        baseUrl: baseUrl,
+        savedNotifier: saved,
+      ),
     );
   }
 
@@ -300,7 +461,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           tooltip: 'Conversations',
           onPressed: _openConversations,
         ),
-        title: const Text('Sobriety Copilot'),
+        title: GestureDetector(
+          onTap: _newChat,
+          child: const Text('Sobriety Copilot'),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.add_comment_outlined),
@@ -345,8 +509,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               PopupMenuItem(
                 value: _MenuAction.altRecovery,
                 child: ListTile(
-                  leading: Icon(Icons.diversity_3_outlined),
-                  title: Text('Alternative recovery'),
+                  leading: Icon(Icons.alt_route_outlined),
+                  title: Text('Other recovery paths'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -370,16 +534,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: chat.isEmpty
-                ? _StarterView(onPick: _send)
-                : _buildMessageList(chat, config),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: Column(
+            children: [
+              Expanded(
+                child: chat.isEmpty
+                    ? _StarterView(onPick: _send)
+                    : _buildMessageList(chat, config),
+              ),
+              if (_suggestVisible) _buildSuggestions(config),
+              _buildInputBar(chat, config),
+            ],
           ),
-          if (_suggestVisible) _buildSuggestions(config),
-          _buildInputBar(chat, config),
-        ],
+        ),
       ),
     );
   }
@@ -406,7 +575,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           onCopy: () => _copy(m.text),
           onRetry: () =>
               ref.read(chatNotifierProvider.notifier).retryLast(),
-          onSourceTap: _showSourceDetail,
+          onSourceTap: (source, allSources) =>
+              _showSourceDetail(source, allSources),
           onFollowup: _send,
           onLinkTap: _openUrl,
         );
@@ -462,6 +632,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget _buildInputBar(ChatState chat, AppConfig config) {
     final theme = Theme.of(context);
     final hasText = _input.text.trim().isNotEmpty;
+    final canSend = hasText || _pendingImages.isNotEmpty;
     return SafeArea(
       top: false,
       child: Container(
@@ -477,53 +648,139 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             top: BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
           ),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(Icons.document_scanner_outlined),
-              tooltip: 'Scan text',
-              onPressed: _scanText,
-            ),
-            Expanded(
-              child: TextField(
-                controller: _input,
-                focusNode: _inputFocus,
-                minLines: 1,
-                maxLines: 5,
-                textInputAction: TextInputAction.newline,
-                onChanged: _onInputChanged,
-                decoration: InputDecoration(
-                  hintText: 'Ask about recovery, share what is going on...',
-                  filled: true,
-                  fillColor: theme.colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.5),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                    vertical: AppSpacing.md,
+            if (_pendingImages.isNotEmpty) _buildAttachmentPreview(theme),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  tooltip: 'Attach a photo or scan text',
+                  onPressed: _showAttachSheet,
+                ),
+                _isTranscribing
+                    ? const IconButton(
+                        onPressed: null,
+                        icon: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        icon: Icon(_isRecording ? Icons.stop : Icons.mic_none),
+                        color: _isRecording ? theme.colorScheme.error : null,
+                        tooltip: _isRecording ? 'Stop recording' : 'Voice input',
+                        onPressed: _toggleMic,
+                      ),
+                Expanded(
+                  child: TextField(
+                    controller: _input,
+                    focusNode: _inputFocus,
+                    minLines: 1,
+                    maxLines: 5,
+                    textInputAction: TextInputAction.newline,
+                    onChanged: _onInputChanged,
+                    decoration: InputDecoration(
+                      hintText: _isRecording
+                          ? 'Listening…'
+                          : 'Ask about recovery, share what is going on...',
+                      filled: true,
+                      fillColor: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.5),
+                      border: OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusLg),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.md,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(width: AppSpacing.xs),
+                chat.isSending
+                    ? IconButton.filled(
+                        icon: const Icon(Icons.stop),
+                        tooltip: 'Stop',
+                        onPressed: () =>
+                            ref.read(chatNotifierProvider.notifier).stop(),
+                      )
+                    : IconButton.filled(
+                        icon: const Icon(Icons.send),
+                        tooltip: 'Send',
+                        onPressed: canSend ? () => _send() : null,
+                      ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.xs),
-            chat.isSending
-                ? IconButton.filled(
-                    icon: const Icon(Icons.stop),
-                    tooltip: 'Stop',
-                    onPressed: () =>
-                        ref.read(chatNotifierProvider.notifier).stop(),
-                  )
-                : IconButton.filled(
-                    icon: const Icon(Icons.send),
-                    tooltip: 'Send',
-                    onPressed: hasText ? () => _send() : null,
-                  ),
+            const SizedBox(height: AppSpacing.xs),
+            TextButton.icon(
+              icon: const Icon(Icons.groups_outlined, size: 14),
+              label: const Text('Find a meeting'),
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.onSurfaceVariant,
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: theme.textTheme.bodySmall,
+              ),
+              onPressed: () => _openMenu(_MenuAction.meetings),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Horizontal strip of queued photo thumbnails, each with a remove button.
+  Widget _buildAttachmentPreview(ThemeData theme) {
+    return Container(
+      height: 72,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _pendingImages.length,
+        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+        itemBuilder: (ctx, i) {
+          final bytes = base64Decode(_pendingImages[i].split(',').last);
+          return SizedBox(
+            width: 64,
+            height: 64,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppSpacing.radius),
+                  child: Image.memory(
+                    bytes,
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Positioned(
+                  top: -8,
+                  right: -8,
+                  child: IconButton(
+                    iconSize: 20,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: const Icon(Icons.cancel),
+                    color: theme.colorScheme.error,
+                    tooltip: 'Remove',
+                    onPressed: () =>
+                        setState(() => _pendingImages.removeAt(i)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -533,60 +790,183 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 // Starter / empty state
 // ════════════════════════════════════════════════════════════════════════════
 
-class _StarterView extends StatelessWidget {
+class _StarterView extends StatefulWidget {
   final void Function(String prompt) onPick;
   const _StarterView({required this.onPick});
 
   @override
+  State<_StarterView> createState() => _StarterViewState();
+}
+
+class _StarterViewState extends State<_StarterView> {
+  late final List<String> _prompts;
+
+  @override
+  void initState() {
+    super.initState();
+    _prompts = starterPromptsForNow().toList()..shuffle();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final prompts = starterPromptsForNow();
+    final prompts = _prompts.take(5).toList();
     final reflection = reflectionForToday();
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      children: [
-        const SizedBox(height: AppSpacing.xl),
-        Icon(Icons.explore_outlined, size: 56, color: AppColors.accent),
-        const SizedBox(height: AppSpacing.lg),
-        Text(
-          'Start a Conversation',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.titleLarge,
+    return Container(
+      decoration: const BoxDecoration(
+        image: DecorationImage(
+          image: AssetImage('assets/icon/app_icon.jpg'),
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
         ),
-        const SizedBox(height: AppSpacing.md),
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          decoration: BoxDecoration(
-            color: AppColors.accentSoft,
-            borderRadius: BorderRadius.circular(AppSpacing.radius),
-          ),
-          child: Text(
-            reflection,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontStyle: FontStyle.italic,
-              color: AppColors.brand,
-            ),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.black.withAlpha(20),
+              Colors.black.withAlpha(160),
+              Colors.black.withAlpha(240),
+            ],
+            stops: const [0.0, 0.5, 1.0],
           ),
         ),
-        const SizedBox(height: AppSpacing.xl),
-        ...prompts.map(
-          (p) => Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.radius),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight > 80 ? constraints.maxHeight - 80 : 0,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Start a Conversation',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        shadows: [
+                          const Shadow(
+                            color: Colors.black87,
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 600),
+                        child: Container(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withAlpha(120),
+                            borderRadius: BorderRadius.circular(AppSpacing.radius),
+                            border: Border.all(color: Colors.white24),
+                          ),
+                          child: Text(
+                            reflection,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontStyle: FontStyle.italic,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    ...prompts.map(
+                      (p) => Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 600),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  alignment: Alignment.centerLeft,
+                                  foregroundColor: Colors.white,
+                                  side: const BorderSide(color: Colors.white54),
+                                  backgroundColor: Colors.black.withAlpha(120),
+                                  padding: const EdgeInsets.all(AppSpacing.lg),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(AppSpacing.radius),
+                                  ),
+                                ),
+                                onPressed: () => widget.onPick(p),
+                                child: Text(p, textAlign: TextAlign.left),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              onPressed: () => onPick(p),
-              child: Text(p, textAlign: TextAlign.left),
+            );
+          }
+        ),
+      ),
+    );
+  }
+}
+
+class _DenoisingProgress extends StatelessWidget {
+  final int step;
+  final int total;
+
+  const _DenoisingProgress({required this.step, required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final percent = total > 0 ? (step + 1) / total : 0.0;
+    final cleanPercent = percent.clamp(0.0, 1.0);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.auto_awesome,
+                size: 14,
+                color: AppColors.accent,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                'denoising — pass ${step + 1}/$total',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: cleanPercent,
+              minHeight: 4,
+              backgroundColor: theme.colorScheme.outlineVariant,
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accent),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -604,7 +984,7 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback onSpeak;
   final VoidCallback onCopy;
   final VoidCallback onRetry;
-  final void Function(Source) onSourceTap;
+  final void Function(Source, List<Source>) onSourceTap;
   final void Function(String) onFollowup;
   final void Function(String) onLinkTap;
 
@@ -632,6 +1012,8 @@ class _MessageBubble extends StatelessWidget {
   }
 
   Widget _userBubble(BuildContext context) {
+    final hasImages = message.imageThumbs.isNotEmpty;
+    final hasText = message.text.trim().isNotEmpty;
     return Align(
       alignment: Alignment.centerRight,
       child: Container(
@@ -647,16 +1029,46 @@ class _MessageBubble extends StatelessWidget {
           color: AppColors.accent,
           borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
         ),
-        child: Text(
-          message.text,
-          style: const TextStyle(color: Colors.white),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasImages)
+              Padding(
+                padding: EdgeInsets.only(bottom: hasText ? AppSpacing.sm : 0),
+                child: Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xs,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    for (final url in message.imageThumbs)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(AppSpacing.radius),
+                        child: Image.memory(
+                          base64Decode(url.split(',').last),
+                          width: 140,
+                          height: 140,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            if (hasText)
+              Text(
+                message.text,
+                style: const TextStyle(color: Colors.white),
+              ),
+          ],
         ),
       ),
     );
   }
 
   Widget _assistantBubble(BuildContext context) {
-    final streamingEmpty = message.isStreaming && message.text.trim().isEmpty;
+    final hasText = message.text.trim().isNotEmpty;
+    final hasDiffusion = message.isDenoising && message.diffusionContent != null && message.diffusionContent!.trim().isNotEmpty;
+    final streamingEmpty = message.isStreaming && !hasText && !hasDiffusion;
 
     return Align(
       alignment: Alignment.centerLeft,
@@ -676,18 +1088,25 @@ class _MessageBubble extends StatelessWidget {
                   initiallyExpanded: streamingEmpty,
                 ),
               ),
+            if (message.isDenoising && message.diffusionStep != null && message.diffusionTotal != null)
+              _DenoisingProgress(
+                step: message.diffusionStep!,
+                total: message.diffusionTotal!,
+              ),
             if (streamingEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
                 child: LoadingDots(),
               )
-            else if (message.text.trim().isNotEmpty)
+            else if (hasDiffusion)
+              _diffusionBody(context)
+            else if (hasText)
               _markdown(context),
             if (message.sources.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.sm),
               _sourceChips(context),
             ],
-            if (!message.isStreaming && message.text.trim().isNotEmpty)
+            if (!message.isStreaming && hasText)
               _actions(context),
             if (message.followups.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -697,6 +1116,59 @@ class _MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _diffusionBody(BuildContext context) {
+    final theme = Theme.of(context);
+    final raw = message.diffusionContent ?? '';
+    final cleaned = raw.replaceAll(RegExp(r'<(?:eos|pad|unk)>'), '');
+
+    return Opacity(
+      opacity: 0.7,
+      child: Text(
+        cleaned,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          height: 1.45,
+          fontStyle: FontStyle.italic,
+        ),
+      ),
+    );
+  }
+
+  String _enrichTextWithSourceLinks(String text, List<Source> sources) {
+    var processed = text;
+    final unique = <String, Source>{};
+    for (final s in sources) {
+      final t = s.title.toLowerCase();
+      if (t.length >= 4) {
+        unique[t] = s;
+      }
+    }
+
+    final sortedTitles = unique.keys.toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+
+    for (final title in sortedTitles) {
+      final source = unique[title]!;
+      final escTitle = RegExp.escape(title).replaceAll(RegExp(r' +'), r'\s+');
+      final pattern = RegExp('\\b$escTitle(?:s)?\\b', caseSensitive: false);
+
+      processed = processed.replaceAllMapped(pattern, (match) {
+        final matchedText = match.group(0)!;
+        final index = match.start;
+        if (index > 0 && processed[index - 1] == '[') {
+          return matchedText;
+        }
+        final afterIndex = match.end;
+        if (afterIndex < processed.length &&
+            processed.substring(afterIndex).startsWith('](')) {
+          return matchedText;
+        }
+        final docKey = Uri.encodeComponent(source.documentKey);
+        return '[$matchedText](source://$docKey)';
+      });
+    }
+    return processed;
   }
 
   Widget _markdown(BuildContext context) {
@@ -715,8 +1187,9 @@ class _MessageBubble extends StatelessWidget {
         ),
       );
     }
+    final enrichedData = _enrichTextWithSourceLinks(message.text, message.sources);
     return MarkdownBody(
-      data: message.text,
+      data: enrichedData,
       selectable: true,
       styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
         p: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
@@ -726,7 +1199,21 @@ class _MessageBubble extends StatelessWidget {
         ),
       ),
       onTapLink: (text, href, title) {
-        if (href != null && href.isNotEmpty) onLinkTap(href);
+        if (href != null && href.startsWith('source://')) {
+          final docKey = Uri.decodeComponent(href.replaceFirst('source://', ''));
+          final seen = <String>{};
+          final unique = <Source>[];
+          for (final s in message.sources) {
+            if (seen.add(s.documentKey)) unique.add(s);
+          }
+          final source = unique.firstWhere(
+            (s) => s.documentKey == docKey,
+            orElse: () => unique.first,
+          );
+          onSourceTap(source, unique);
+        } else if (href != null && href.isNotEmpty) {
+          onLinkTap(href);
+        }
       },
     );
   }
@@ -742,7 +1229,7 @@ class _MessageBubble extends StatelessWidget {
       runSpacing: AppSpacing.sm,
       children: [
         for (final s in unique)
-          SourceChip(source: s, onTap: () => onSourceTap(s)),
+          SourceChip(source: s, onTap: () => onSourceTap(s, unique)),
       ],
     );
   }
@@ -810,11 +1297,13 @@ class _MessageBubble extends StatelessWidget {
 // ════════════════════════════════════════════════════════════════════════════
 
 class _SourceDetailSheet extends ConsumerStatefulWidget {
-  final Source source;
+  final Source initialSource;
+  final List<Source> allSources;
   final String baseUrl;
   final SavedPassagesNotifier savedNotifier;
   const _SourceDetailSheet({
-    required this.source,
+    required this.initialSource,
+    required this.allSources,
     required this.baseUrl,
     required this.savedNotifier,
   });
@@ -824,25 +1313,43 @@ class _SourceDetailSheet extends ConsumerStatefulWidget {
 }
 
 class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
-  late bool _saved;
+  late PageController _pageController;
+  late int _currentPage;
+  final Map<int, bool> _savedMap = {};
 
   @override
   void initState() {
     super.initState();
-    _saved = widget.savedNotifier.isSaved(widget.source);
-  }
-
-  Future<void> _toggleSave() async {
-    if (_saved) {
-      await widget.savedNotifier.remove(widget.source);
-    } else {
-      await widget.savedNotifier.save(widget.source);
+    final idx = widget.allSources.indexWhere((s) => s.documentKey == widget.initialSource.documentKey);
+    _currentPage = idx >= 0 ? idx : 0;
+    _pageController = PageController(initialPage: _currentPage);
+    for (var i = 0; i < widget.allSources.length; i++) {
+      _savedMap[i] = widget.savedNotifier.isSaved(widget.allSources[i]);
     }
-    if (mounted) setState(() => _saved = !_saved);
   }
 
-  Future<void> _open() async {
-    final s = widget.source;
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggleSave(int index) async {
+    final s = widget.allSources[index];
+    final isSaved = _savedMap[index] ?? false;
+    if (isSaved) {
+      await widget.savedNotifier.remove(s);
+    } else {
+      await widget.savedNotifier.save(s);
+    }
+    if (mounted) {
+      setState(() {
+        _savedMap[index] = !isSaved;
+      });
+    }
+  }
+
+  Future<void> _open(Source s) async {
     if (s.docId != null) {
       final libraryRepo = ref.read(libraryRepositoryProvider);
       final installed = await libraryRepo.isPackInstalled;
@@ -875,50 +1382,119 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final s = widget.source;
+    final total = widget.allSources.length;
+
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Container(
+        height: 450,
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(s.title, style: theme.textTheme.titleMedium),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Relevance ${(s.similarity * 100).round()}%',
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Flexible(
-              child: SingleChildScrollView(
-                child: Text(
-                  s.excerpt,
-                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+            if (total > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left),
+                      onPressed: _currentPage > 0
+                          ? () => _pageController.previousPage(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                              )
+                          : null,
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: List.generate(total, (index) {
+                        final isCurrent = index == _currentPage;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: isCurrent ? 12 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: isCurrent ? AppColors.accent : theme.colorScheme.outlineVariant,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        );
+                      }),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right),
+                      onPressed: _currentPage < total - 1
+                          ? () => _pageController.nextPage(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                              )
+                          : null,
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _toggleSave,
-                    icon: Icon(
-                      _saved ? Icons.bookmark : Icons.bookmark_outline,
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                onPageChanged: (page) {
+                  setState(() => _currentPage = page);
+                },
+                itemCount: total,
+                itemBuilder: (context, index) {
+                  final s = widget.allSources[index];
+                  final isSaved = _savedMap[index] ?? false;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          s.title,
+                          style: theme.textTheme.titleMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          'Relevance ${(s.similarity * 100).round()}% | Source ${index + 1} of $total',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Text(
+                              s.excerpt,
+                              style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () => _toggleSave(index),
+                                icon: Icon(
+                                  isSaved ? Icons.bookmark : Icons.bookmark_outline,
+                                ),
+                                label: Text(isSaved ? 'Saved' : 'Save passage'),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: () => _open(s),
+                                icon: const Icon(Icons.open_in_new),
+                                label: const Text('Open'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                    label: Text(_saved ? 'Saved' : 'Save passage'),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: _open,
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('Open'),
-                  ),
-                ),
-              ],
+                  );
+                },
+              ),
             ),
           ],
         ),

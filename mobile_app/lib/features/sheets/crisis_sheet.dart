@@ -3,39 +3,14 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 
-/// Static crisis-resource sheet. Mirrors the web app's "If you need someone
-/// right now" panel: AA helpline, SAMHSA, 988, and 911 (urgent), each
-/// tap-to-call via `tel:` using url_launcher.
+/// Bottom-sheet that shows the AA 24-Hour Helpline as the primary resource.
+/// National hotlines (988, SAMHSA) live behind a collapsed "More support
+/// options" tile so the default presentation stays helpline-first while the
+/// resources remain reachable (Play health/AI policy expects crisis routing).
 class CrisisSheet extends StatelessWidget {
   const CrisisSheet({super.key});
 
-  static const List<_CrisisResource> _resources = [
-    _CrisisResource(
-      name: 'AA 24-Hour Helpline',
-      detail: '212-647-1680 · Talk to a sober AA member, 24/7',
-      phone: '12126471680',
-      icon: Icons.support_agent,
-    ),
-    _CrisisResource(
-      name: 'SAMHSA Helpline',
-      detail: '1-800-662-HELP (4357) · Substance use, 24/7',
-      phone: '18006624357',
-      icon: Icons.medical_services_outlined,
-    ),
-    _CrisisResource(
-      name: '988 Suicide & Crisis Lifeline',
-      detail: 'Call or text 988 · Mental health, 24/7',
-      phone: '988',
-      icon: Icons.favorite_outline,
-    ),
-    _CrisisResource(
-      name: 'Emergency',
-      detail: "911 · If there's immediate danger",
-      phone: '911',
-      icon: Icons.local_hospital_outlined,
-      urgent: true,
-    ),
-  ];
+  static const _aaPhone = '12126471680';
 
   Future<void> _call(BuildContext context, String phone) async {
     final uri = Uri(scheme: 'tel', path: phone);
@@ -63,19 +38,9 @@ class CrisisSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: theme.dividerColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
+
             Text(
-              'If you need someone right now',
+              'Need to talk now?',
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w700,
                 fontSize: AppTypography.title,
@@ -83,103 +48,91 @@ class CrisisSheet extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'These lines are free, confidential, and open around the clock.',
+              'Call the AA 24-Hour Helpline to speak with a sober AA member, 24/7.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.textTheme.bodySmall?.color,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            for (final r in _resources) ...[
-              _CrisisTile(resource: r, onTap: () => _call(context, r.phone)),
-              const SizedBox(height: AppSpacing.sm),
-            ],
-            const SizedBox(height: AppSpacing.sm),
-            Center(
-              child: Text(
-                "You're not alone. Reaching out is a strong step.",
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontStyle: FontStyle.italic,
+            const SizedBox(height: AppSpacing.md),
+            // Direct call card
+            InkWell(
+              onTap: () => _call(context, _aaPhone),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                  ),
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CrisisResource {
-  final String name;
-  final String detail;
-  final String phone;
-  final IconData icon;
-  final bool urgent;
-  const _CrisisResource({
-    required this.name,
-    required this.detail,
-    required this.phone,
-    required this.icon,
-    this.urgent = false,
-  });
-}
-
-class _CrisisTile extends StatelessWidget {
-  final _CrisisResource resource;
-  final VoidCallback onTap;
-  const _CrisisTile({required this.resource, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final iconColor = resource.urgent ? AppColors.error : AppColors.accent;
-    final borderColor =
-        resource.urgent ? AppColors.error : theme.dividerColor;
-    return Material(
-      color: theme.cardColor,
-      borderRadius: BorderRadius.circular(AppSpacing.radius),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppSpacing.radius),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppSpacing.radius),
-            border: Border.all(color: borderColor),
-          ),
-          child: Row(
-            children: [
-              Icon(resource.icon, color: iconColor),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      resource.name,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
+                    Icon(
+                      Icons.support_agent,
+                      color: theme.colorScheme.primary,
+                      size: 32,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'AA 24-Hour Helpline',
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            '(212) 647-1680',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      resource.detail,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.textTheme.bodySmall?.color,
-                      ),
-                    ),
+                    const Icon(Icons.call, color: Colors.green, size: 24),
                   ],
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Icon(
-                Icons.call,
-                size: 18,
-                color: theme.iconTheme.color?.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            // Collapsed by default; national resources for review-policy
+            // coverage without changing the helpline-first presentation.
+            Theme(
+              data: theme.copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                title: Text(
+                  'More support options',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                  ),
+                ),
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.phone_in_talk_outlined),
+                    title: const Text('988 Suicide & Crisis Lifeline'),
+                    subtitle: const Text('Call or text 988 — 24/7'),
+                    onTap: () => _call(context, '988'),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.support_agent_outlined),
+                    title: const Text('SAMHSA National Helpline'),
+                    subtitle: const Text('1-800-662-4357 — treatment referrals, 24/7'),
+                    onTap: () => _call(context, '18006624357'),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -66,5 +66,13 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Your location is used only to find nearby recovery meetings. It is never stored or shared.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>The camera is used to scan printed recovery literature into the chat and to attach photos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>The microphone is used only when you tap the mic button to dictate a message.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo access lets you attach an existing image to a chat message.</string>
 </dict>
 </plist>

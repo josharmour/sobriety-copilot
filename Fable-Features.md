@@ -9,15 +9,15 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 
 ## P0 — Fixes & hygiene
 
-- [ ] **Android location permissions** — add `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` to `mobile_app/android/app/src/main/AndroidManifest.xml`; add iOS `NSLocationWhenInUseUsageDescription`, `NSCameraUsageDescription`, `NSMicrophoneUsageDescription`, `NSPhotoLibraryUsageDescription` to Info.plist. "Use my location" is currently broken on the Play build.
+- [x] **Android location permissions** — add `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` to `mobile_app/android/app/src/main/AndroidManifest.xml`; add iOS `NSLocationWhenInUseUsageDescription`, `NSCameraUsageDescription`, `NSMicrophoneUsageDescription`, `NSPhotoLibraryUsageDescription` to Info.plist. "Use my location" is currently broken on the Play build.
 - [ ] **Auth on `GET /api/bugs`** — enforce `BUG_ADMIN_TOKEN` (already in docker-compose, never checked in `src/server.py`). Unauthenticated endpoint currently exposes user conversation snippets.
 - [ ] **Stop server-side chat body logging by default** — `save_interaction` persists full message/response keyed by per-install UUID, contradicting privacy.html. Gate behind `STORE_CHAT_HISTORY` env (default off); keep timestamps/counters only.
-- [ ] **Base-URL field in Settings** — `setBaseUrl` exists but has no UI; error copy references a field that isn't there. Unblocks self-hosters.
-- [ ] **Enable AltRecoverySheet** — built but unreachable (not in the app-bar menu enum). One-line fix + menu entry.
-- [ ] **Privacy page email typo** — `support@sobriettycopilot.com` → `sobrietycopilot.com` (static/privacy.html and any source copy in mobile_app/web/).
-- [ ] **Crisis sheet: collapsed "More support options" expander** (988 / SAMHSA 1-800-662-4357) below the existing AA helpline default. NOTE: default presentation unchanged; added for Play AI/health policy review safety. Revert is one small widget if you don't want it.
+- [x] **Base-URL mismatch** — RESOLVED per owner (2026-07-06): no visible URL field (normal users never need it); fixed the misleading "check the base URL below" error copy instead. `setBaseUrl` retained unused; a hidden dev affordance (long-press version in About) is available on request.
+- [x] **Enable AltRecoverySheet** — built but unreachable (not in the app-bar menu enum). One-line fix + menu entry.
+- [x] **Privacy page email typo** (already correct in repo — typo only in deployed copy; fixed by next deploy) — `support@sobriettycopilot.com` → `sobrietycopilot.com` (static/privacy.html and any source copy in mobile_app/web/).
+- [x] **Crisis sheet: collapsed "More support options" expander** (988 / SAMHSA 1-800-662-4357) below the existing AA helpline default. NOTE: default presentation unchanged; added for Play AI/health policy review safety. Revert is one small widget if you don't want it.
 - [ ] **Remove dead weight** — unused `permission_handler` dep audit, vestigial `sendMessage(audio:)` path notes, unused `_SheetHandle`. (Low priority; only if time.)
-- [!] **Pack copyright triage** — `packs/library-v1.scpack` redistributes Hazelden titles + Joe & Charlie transcripts (the material AAWS stripped from Everything AA in May 2026); RAG corpus includes Daily Reflections / As Bill Sees It / 12&12. Legal/content decision — needs you. Recommendation in report §2.5: PD-tier public pack (1939/1955 Big Book, prayers, pre-1931 devotionals), copyrighted works RAG-cite-only.
+- [x] **Pack copyright triage** — RESOLVED by owner decision (2026-07-06): app is a study aide, not a publisher — snippets + citations + purchase encouragement; corpus and packs stay as-is. No action.
 - [!] **`/api/transcribe` drift** — app calls it; endpoint absent from this repo. Confirm whether prod runs uncommitted code. Long-term fix is on-device ASR (see P5 stretch below).
 
 ## P1 — Milestone tracker + Android widget
