@@ -1,7 +1,11 @@
 x-app-env: &app-env
   REDIS_URL: redis://redis:6379/0
-  LLM_BASE_URL: "${LLM_BASE_URL:-http://host.docker.internal:8000/v1}"
-  LLM_MODEL: "${LLM_MODEL:-gemma4-31b-uncensored}"
+  LLM_BASE_URL: "${LLM_BASE_URL:-http://10.0.0.10:8002/v1}"
+  LLM_MODEL: "${LLM_MODEL:-dsv4}"
+  # LLM_BASE_URL_DIFFUSION removed — single model on 10.0.0.10:8002
+  # LLM_MODEL_DIFFUSION removed — single model on 10.0.0.10:8002
+  LLM_BASE_URL_STANDARD: "${LLM_BASE_URL_STANDARD:-http://10.0.0.10:8002/v1}"
+  LLM_MODEL_STANDARD: "${LLM_MODEL_STANDARD:-dsv4}"
   LLM_API_KEY: "${LLM_API_KEY:-ignored}"
   VLLM_ENABLE_THINKING: "${VLLM_ENABLE_THINKING:-1}"
   EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-ollama}"
@@ -31,7 +35,18 @@ x-app-env: &app-env
   #   python3 -c "import secrets; print(secrets.token_hex(24))"
   # Visit the app once as /?admin=<value> to unlock the in-app bug viewer.
   BUG_ADMIN_TOKEN: "${BUG_ADMIN_TOKEN:-7fe8d9a7e8a43db0472dd8e927b5dcd8}"
+  # Server-side chat transcript storage (debugging only). Default OFF — the
+  # privacy policy promises chat history stays on the user's device.
+  STORE_CHAT_HISTORY: "${STORE_CHAT_HISTORY:-0}"
+  # Optional comma-separated Nominatim country filter (e.g. "us,ca").
+  # Empty = worldwide, matching the NA aggregator's coverage.
+  GEOCODE_COUNTRYCODES: "${GEOCODE_COUNTRYCODES:-}"
   PIP_NO_CACHE_DIR: "1"
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
+  VECLIB_MAXIMUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
 
 services:
   app:

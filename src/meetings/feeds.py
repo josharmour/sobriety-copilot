@@ -3,8 +3,14 @@
 Each feed was probed once and confirmed to return the standard Meeting Guide
 JSON spec (https://github.com/code4recovery/spec) with real meeting data.
 
-To extend coverage, append entries here. The probe pattern is:
+To extend coverage, append entries here. Most TSML (12 Step Meeting List
+WordPress plugin) sites expose the feed at a predictable URL:
+    https://{site}/wp-admin/admin-ajax.php?action=meetings
+and some declare it in a <link> tag in the page <head>. Probe pattern:
     curl '<URL>' | head -c 200    # should start with '['
+
+Entries default to fellowship "AA" (service.py); set "fellowship" explicitly
+for anything else — the /api/meetings filter matches it case-insensitively.
 """
 
 FEEDS: list[dict[str, str]] = [
@@ -30,4 +36,8 @@ FEEDS: list[dict[str, str]] = [
     {"name": "Cincinnati",               "home": "https://www.aacincinnati.org",  "url": "https://www.aacincinnati.org/wp-admin/admin-ajax.php?action=meetings",  "region": "Cincinnati metro"},
     {"name": "Tucson",                   "home": "https://www.aatucson.org",      "url": "https://www.aatucson.org/wp-admin/admin-ajax.php?action=meetings",      "region": "Southern Arizona"},
     {"name": "Indianapolis",             "home": "https://www.indyaa.org",        "url": "https://www.indyaa.org/wp-admin/admin-ajax.php?action=meetings",        "region": "Central Indiana"},
+
+    # Adjacent fellowships with live TSML feeds (worldwide lists).
+    {"name": "Recovery Dharma",          "home": "https://recoverydharma.org",    "url": "https://recoverydharma.org/wp-admin/admin-ajax.php?action=meetings",    "region": "Worldwide", "fellowship": "Recovery Dharma"},
+    {"name": "CMA",                      "home": "https://crystalmeth.org",       "url": "https://crystalmeth.org/wp-admin/admin-ajax.php?action=meetings",       "region": "Worldwide", "fellowship": "CMA"},
 ]

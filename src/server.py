@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import os
 import re
@@ -13,7 +14,7 @@ from threading import Lock
 from typing import Any
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,6 +28,7 @@ from src.render_cache import (
 )
 
 from src.inference.engine import InferenceEngine
+from src.meetings.online import search_online_meetings, warmup_online_feeds
 from src.meetings.service import search_meetings, warmup_feeds as warmup_meeting_feeds
 from src.prompts.templates import NO_CONTEXT_TEMPLATE, USER_MESSAGE_TEMPLATE, system_message_for_tone
 from src.rag.chroma_client import find_largest_collection_with_prefix
@@ -56,9 +58,9 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 INDEX_HTML_PATH = os.path.join(STATIC_DIR, "index.html")
 
-BASE_URL = os.environ.get("LLM_BASE_URL", "http://172.20.48.1:11434/v1")
-MODEL = os.environ.get("LLM_MODEL", "gemma4:e2b")
-API_KEY = os.environ.get("LLM_API_KEY", "ollama")
+BASE_URL = os.environ.get("LLM_BASE_URL", "http://10.0.0.10:8002/v1")
+MODEL = os.environ.get("LLM_MODEL", "dsv4")
+API_KEY = os.environ.get("LLM_API_KEY", "")
 DOCUMENTS_DIR = os.environ.get("DOCUMENTS_DIR", "documents")
 RAG_DB_PATH = os.environ.get("RAG_DB_PATH", "rag_db")
 RAG_COLLECTION = os.environ.get("RAG_COLLECTION", DEFAULT_COLLECTION)
@@ -135,6 +137,9 @@ class ChatRequest(BaseModel):
     show_thinking: bool = False
     diffusion_view: bool = False
     user_id: str | None = None
+    # Ambient context supplied by the client (e.g. the local-only sobriety
+    # tracker's day count). Folded into the system prompt, never persisted.
+    client_context: str | None = None
 
 
 class IndexRequest(BaseModel):
@@ -921,6 +926,10 @@ async def _warmup_meetings() -> None:
         await warmup_meeting_feeds()
     except Exception:
         pass
+    try:
+        await warmup_online_feeds()
+    except Exception:
+        pass
 
 
 @asynccontextmanager
@@ -1358,6 +1367,11 @@ def chat(payload: ChatRequest):
     sys_msg = system_message_for_tone(payload.tone)
     if user_state_note:
         sys_msg = f"{sys_msg}\n\n{user_state_note}" if sys_msg else user_state_note
+    client_note = (payload.client_context or "").strip()
+    if client_note:
+        client_note = client_note.replace("\n", " ")[:300]
+        note_line = f"About this user (shared from their device for this reply only): {client_note}"
+        sys_msg = f"{sys_msg}\n\n{note_line}" if sys_msg else note_line
     want_thinking = bool(payload.show_thinking)
     want_diffusion = bool(payload.diffusion_view)
 
@@ -1478,9 +1492,15 @@ def chat(payload: ChatRequest):
         except Exception as exc:
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
         finally:
-            response_text = "".join(response_buffer).strip()
             try:
-                memory_manager.save_interaction(user_id, query, response_text)
+                if STORE_CHAT_HISTORY:
+                    response_text = "".join(response_buffer).strip()
+                    memory_manager.save_interaction(user_id, query, response_text)
+                else:
+                    # Privacy default: no message bodies server-side — the
+                    # deployed privacy policy promises chat history stays on
+                    # the device. Keep only the last-seen timestamp.
+                    memory_manager.touch(user_id)
             except Exception as mem_exc:
                 print(f"[MEM-ERR] {type(mem_exc).__name__}: {mem_exc}", flush=True)
 
@@ -1497,6 +1517,10 @@ def chat(payload: ChatRequest):
 
 BUG_REPORT_KEY = "sobriety_copilot:bugs"
 BUG_REPORT_TTL = 60 * 60 * 24 * 30  # 30 days
+
+# Opt-in server-side transcript storage (debugging only). Default OFF: the
+# deployed privacy policy promises chat history lives on-device only.
+STORE_CHAT_HISTORY = os.environ.get("STORE_CHAT_HISTORY", "0") == "1"
 
 
 @app.post("/api/bugs")
@@ -1518,7 +1542,14 @@ def submit_bug(report: BugReport):
 
 
 @app.get("/api/bugs")
-def list_bugs():
+def list_bugs(x_admin_token: str | None = Header(default=None)):
+    # Reports carry conversation snippets — admin-only, fail closed when the
+    # token isn't configured.
+    expected = os.environ.get("BUG_ADMIN_TOKEN", "")
+    if not expected or not x_admin_token or not hmac.compare_digest(
+        x_admin_token, expected
+    ):
+        raise HTTPException(status_code=403, detail="forbidden")
     from src.tasks.job_store import get_redis_client
     r = get_redis_client()
     raw = r.lrange(BUG_REPORT_KEY, 0, 99)
@@ -1562,17 +1593,23 @@ async def geocode(q: str = Query(..., min_length=2, max_length=120)):
             raise HTTPException(status_code=404, detail="No match for that location")
         return cached
 
+    params = {
+        "q": q,
+        "format": "json",
+        "limit": "1",
+        "addressdetails": "1",
+    }
+    # Optional comma-separated country filter. Default is worldwide — the NA
+    # aggregator covers meetings well beyond the US/CA.
+    countrycodes = os.environ.get("GEOCODE_COUNTRYCODES", "").strip()
+    if countrycodes:
+        params["countrycodes"] = countrycodes
+
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(
                 "https://nominatim.openstreetmap.org/search",
-                params={
-                    "q": q,
-                    "format": "json",
-                    "limit": "1",
-                    "addressdetails": "1",
-                    "countrycodes": "us,ca",
-                },
+                params=params,
                 headers={"User-Agent": "sobriety-copilot/1.0 (+https://github.com)"},
                 timeout=8.0,
                 follow_redirects=True,
@@ -1611,12 +1648,28 @@ async def meetings(
     max: int = Query(30, ge=1, le=100),
     day: int | None = Query(None, ge=0, le=6),
     attendance: str | None = Query(None, pattern="^(inperson|online|all)$"),
-    fellowship: str | None = Query(None, pattern="^(aa|na|all|AA|NA|ALL)$"),
+    fellowship: str | None = Query(None, max_length=40),
 ):
     return await search_meetings(
         lat=lat, lng=lng,
         radius_mi=radius_mi, max_results=max,
         day=day, attendance=attendance, fellowship=fellowship,
+    )
+
+
+@app.get("/api/meetings/online")
+async def meetings_online(
+    fellowship: str | None = Query(None, max_length=40),
+    max: int = Query(50, ge=1, le=200),
+    day: int | None = Query(None, ge=0, le=6),
+):
+    """Location-agnostic online-meeting directory (OIAA + Virtual NA).
+
+    Sorted live-now first, then soonest-to-start; every result carries a
+    conference_url or conference_phone.
+    """
+    return await search_online_meetings(
+        fellowship=fellowship, max_results=max, day=day,
     )
 
 

@@ -111,6 +111,20 @@ class UserMemoryManager:
                 (user_id, now),
             )
 
+    def touch(self, user_id: str) -> None:
+        """Update last_interaction without storing any message content.
+
+        Used when STORE_CHAT_HISTORY is off (the privacy-preserving default).
+        """
+        now = time.time()
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO user_state (user_id, current_step, notes, last_interaction) "
+                "VALUES (?, 1, '', ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET last_interaction = excluded.last_interaction",
+                (user_id, now),
+            )
+
     def get_recent_history(self, user_id: str, limit: int = 5) -> list[dict]:
         with self._conn() as conn:
             cursor = conn.execute(

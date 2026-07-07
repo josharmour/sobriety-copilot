@@ -132,7 +132,7 @@ async def _fetch_feed(client: httpx.AsyncClient, feed: dict[str, str]) -> list[d
         resp = await client.get(
             url,
             timeout=FETCH_TIMEOUT,
-            headers={"User-Agent": "sobriety-copilot/1.0 (+meeting-aggregator)"},
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
             follow_redirects=True,
         )
         resp.raise_for_status()
@@ -186,14 +186,24 @@ async def search_meetings(
     `fellowship`:
         "AA" — only AA intergroup feeds
         "NA" — only NA via the BMLT aggregator
-        None / "all" — both
+        any other value — case-insensitive match against a feed's
+            "fellowship" (e.g. "cma", "recovery dharma")
+        None / "all" — everything
     """
-    fellowship_norm = (fellowship or "").upper() if fellowship else None
-    want_aa = fellowship_norm in (None, "ALL", "AA")
-    want_na = fellowship_norm in (None, "ALL", "NA")
+    fellowship_norm = (fellowship or "").strip().lower() or None
+    if fellowship_norm == "all":
+        fellowship_norm = None
+
+    def _feed_wanted(feed: dict[str, str]) -> bool:
+        if fellowship_norm is None:
+            return True
+        return feed.get("fellowship", "AA").lower() == fellowship_norm
+
+    wanted_feeds = [f for f in FEEDS if _feed_wanted(f)]
+    want_na = fellowship_norm in (None, "na")
 
     async with httpx.AsyncClient() as client:
-        aa_task = asyncio.gather(*[_fetch_feed(client, feed) for feed in FEEDS]) if want_aa else None
+        aa_task = asyncio.gather(*[_fetch_feed(client, feed) for feed in wanted_feeds]) if wanted_feeds else None
         na_task = fetch_na_meetings(lat, lng, radius_mi) if want_na else None
         aa_results, na_results = await asyncio.gather(
             aa_task or _empty_list(),
@@ -252,7 +262,7 @@ async def search_meetings(
     return {
         "meetings": candidates[:max_results],
         "total_in_radius": len(candidates),
-        "feeds_total": len(FEEDS) + (1 if want_na else 0),
+        "feeds_total": len(wanted_feeds) + (1 if want_na else 0),
         "feeds_with_data": feeds_with_data,
     }
 
