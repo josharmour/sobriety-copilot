@@ -1,0 +1,28 @@
+Your task: FT-B2 (Track B — Hard negatives) → finetune/retriever/triplets.jsonl
+per the roadmap spec (### B2 in finetuning-the-rag.md).
+
+Input: finetune/retriever/pairs.jsonl (61,699 rows {query, doc_id, block_id}).
+Do NOT modify pairs.jsonl.
+
+For each pair produce {query, pos_block:{doc_id, block_id, text},
+neg_blocks:[4 x {doc_id, block_id, text}]} where negatives are hard: top
+BM25 hits for the query (FTS5 MATCH over finetune/cache/search.db — build a
+query sanitizer: strip punctuation/operators, OR the content words) that are
+NOT the positive and NOT adjacent to it (same doc && |block_num diff| <= 2).
+IMPORTANT: all block identity comparisons must use (doc_id, block_id) pairs —
+bare block ids collide across docs.
+
+Optional stronger negatives: packs/library-v2.scpack contains precomputed
+768-dim int8 EmbeddingGemma vectors (vectors.i8 + vectors.idx) for every
+block — if you use them, mix top-vector and top-BM25 negatives ~50/50.
+BM25-only is acceptable per spec.
+
+No LLM calls needed for this task — it's pure retrieval. Checkpointed
+resumable script scripts/ft_build_triplets.py, nohup + poll (61k FTS queries
+takes a while; report progress every 1000).
+
+Write scripts/ft_checks_b2.py registering 'b2': every row has exactly 4
+negatives, no positive leaked into negatives (doc-scoped), adjacency
+respected, all ids exist in search.db, 5-row sample printed.
+Your Verify: python -m scripts.ft_checks b2.
+Then the HANDOFF line per swarm rules.

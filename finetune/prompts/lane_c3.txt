@@ -1,0 +1,35 @@
+Your task: FT-C3 (Track C — Quality filter) → finetune/gen/sft.filtered.jsonl
++ finetune/gen/filter_report.json per the roadmap spec (### C3 in
+finetuning-the-rag.md).
+
+Input: finetune/gen/sft.jsonl (8,000 samples, schema
+{messages:[system,user,assistant], meta{intent_id, register, difficulty,
+sample_type, gold_docs, gold_blocks, distractor_docs, distractor_blocks,
+crisis_adjacent}}). Do NOT modify sft.jsonl.
+
+Judge every sample with dsv4 at temperature 0. Rubric (score each; drop if
+any hard-fail):
+- grounded: for context samples, does the answer's substance come from the
+  gold passage(s)? (hard-fail if it contradicts them or invents content)
+- voice: no fake lived experience ("when I got sober..."), no bracketed
+  citation markers like [1], no filenames/extensions, names at most 1-2
+  work titles in prose.
+- hotline discipline: mentions hotlines/911 ONLY when meta.crisis_adjacent
+  is true (hard-fail otherwise).
+- register fit: brief samples ≤4 sentences; reflective ends with or contains
+  a question; factual leads with the answer.
+- refusal correctness: for sample_type=refusal, the answer must actually
+  decline + redirect; for no_context, must not hallucinate fake citations.
+
+Implementation requirements:
+- Checkpointed resumable script scripts/ft_filter_sft.py, nohup + poll.
+- dsv4 judge calls MUST pass "chat_template_kwargs": {"thinking": false}
+  (server defaults to thinking:true/high — top-level reasoning_effort is
+  IGNORED). temp 0. Concurrency ≤16.
+- filter_report.json: total, kept, dropped, drop rate by intent_id and by
+  rubric reason.
+- Write scripts/ft_checks_c3.py registering 'c3': ≥6000 survivors, report
+  sums consistent with the filtered file, spot-print 3 dropped samples with
+  reasons.
+Your Verify: python -m scripts.ft_checks c3.
+Then the HANDOFF line per swarm rules.

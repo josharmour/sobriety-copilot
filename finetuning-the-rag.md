@@ -314,19 +314,19 @@ are sequential.
 
 | id | status | agent | notes |
 |----|--------|-------|-------|
-| A0 | done | dsv4 | scaffolding + ft_checks skeleton; verified by Fable 2026-07-07 (f6b413e) |
+|| A0 | done | dsv4 | scaffolding + ft_checks skeleton; verified by Fable 2026-07-07 (f6b413e) |
 || A1 | verify(fable) | dsv4 | FT-A1 targeted fix applied 2026-07-08: 8/9 crosswork deixis repaired via dsv4 (1 manually), 37/42 negatives regenerated as recovery-adjacent (5 sanity anchors kept). Extended ft_checks_a1.py enforces crosswork deixis + negative recovery-adjacency ≥75%. `python -m scripts.ft_checks a1` passes (0 deixis defects, 5 off-target neg = 88.1% on-target) |
 | A2 | todo | | blocked by A1 |
 | A3 | todo | | blocked by A2 |
 | A4 | todo | | blocked by A3 |
-| B1 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-07 ~21:00 |
-| B2 | todo | | blocked by B1 |
+| B1 | done* | dsv4 | verified by Fable 2026-07-08: 61,699 pairs / 56,401 distinct (doc,block), 78 docs, deixis screened (9.3% cut). *gold re-exclude pending A2 (--re-exclude mode ready) |
+| B2 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-08 ~08:35 |
 | B3 | todo | | needs D1 window |
 | B4 | todo | | gate vs A4 |
 | B5 | todo | | after B4 pass |
 | C1 | done | dsv4 | verified by Fable 2026-07-07: 1080 seeds, user-voice register clean, crisis seeds hash-match fixed wording, 0 dupes |
-| C2 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-07 ~21:45 |
-| C3 | todo | | blocked by C2 |
+| C2 | verify(fable) | dsv4 | 8000 samples done; ft_checks c2 green except 5 leaked rows pending final A1 set (doc-scoped guard added by Fable) |
+| C3 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-08 ~08:20 |
 | C4 | todo | | blocked by C3 |
 | C5 | todo | | blocked by C3 |
 | D1 | approved | owner | 2026-07-08: owner approved BOTH GPUs for one training window (prod chat fails over to R9700/10.0.0.100 during it). Plan: GPU0=B3 retriever, GPU1=SFT→DPO in parallel, ~3h. Window opens after data lanes drain (A4 baseline must run BEFORE — needs dsv4 serving) |
