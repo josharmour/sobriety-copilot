@@ -221,12 +221,27 @@ are sequential.
 
 ### D1. GPU window protocol
 - **Context:** this file; NAS/vLLM knowledge: vLLM runs TP=2 on both GPUs.
-- **Deliverable:** `finetune/infra/gpu_window.md` + `scripts/ft_gpu_window.sh`:
-  documented + scripted procedure to (a) restart vLLM pinned to GPU0 only
-  (TP=1) freeing GPU1 for training, (b) restore TP=2. Includes health checks
-  against `/api/health` and a hard rule: never train without a window.
-- **Verify:** dry-run mode prints the exact commands; Fable + owner approve
-  before first real use (touches prod inference).
+- **APPROVED 2026-07-08 (superseding the TP=1 plan):** owner approved BOTH
+  GPUs for one ~3h window. Checklist, in order:
+  1. Prereqs: A4 baseline captured (against the config prod keeps: standard-mtp3,
+     1M ctx, seqs 48, batched 8192) + all training datasets verified (B2, C5, C4).
+  2. Flip prod: point sobriety-copilot `LLM_BASE_URL` on the NAS at the R9700
+     box `http://10.0.0.100:<port>/v1` (owner loads the model there); verify
+     /api/chat works end-to-end; `docker stop ds4-v9`.
+  3. Train in parallel: GPU0 = B3 retriever; GPU1 = D3 SFT dry-run+full, then
+     D4 DPO dry-run+full.
+  4. **DSpark A/B (while ds4-v9 is down anyway, AFTER training completes):**
+     relaunch with a NEWER vllm image if available (Reddit 2026-07 reports
+     DSpark much improved; local v9 notes: DSpark works, 191 vs 174 tok/s
+     single-stream, but KV caps ctx at ~256-384K — see ~/repos/vllm/CLAUDE.md).
+     Benchmark MODE=dspark vs MODE=standard-mtp3 at swarm-like concurrency
+     (16-48 short requests) and single-stream. Keep whichever wins ONLY if
+     owner accepts the context cap; default = restore standard-mtp3/1M.
+  5. Restore: relaunch ds4-v9 (MAX_NUM_SEQS=48, MAX_BATCHED=8192 — 16384
+     starves KV below the 1M admission minimum and the engine fails to boot);
+     health check; revert NAS LLM_BASE_URL; verify prod /api/chat.
+- **Verify:** post-window: prod healthy on ds4-v9, adapters exist, A/B
+  numbers recorded in `finetune/eval/runs/dspark-ab.md` (if run).
 
 ### D2. Training environment
 - **Context:** D1 doc.
@@ -300,7 +315,7 @@ are sequential.
 | id | status | agent | notes |
 |----|--------|-------|-------|
 | A0 | done | dsv4 | scaffolding + ft_checks skeleton; verified by Fable 2026-07-07 (f6b413e) |
-| A1 | in-progress(fable-lane) | dsv4 | BOUNCED x2 2026-07-07: rework only patched literal regex — 8 deixis variants remain, personal kind 0/48 first-person, 131/237 quiz register; rework2 lane running |
+|| A1 | verify(fable) | dsv4 | FT-A1 targeted fix applied 2026-07-08: 8/9 crosswork deixis repaired via dsv4 (1 manually), 37/42 negatives regenerated as recovery-adjacent (5 sanity anchors kept). Extended ft_checks_a1.py enforces crosswork deixis + negative recovery-adjacency ≥75%. `python -m scripts.ft_checks a1` passes (0 deixis defects, 5 off-target neg = 88.1% on-target) |
 | A2 | todo | | blocked by A1 |
 | A3 | todo | | blocked by A2 |
 | A4 | todo | | blocked by A3 |
