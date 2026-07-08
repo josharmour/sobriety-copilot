@@ -1,0 +1,87 @@
+# =============================================================================
+# FT-D3: SFT QLoRA config — google/gemma-4-e2b-it
+# =============================================================================
+# Rank choice: r=32
+#   Rationale — Gemma 4 E2B (~2B params, 35 layers, hidden=1536, MQA with
+#   KV heads=1, double-wide MLP).  QLoRA with r=32 yields ~3.5M trainable
+#   params across all 7 linear types per layer (Q,K,V,O + gate,up,down).
+#   At ~8k training samples across 30 intents × 3 difficulties × 4 registers:
+#     r=16  → ~1.8M params — likely underfits the multi-register adaptation
+#     r=32  → ~3.5M params — sufficient capacity, low overfitting risk at 8k
+#     r=64  → ~7M params — risks overfitting at this sample budget
+#   lora_alpha=2r (64) is the standard scaling convention.
+#
+# Sequence length: 4096 tokens with packing on (multiple short conversations
+# concatenated with EOS token to fill 4096).  This is the max from the C2
+# generation config; the longest user+assistant turns in the dataset are
+# ~2k tokens, so packing on yields ~2× throughput improvement.
+#
+# Validation: 2% held-out split stratified by intent_id.  Val loss logged
+# every 50 steps; val_loss is the primary early-stopping signal.
+# =============================================================================
+
+model:
+  name: google/gemma-4-e2b-it
+  torch_dtype: bfloat16
+  attn_implementation: flash_attention_2   # falls back to sdpa in dry-run
+
+qlora:
+  r: 32
+  lora_alpha: 64
+  lora_dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  modules_to_save: null
+  use_dora: false
+  init_lora_weights: true
+  # 4-bit NF4 base (bitsandbytes)
+  bnb_4bit_compute_dtype: bfloat16
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+
+training:
+  sequence_length: 4096
+  packing: true
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 4
+  gradient_accumulation_steps: 2
+  num_train_epochs: 3
+  max_steps: -1
+  learning_rate: 2.0e-4
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  optim: adamw_torch_fused
+  gradient_checkpointing: true
+  bf16: true
+  tf32: true
+  max_grad_norm: 1.0
+
+evaluation:
+  eval_strategy: steps
+  eval_steps: 50
+  eval_on_start: true
+
+logging:
+  logging_strategy: steps
+  logging_steps: 10
+  report_to: none
+
+checkpointing:
+  save_strategy: steps
+  save_steps: 100
+  save_total_limit: 3
+  load_best_model_at_end: false
+
+dataset:
+  train_val_split: 0.98
+  stratify_by: intent_id
+
+seed: 42
+output_dir: finetune/runs/sft-01

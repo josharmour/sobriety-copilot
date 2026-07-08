@@ -316,8 +316,8 @@ are sequential.
 | C5 | todo | | blocked by C3 |
 | D1 | todo | | owner approval required |
 | D2 | done | dsv4 | verified by Fable 2026-07-07: Unsloth 2026.7.1 native on Blackwell (torch 2.10 cu128), gemma-4-e2b-it smoke pass, QLoRA fits easily; CIFS venv workaround documented |
-| D3 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-07 ~22:25; dry-run verify deferred to D1 window (GPUs held by prod vLLM) |
-| D4 | todo | | blocked by D3 |
+| D3 | done* | dsv4 | verified by Fable 2026-07-07: CPU-side validation full pass (r=32, packing 2.67x, stratified split). *GPU 20-step dry run pending D1 window; note: full-LM loss (no completion-only masking) — revisit at dry run |
+| D4 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-07 ~23:10 |
 | D5 | todo | | blocked by D3 |
 | E1 | todo | | C5 + D3 |
 | E2 | todo | | gate; needs A4 + D5 |

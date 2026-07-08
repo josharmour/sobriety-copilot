@@ -1,0 +1,23 @@
+Your task: FT-D4 (Track D — DPO config) → finetune/infra/dpo_config.yaml +
+scripts/ft_train_dpo.py per the roadmap spec (### D4 in finetuning-the-rag.md).
+Same shape as D3 (see finetune/infra/sft_config.yaml and
+scripts/ft_train_sft.py — mirror their structure, argparse, checkpointing,
+and dry-run design).
+
+Requirements:
+- DPO starting FROM the SFT adapter: --adapter path arg (the adapter won't
+  exist yet — validate path plumbing only).
+- Document the beta choice in the config comments.
+- Dataset: finetune/gen/dpo.jsonl schema {prompt|messages, chosen, rejected,
+  meta.flaw} — C4 hasn't run yet, so fabricate schema-identical dummy pairs
+  for validation (and read the C4 spec in finetuning-the-rag.md for the
+  exact shape; document your assumed schema in the script header so C4 can
+  match it).
+- Both GPUs serve prod vLLM: NO GPU allocation, NO weight downloads.
+  CPU-side validation only; GPU 20-step dry run deferred to a D1 window,
+  zero-edit runnable: python scripts/ft_train_dpo.py --dataset
+  finetune/gen/dpo.jsonl --adapter finetune/runs/sft-01/adapter --dry-run 20
+- Environment: finetune/.venv (Unsloth stack), not the repo venv.
+- Write scripts/ft_checks_d4.py registering a 'd4' check (CPU-only, exit 0).
+Your Verify: python -m scripts.ft_checks d4.
+Then the HANDOFF line per swarm rules, noting the deferred GPU dry run.
