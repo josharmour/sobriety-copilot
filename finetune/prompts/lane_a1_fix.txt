@@ -1,0 +1,35 @@
+Your task: FT-A1 TARGETED FIX. finetune/eval/questions.jsonl (256 rows)
+mostly passed Fable review — doctrine/practical/phrase/personal are ACCEPTED
+and must remain byte-identical. Repair ONLY two kinds, in place (checkpointed
+script, dsv4 temp 0.7):
+
+1. crosswork (41 rows, 24 defective): questions like "How does X in Source 1
+   compare with Y in the second source" are source-deixis — the eval system
+   under test never sees "Source 1". Rewrite every crosswork question that
+   references source-1/source-2/first-source/second-reading etc. to NAME THE
+   WORKS by title instead (get titles from the corpus: join the row's
+   source_doc_ids/doc_id to the manifest inside packs/library-v1.scpack or
+   the blocks' headings in search.db). Example shape: "How does the Big
+   Book's idea of a shared solution compare with what Living Sober says
+   about personal surrender?" Keep the same source blocks/ids.
+
+2. negative (42 rows, 41 defective): currently off-topic trivia (BIOS
+   passwords, knife sharpening). A useful negative probes the corpus
+   BOUNDARY: recovery-adjacent questions the literature does NOT answer —
+   medical/clinical (naltrexone dosing, detox safety, insurance coverage for
+   rehab), legal (DUI expungement), logistics (court-card signing rules),
+   statistics (AA success rates), other-program specifics not in the corpus.
+   Regenerate all 42 as recovery-adjacent-but-uncovered. At most 5 may be
+   fully off-topic (as sanity anchors).
+
+3. Extend scripts/ft_checks_a1.py to ENFORCE:
+   - crosswork: reject \b(first|second|1st|2nd)\s+(source|reading|work|
+     selection)\b and \bsource\s*[12]\b (case-insens).
+   - negative: ≥75% must match a recovery-adjacency lexicon (alcohol, drink,
+     sober, recovery, addict, drug, AA, NA, step, meeting, sponsor, rehab,
+     relapse, detox, withdrawal, DUI, naltrexone, twelve, program...).
+   Keep all existing enforcement. Do not weaken any check.
+
+Deliverables: finetune/eval/questions.jsonl + scripts/ft_checks_a1.py only.
+All other rows byte-identical — Fable will diff to confirm.
+Verify: python -m scripts.ft_checks a1. Then the HANDOFF line per swarm rules.

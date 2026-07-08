@@ -1,0 +1,27 @@
+Your task: FT-A1 CROSSWORK REPAIR (final targeted fix). In
+finetune/eval/questions.jsonl (256 rows), ONLY the 41 kind=="crosswork" rows
+are defective: both source blocks come from the SAME doc, so the question
+compares a work with itself. Every other row is ACCEPTED and must remain
+byte-identical (Fable diffs against a snapshot).
+
+Regenerate all 41 crosswork rows (checkpointed dsv4 script, temp 0.7):
+1. Sample block PAIRS from TWO DIFFERENT docs (both blocks ≥200 chars,
+   thematically related — e.g. both about resentment, surrender, amends,
+   prayer; find theme-mates via FTS queries on search.db). Prefer
+   recovery-core docs (conference_approved / other_anonymous /
+   books_about_aa); at most 1 in 5 pairs may include a related_nonfiction
+   doc, and then the question must still be asked from a recovery angle.
+2. Question must NAME BOTH WORKS by their real titles in the question text
+   (get titles from the pack manifest or block headings), user register
+   ("How does the Big Book's take on resentment compare with what Living
+   Sober suggests for the same feeling?"). No source-deixis of any form.
+3. Schema per row: source_doc_id = primary doc; ADD "source_doc_ids":
+   [docA, docB] (2 distinct); source_block_ids = [blockA, blockB]
+   (existing ids in search.db). Keep kind, keep the row's existing id.
+4. Extend scripts/ft_checks_a1.py: for kind==crosswork, REQUIRE
+   source_doc_ids present with exactly 2 DISTINCT doc ids that exist in
+   search.db, and require both block ids to belong to those docs. Keep all
+   existing enforcement; do not weaken any check.
+
+Deliverables: finetune/eval/questions.jsonl + scripts/ft_checks_a1.py only.
+Verify: python -m scripts.ft_checks a1. Then the HANDOFF line per swarm rules.
