@@ -300,22 +300,22 @@ are sequential.
 | id | status | agent | notes |
 |----|--------|-------|-------|
 | A0 | done | dsv4 | scaffolding + ft_checks skeleton; verified by Fable 2026-07-07 (f6b413e) |
-| A1 | in-progress(dsv4) | dsv4 | |
+| A1 | in-progress(fable-lane) | dsv4 | BOUNCED 2026-07-07: passage-deixis, quiz register, null doc_id, off-domain sampling — headless rework running |
 | A2 | todo | | blocked by A1 |
 | A3 | todo | | blocked by A2 |
 | A4 | todo | | blocked by A3 |
-| B1 | todo | | leakage guard needs A2 (or re-run exclusions) |
+| B1 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-07 ~21:00 |
 | B2 | todo | | blocked by B1 |
 | B3 | todo | | needs D1 window |
 | B4 | todo | | gate vs A4 |
 | B5 | todo | | after B4 pass |
-| C1 | todo | | |
+| C1 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-07 ~21:00 |
 | C2 | todo | | blocked by C1 |
 | C3 | todo | | blocked by C2 |
 | C4 | todo | | blocked by C3 |
 | C5 | todo | | blocked by C3 |
 | D1 | todo | | owner approval required |
-| D2 | todo | | |
+| D2 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-07 ~21:00 |
 | D3 | todo | | blocked by D2 |
 | D4 | todo | | blocked by D3 |
 | D5 | todo | | blocked by D3 |
