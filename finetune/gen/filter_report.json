@@ -1,207 +1,124 @@
 {
   "total": 8000,
-  "kept": 6446,
-  "dropped": 1554,
-  "drop_rate": 0.1943,
+  "kept": 6444,
+  "dropped": 1556,
+  "drop_rate": 0.1945,
   "judge_errors": 0,
+  "c2fix_purged_from_sft": 72,
+  "c2fix_backfill_added": 72,
+  "c2fix_purged_from_filtered": 57,
   "by_intent": {
-    "ask_12_and_12": {
-      "total": 289,
-      "kept": 155,
-      "dropped": 134,
-      "drop_rate": 0.4637
-    },
-    "ask_big_book": {
-      "total": 280,
-      "kept": 153,
-      "dropped": 127,
-      "drop_rate": 0.4536
-    },
-    "ask_family": {
-      "total": 294,
-      "kept": 244,
-      "dropped": 50,
-      "drop_rate": 0.1701
-    },
-    "ask_fear": {
-      "total": 274,
-      "kept": 232,
-      "dropped": 42,
-      "drop_rate": 0.1533
-    },
-    "ask_forgiveness": {
-      "total": 276,
-      "kept": 249,
-      "dropped": 27,
-      "drop_rate": 0.0978
-    },
-    "ask_higher_power": {
-      "total": 279,
-      "kept": 237,
-      "dropped": 42,
-      "drop_rate": 0.1505
-    },
-    "ask_humility": {
-      "total": 289,
-      "kept": 265,
-      "dropped": 24,
-      "drop_rate": 0.083
-    },
-    "ask_meetings": {
-      "total": 287,
-      "kept": 183,
-      "dropped": 104,
-      "drop_rate": 0.3624
-    },
-    "ask_newcomer": {
-      "total": 269,
-      "kept": 203,
-      "dropped": 66,
-      "drop_rate": 0.2454
+    "refusal_out_of_domain": {
+      "kept": 414,
+      "total": 415
     },
     "ask_prayer_meditation": {
-      "total": 274,
-      "kept": 208,
-      "dropped": 66,
-      "drop_rate": 0.2409
+      "kept": 212,
+      "total": 276
     },
-    "ask_relapse": {
-      "total": 289,
-      "kept": 236,
-      "dropped": 53,
-      "drop_rate": 0.1834
-    },
-    "ask_resentment": {
-      "total": 272,
-      "kept": 200,
-      "dropped": 72,
-      "drop_rate": 0.2647
-    },
-    "ask_service": {
-      "total": 277,
-      "kept": 239,
-      "dropped": 38,
-      "drop_rate": 0.1372
-    },
-    "ask_slogan": {
-      "total": 272,
-      "kept": 216,
-      "dropped": 56,
-      "drop_rate": 0.2059
-    },
-    "ask_sponsorship": {
-      "total": 287,
+    "ask_forgiveness": {
       "kept": 251,
-      "dropped": 36,
-      "drop_rate": 0.1254
-    },
-    "ask_step_1": {
-      "total": 289,
-      "kept": 239,
-      "dropped": 50,
-      "drop_rate": 0.173
-    },
-    "ask_step_10": {
-      "total": 282,
-      "kept": 239,
-      "dropped": 43,
-      "drop_rate": 0.1525
+      "total": 278
     },
     "ask_step_11": {
-      "total": 284,
       "kept": 235,
-      "dropped": 49,
-      "drop_rate": 0.1725
+      "total": 284
     },
-    "ask_step_12": {
-      "total": 283,
-      "kept": 243,
-      "dropped": 40,
-      "drop_rate": 0.1413
+    "ask_resentment": {
+      "kept": 200,
+      "total": 271
+    },
+    "ask_sponsorship": {
+      "kept": 253,
+      "total": 290
     },
     "ask_step_2": {
-      "total": 280,
       "kept": 246,
-      "dropped": 34,
-      "drop_rate": 0.1214
+      "total": 282
     },
     "ask_step_3": {
-      "total": 274,
+      "kept": 239,
+      "total": 271
+    },
+    "ask_family": {
       "kept": 242,
-      "dropped": 32,
-      "drop_rate": 0.1168
+      "total": 290
+    },
+    "ask_service": {
+      "kept": 239,
+      "total": 278
+    },
+    "ask_12_and_12": {
+      "kept": 157,
+      "total": 292
+    },
+    "ask_step_12": {
+      "kept": 243,
+      "total": 284
+    },
+    "ask_relapse": {
+      "kept": 237,
+      "total": 290
     },
     "ask_step_4": {
-      "total": 300,
-      "kept": 246,
-      "dropped": 54,
-      "drop_rate": 0.18
-    },
-    "ask_step_5": {
-      "total": 273,
-      "kept": 227,
-      "dropped": 46,
-      "drop_rate": 0.1685
-    },
-    "ask_step_6_7": {
-      "total": 284,
-      "kept": 239,
-      "dropped": 45,
-      "drop_rate": 0.1585
-    },
-    "ask_step_8_9": {
-      "total": 275,
-      "kept": 199,
-      "dropped": 76,
-      "drop_rate": 0.2764
-    },
-    "ask_traditions": {
-      "total": 274,
-      "kept": 192,
-      "dropped": 82,
-      "drop_rate": 0.2993
+      "kept": 241,
+      "total": 295
     },
     "ask_work_finances": {
-      "total": 284,
-      "kept": 219,
-      "dropped": 65,
-      "drop_rate": 0.2289
+      "kept": 217,
+      "total": 282
     },
-    "refusal_out_of_domain": {
-      "total": 410,
-      "kept": 409,
-      "dropped": 1,
-      "drop_rate": 0.0024
+    "ask_step_5": {
+      "kept": 223,
+      "total": 269
+    },
+    "ask_higher_power": {
+      "kept": 238,
+      "total": 280
+    },
+    "ask_newcomer": {
+      "kept": 205,
+      "total": 271
+    },
+    "ask_step_8_9": {
+      "kept": 199,
+      "total": 276
+    },
+    "ask_step_1": {
+      "kept": 235,
+      "total": 284
+    },
+    "ask_big_book": {
+      "kept": 154,
+      "total": 282
+    },
+    "ask_step_6_7": {
+      "kept": 238,
+      "total": 282
+    },
+    "ask_fear": {
+      "kept": 235,
+      "total": 277
+    },
+    "ask_humility": {
+      "kept": 265,
+      "total": 289
+    },
+    "ask_slogan": {
+      "kept": 215,
+      "total": 272
+    },
+    "ask_step_10": {
+      "kept": 234,
+      "total": 276
+    },
+    "ask_traditions": {
+      "kept": 193,
+      "total": 276
+    },
+    "ask_meetings": {
+      "kept": 184,
+      "total": 288
     }
-  },
-  "by_reason": {
-    "grounded": 1192,
-    "hotline_discipline": 35,
-    "voice": 65,
-    "voice and hotline_discipline": 2,
-    "voice, register_fit, refusal_correctness": 7,
-    "grounded, register_fit": 119,
-    "voice, register_fit": 14,
-    "grounded, hotline_discipline": 9,
-    "grounded, voice": 23,
-    "register_fit": 58,
-    "grounded, hotline_discipline, register_fit": 3,
-    "voice (more than 2 literature titles) and grounded (invented content from 'The Virtue of Selfishness')": 1,
-    "voice, refusal_correctness": 3,
-    "voice and refusal_correctness": 2,
-    "hotline_discipline, register_fit": 1,
-    "grounded, voice, register_fit": 3,
-    "voice: more than 2 literature titles named in the answer": 3,
-    "voice, hotline_discipline, refusal_correctness": 1,
-    "voice and register_fit": 3,
-    "voice: more than 2 literature titles named in the answer (5 titles)": 1,
-    "voice, hotline_discipline, register_fit": 1,
-    "voice (more than 2 literature titles) and register_fit (preamble in factual register)": 1,
-    "refusal_correctness": 2,
-    "voice, hotline_discipline": 1,
-    "voice (citation marker) and refusal_correctness (hallucinated specific literature citation)": 1,
-    "voice — more than 2 literature titles named in the answer": 1,
-    "grounded, voice, hotline_discipline": 1,
-    "voice: more than 2 literature titles named in the answer (On Becoming a Person, The Body Keeps the Score, Step Working Guides).": 1
   }
 }

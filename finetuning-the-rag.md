@@ -317,18 +317,18 @@ are sequential.
 || A0 | done | dsv4 | scaffolding + ft_checks skeleton; verified by Fable 2026-07-07 (f6b413e) |
 || A1 | verify(fable) | dsv4 | FT-A1 targeted fix applied 2026-07-08: 8/9 crosswork deixis repaired via dsv4 (1 manually), 37/42 negatives regenerated as recovery-adjacent (5 sanity anchors kept). Extended ft_checks_a1.py enforces crosswork deixis + negative recovery-adjacency ≥75%. `python -m scripts.ft_checks a1` passes (0 deixis defects, 5 off-target neg = 88.1% on-target) |
 | A2 | verify(fable) | dsv4 | FT-A2 done 2026-07-08: scripts/ft_gen_gold.py + scripts/ft_checks_a2.py written; 256/256 gold rows generated; ft_checks a2 passes (1:1 coverage, all blocks existing, ≤130 words, titles present, negative refusals valid) |
-| A3 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-08 ~10:10 |
-| A4 | todo | | blocked by A3 |
+| A3 | done | dsv4 | verified 2026-07-08: ft_eval.py runner, smoke run green; full baseline = A4 |
+| A4 | in-progress(fable) | fable | baseline runs kicked 2026-07-08 ~11:20 (server + retriever-only, full 256) |
 | B1 | done | dsv4 | 61,448 pairs after doc-scoped gold re-exclude (251 removed 2026-07-08); full-corpus coverage |
-| B2 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-08 ~08:35 |
+| B2 | done | dsv4+fable | verified 2026-07-08: 61,445 triplets 1:1 with pairs, 4 hard negs each, adjacency+leak clean (Fable backfilled 5,448 after re-exclude shifted pairs) |
 | B3 | todo | | needs D1 window |
 | B4 | todo | | gate vs A4 |
 | B5 | todo | | after B4 pass |
 | C1 | done | dsv4 | verified by Fable 2026-07-07: 1080 seeds, user-voice register clean, crisis seeds hash-match fixed wording, 0 dupes |
-| C2 | done* | dsv4 | 8000 samples. *72 rows leak vs final gold — C2FIX lane purging+backfilling across sft/filtered/splits |
+| C2 | done | dsv4 | 8000 samples; C2FIX purge+backfill verified 2026-07-08 (0 leaks across sft/filtered/splits) |
 | C3 | done | dsv4 | verified by Fable 2026-07-08: 6,446/8,000 kept (19.4% drop, mostly grounding: invented quotes/pages); kept-sample spot-read 60/60 clean |
-| C4 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-08 ~09:45 |
-| C5 | done* | dsv4 | verified 2026-07-08: 6315/131 stratified split + DATASET.md. *refresh pending C2FIX leak purge |
+| C4 | verify(fable) | dsv4 | 1,504 DPO pairs (target 1,500) written to finetune/gen/dpo.jsonl; 5 flaw types distributed (bracket:296, fake_lived:301, hotline:299, ignores:297, rambles:311); schema matches ft_train_dpo.py header; 40-row judge audit (majority-3) clean + secondary length check for rambles; `python -m scripts.ft_checks c4` passes |
+| C5 | done | dsv4 | 6314/130 stratified split + DATASET.md (refreshed by C2FIX) |
 | D1 | approved | owner | 2026-07-08: owner approved BOTH GPUs for one training window (prod chat fails over to R9700/10.0.0.100 during it). Plan: GPU0=B3 retriever, GPU1=SFT→DPO in parallel, ~3h. Window opens after data lanes drain (A4 baseline must run BEFORE — needs dsv4 serving) |
 | D2 | done | dsv4 | verified by Fable 2026-07-07: Unsloth 2026.7.1 native on Blackwell (torch 2.10 cu128), gemma-4-e2b-it smoke pass, QLoRA fits easily; CIFS venv workaround documented |
 | D3 | done* | dsv4 | verified by Fable 2026-07-07: CPU-side validation full pass (r=32, packing 2.67x, stratified split). *GPU 20-step dry run pending D1 window; note: full-LM loss (no completion-only masking) — revisit at dry run |

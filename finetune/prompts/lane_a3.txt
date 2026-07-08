@@ -1,0 +1,38 @@
+Your task: FT-A3 (Track A — Judge + metrics runner) → scripts/ft_eval.py
+per the roadmap spec (### A3 in finetuning-the-rag.md).
+
+Inputs (FROZEN, read-only): finetune/eval/questions.jsonl (256),
+finetune/eval/gold.jsonl. Reference: tests/eval_rag.py for style, but this
+is a NEW standalone runner (RAGAS not required).
+
+scripts/ft_eval.py --system {server|retriever-only} [--limit N]
+[--base-url URL] [--name RUNNAME] → finetune/eval/runs/<name>.json:
+- retrieval.recall@4 and @8: gold (doc_id, block_id) in top-k retrieved.
+  ALL identity doc-scoped — bare block ids collide across docs.
+  For --system retriever-only: replicate the server's hybrid retrieval
+  directly (BM25 over finetune/cache/search.db; skip server specifics) OR
+  call the server's retrieval if an endpoint exists — document choice.
+- citation_accuracy: answer names ≥1 gold work's exact title (match
+  manifest titles case-insensitively; for negative kind this metric is
+  skipped).
+- faithfulness + answer_quality: dsv4-as-judge, temp 0, rubric prompts
+  embedded in the script (faithfulness: claims supported by retrieved
+  context; quality: helpfulness/voice/registers 1-5 scale vs
+  reference_answer).
+- refusal_correctness: negative-kind rows — answer declines/redirects and
+  invents no citations (dsv4 judge, temp 0).
+- --system server: POST {base-url}/api/chat (default http://localhost:5000)
+  with the question as the user message, non-streaming collect of the SSE
+  stream; capture cited sources if the response exposes them, else parse
+  titles from the answer.
+- Output JSON: per-question rows + aggregate means; nulls only where a
+  metric doesn't apply.
+- dsv4 judge calls MUST include "chat_template_kwargs": {"thinking": false},
+  temp 0, concurrency ≤8 (leave headroom — prod shares the endpoint).
+  Checkpointed/resumable per question id.
+
+Your Verify: python -m scripts.ft_eval --system retriever-only --limit 12
+completes, writes finetune/eval/runs/smoke-retriever.json with non-null
+aggregate metrics. Also write scripts/ft_checks_a3.py registering 'a3'
+(run file exists, schema, non-null aggregates).
+Then the HANDOFF line per swarm rules.
