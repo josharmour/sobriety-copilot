@@ -1,0 +1,29 @@
+Your task: FT-A2 (Track A — Gold citations + reference answers) →
+finetune/eval/gold.jsonl per the roadmap spec (### A2 in
+finetuning-the-rag.md).
+
+Input: finetune/eval/questions.jsonl (256 rows — FROZEN, do not modify).
+For each question: {id, gold_doc_ids[], gold_block_ids[], reference_answer}.
+- gold_doc_ids[i] pairs with gold_block_ids[i] (SAME LENGTH, aligned) — all
+  identity is (doc_id, block_id); bare block ids collide across docs.
+- For most kinds: gold = the question's source_doc_id(s)/source_block_ids.
+  For crosswork rows use both docs/blocks (source_doc_ids field).
+- reference_answer: written by dsv4 WITH the gold blocks in context,
+  ≤120 words, MUST name the work(s) by exact title in prose, no bracketed
+  citations, no fake lived experience.
+- kind=negative rows: gold_doc_ids=[] gold_block_ids=[] and the reference
+  answer is a short honest refusal that says the literature doesn't cover
+  this and redirects appropriately (for medical questions: talk to a
+  doctor; never invent citations).
+- dsv4 calls MUST include "chat_template_kwargs": {"thinking": false}
+  (server defaults to thinking ON — top-level reasoning_effort is ignored).
+  temp 0.7, concurrency ≤16, checkpointed resumable script
+  scripts/ft_gen_gold.py under nohup.
+
+Write scripts/ft_checks_a2.py registering 'a2': 1:1 id coverage vs
+questions.jsonl, aligned gold_doc_ids/gold_block_ids arrays, every
+(doc,block) exists in search.db, negative rows empty-gold + refusal-like
+answer, every non-negative reference_answer ≤130 words and contains at
+least one gold work title, print 5 sampled rows for Fable spot-read.
+Your Verify: python -m scripts.ft_checks a2.
+Then the HANDOFF line per swarm rules.

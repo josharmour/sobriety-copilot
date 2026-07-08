@@ -316,7 +316,7 @@ are sequential.
 |----|--------|-------|-------|
 || A0 | done | dsv4 | scaffolding + ft_checks skeleton; verified by Fable 2026-07-07 (f6b413e) |
 || A1 | verify(fable) | dsv4 | FT-A1 targeted fix applied 2026-07-08: 8/9 crosswork deixis repaired via dsv4 (1 manually), 37/42 negatives regenerated as recovery-adjacent (5 sanity anchors kept). Extended ft_checks_a1.py enforces crosswork deixis + negative recovery-adjacency ≥75%. `python -m scripts.ft_checks a1` passes (0 deixis defects, 5 off-target neg = 88.1% on-target) |
-| A2 | todo | | blocked by A1 |
+| A2 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-08 ~09:30 |
 | A3 | todo | | blocked by A2 |
 | A4 | todo | | blocked by A3 |
 | B1 | done* | dsv4 | verified by Fable 2026-07-08: 61,699 pairs / 56,401 distinct (doc,block), 78 docs, deixis screened (9.3% cut). *gold re-exclude pending A2 (--re-exclude mode ready) |
