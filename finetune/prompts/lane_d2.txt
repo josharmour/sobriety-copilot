@@ -1,0 +1,9 @@
+Your task: FT-D2 (Track D — Training environment) →
+finetune/infra/setup_env.sh building finetune/.venv per the roadmap spec.
+Constraints: NO training, NO GPU allocation, and do NOT download model weights
+larger than 10 GB — the smoke test should load tokenizer + config for the
+Gemma 4 E2B base (verify the exact HF repo id and document it) and print
+library versions plus your VRAM-fit estimate for QLoRA seq-len 4096.
+If Unsloth lacks working Blackwell (cu130) wheels, fall back to TRL+PEFT and
+document which path you took in the script header.
+Your Verify: bash finetune/infra/setup_env.sh --check (exit 0).

@@ -300,7 +300,7 @@ are sequential.
 | id | status | agent | notes |
 |----|--------|-------|-------|
 | A0 | done | dsv4 | scaffolding + ft_checks skeleton; verified by Fable 2026-07-07 (f6b413e) |
-| A1 | in-progress(fable-lane) | dsv4 | BOUNCED 2026-07-07: passage-deixis, quiz register, null doc_id, off-domain sampling — headless rework running |
+| A1 | in-progress(fable-lane) | dsv4 | BOUNCED x2 2026-07-07: rework only patched literal regex — 8 deixis variants remain, personal kind 0/48 first-person, 131/237 quiz register; rework2 lane running |
 | A2 | todo | | blocked by A1 |
 | A3 | todo | | blocked by A2 |
 | A4 | todo | | blocked by A3 |
@@ -315,8 +315,8 @@ are sequential.
 | C4 | todo | | blocked by C3 |
 | C5 | todo | | blocked by C3 |
 | D1 | todo | | owner approval required |
-| D2 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-07 ~21:00 |
-| D3 | todo | | blocked by D2 |
+| D2 | done | dsv4 | verified by Fable 2026-07-07: Unsloth 2026.7.1 native on Blackwell (torch 2.10 cu128), gemma-4-e2b-it smoke pass, QLoRA fits easily; CIFS venv workaround documented |
+| D3 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-07 ~22:25; dry-run verify deferred to D1 window (GPUs held by prod vLLM) |
 | D4 | todo | | blocked by D3 |
 | D5 | todo | | blocked by D3 |
 | E1 | todo | | C5 + D3 |

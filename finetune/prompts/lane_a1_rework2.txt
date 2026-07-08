@@ -1,0 +1,43 @@
+Your task: FT-A1 REWORK #2. finetune/eval/questions.jsonl (282 rows) failed
+Fable review a second time. The first rework only patched questions matching
+a literal phrase list; the register defects remain. This time REGENERATE the
+question text (dsv4, temp 0.7, checkpointed nohup script) — do not do
+regex-targeted patching.
+
+Requirements (all will be spot-read, and 1–3 must be ENFORCED in
+scripts/ft_checks_a1.py so the check FAILS if violated):
+
+1. NO SOURCE DEIXIS, broad rule: question must make sense to someone who has
+   never seen the source block. Enforce at minimum this regex (case-insens):
+   \b(the|this|that)\s+(passage|excerpt|text|exercise|chapter|section|story|
+   essay|selection|reading|source|document)\b | the author | the speaker |
+   the writer | according to the (excerpt|text|passage)
+
+2. PERSONAL KIND = FIRST PERSON. Every `personal` question must contain a
+   first-person pronoun (I, I'm, my, me, myself) and read like a struggling
+   user's message ("I keep resenting my boss even after step 4 — what am I
+   missing?"). Enforce: 48/48 first-person.
+
+3. USER REGISTER for doctrine/practical/phrase/crosswork: ask as a member or
+   student of the literature would ("What does the Big Book say about
+   resentment?", "How do I do a tenth step at night?"). Third-person
+   reading-comprehension phrasing ("What term describes...", "What behavior
+   does X compare to...") is a defect. Enforce a heuristic ceiling: at most
+   15% of non-negative questions may (a) start with What/Which/Who/When/Where
+   AND (b) contain no first- or second-person pronoun AND (c) not name a
+   recovery work title (Big Book, Twelve Steps and Twelve Traditions/12&12,
+   Daily Reflections, Living Sober, As Bill Sees It, AA/NA + title-cased
+   work names from the corpus manifest).
+
+4. RECOVERY ANGLE ALWAYS. If a source block is from related_nonfiction
+   (Ayn Rand, general religion, management, etc.), the question must be
+   framed from a recovery perspective or the block re-rolled. ≤15% of
+   questions from related_nonfiction docs.
+
+5. Keep schema and counts: ≥240 rows, ≥40 per kind; source_doc_id non-null
+   for all kinds EXCEPT negative (negative may be null); question must not
+   quote the block verbatim (>12-word overlap = defect).
+
+Deliverables: finetune/eval/questions.jsonl + scripts/ft_checks_a1.py only.
+Verify: python -m scripts.ft_checks a1 (with the new enforcement in place).
+Then the HANDOFF line per swarm rules.

@@ -22,8 +22,10 @@ repos/
 vllm/
 sobriety-copilot-recovered/
 finetune/.venv/
+finetune/cache/
 finetune/**/model/
 finetune/runs/
 finetune/**/*.jsonl
 !finetune/**/sample*.jsonl
 packs/library-v2*.scpack
+/unsloth-*.whl

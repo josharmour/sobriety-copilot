@@ -243,13 +243,44 @@ def check_a0(args: list[str]) -> int:
 def _load_task_modules() -> None:
     """Auto-import scripts/ft_checks_*.py so parallel workers register their
     checks in per-task modules instead of editing this shared file (swarm
-    mode: no two agents may write the same path)."""
+    mode: no two agents may write the same path).
+
+    After importing, sync any checks that ended up in a secondary
+    ``scripts.ft_checks`` module (which happens when this file is run
+    as ``__main__`` and task modules ``import scripts.ft_checks`` —
+    they get a separate module instance).
+    """
     import importlib
     for mod in sorted(Path(__file__).parent.glob("ft_checks_*.py")):
         try:
             importlib.import_module(f"scripts.{mod.stem}")
         except Exception as e:
             print(f"WARN: failed to load {mod.name}: {e}", file=sys.stderr)
+
+    # Sync: copy checks from scripts.ft_checks if it's a different module
+    # (the ``python -m scripts.ft_checks`` case described above).
+    _sync_imported_checks()
+
+
+def _sync_imported_checks() -> None:
+    """Copy any checks that were registered into a secondary
+    ``scripts.ft_checks`` module back into the current module's
+    ``_CHECKS`` dict.
+
+    This is a no-op when ``scripts.ft_checks`` is the same module
+    as the currently executing one.
+    """
+    import importlib
+    try:
+        ftc = importlib.import_module("scripts.ft_checks")
+    except ImportError:
+        return
+    # If ftc IS the current module, nothing to do
+    if ftc is sys.modules.get("__main__"):
+        return
+    for k, v in ftc._CHECKS.items():
+        if k not in _CHECKS:
+            _CHECKS[k] = v
 
 
 def main() -> int:

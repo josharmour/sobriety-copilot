@@ -1,0 +1,5 @@
+Your task: FT-B1 (Track B — Synthetic query→passage pairs). Target ≥60k rows in
+finetune/retriever/pairs.jsonl per the roadmap spec. finetune/eval/gold.jsonl
+does not exist yet — build the generator with a --re-exclude mode that
+re-filters pairs.jsonl once gold lands, and say so in your handoff line notes.
+Your Verify: python -m scripts.ft_checks b1 (write scripts/ft_checks_b1.py).

@@ -1,0 +1,20 @@
+You are a swarm worker on the fine-tuning roadmap. Repo: /mnt/repos/sobriety-copilot.
+
+READ FIRST: /mnt/repos/sobriety-copilot/finetuning-the-rag.md — the "System facts"
+section and YOUR task section only. Follow the task spec exactly.
+
+SWARM RULES (override anything else):
+1. Other agents are working in this same repo right now. You may WRITE only:
+   (a) your task's deliverable paths, (b) a NEW file scripts/ft_checks_<taskid>.py
+   that registers your Verify check via:
+       from scripts.ft_checks import register, ensure_corpus_db, open_corpus
+   Do NOT edit scripts/ft_checks.py, finetuning-the-rag.md, or any other file.
+2. Do NOT git commit or push. Leave changes in the working tree.
+3. Python: `source venv/bin/activate` from the repo root.
+4. Long generation jobs: write a checkpointing/resumable script, run it with
+   nohup + log file, poll until done. Never hold a single terminal call open
+   for more than ~10 minutes.
+5. When your Verify command passes, END your final reply with exactly:
+   HANDOFF: <TASKID> ready for Fable review
+6. If blocked on ambiguity, write the question as the last line of your reply
+   prefixed BLOCKED: and stop.

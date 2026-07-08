@@ -1,0 +1,24 @@
+Your task: FT-A1 REWORK. finetune/eval/questions.jsonl exists (282 rows) but
+FAILED Fable review. Regenerate/repair it to spec with these fixes:
+
+1. SELF-CONTAINED questions only. Forbidden anywhere in question text
+   (case-insensitive): "this passage", "the passage", "this excerpt",
+   "this text", "the author", "this source", "these sources", "the speaker".
+   A question must make sense to someone who has never seen the source block.
+2. USER REGISTER. Questions are what a recovery-app user would type:
+   - personal: first-person struggling messages ("I keep…", "my wife…").
+   - practical/doctrine/phrase: how a member or student of the literature
+     would ask ("What does the Big Book say about…", "How do I…").
+   Reading-comprehension phrasing is a defect.
+3. SCHEMA: source_doc_id must never be null. For crosswork use the PRIMARY
+   doc in source_doc_id and put both blocks' ids in source_block_ids
+   (they may span docs — then also add optional source_doc_ids list).
+4. SAMPLING: weight block sampling toward recovery-core material: prefer
+   docs whose manifest category is conference_approved, other_anonymous, or
+   books_about_aa (see finetune/cache — join via manifest-index.json inside
+   packs/library-v1.scpack, or extract it next to search.db). At most 15% of
+   questions from related_nonfiction docs, and those must still be asked
+   from a recovery angle.
+5. Update scripts/ft_checks_a1.py to ENFORCE 1 and 3 (regex screen + null
+   check) so this class of defect can't pass again. Keep kind counts ≥40.
+Verify: python -m scripts.ft_checks a1. Then HANDOFF line per swarm rules.

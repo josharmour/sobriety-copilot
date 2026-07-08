@@ -1,0 +1,26 @@
+Your task: FT-D3 (Track D — SFT config) → finetune/infra/sft_config.yaml +
+scripts/ft_train_sft.py per the roadmap spec (### D3 in finetuning-the-rag.md).
+
+Environment: finetune/.venv from D2 (Unsloth 2026.7.1, torch 2.10 cu128,
+Blackwell-native — see finetune/infra/setup_env.sh header). Activate it, not
+the repo venv, for training-stack work.
+
+Requirements:
+- QLoRA on google/gemma-4-e2b-it: r in 16..64 (pick + document why),
+  seq len 4096, packing on, cosine LR schedule, val split + val loss logged,
+  checkpoint save/resume. Parameterized by --dataset path; supports
+  --dry-run N (default 20 steps, 200 samples).
+- Dataset schema: {messages:[system,user,assistant], meta} JSONL. C5 splits
+  don't exist yet — finetune/gen/sft.jsonl is being generated RIGHT NOW by
+  another agent (do not modify it); read at most 10 rows for schema, or
+  fabricate 200 schema-identical dummy samples for CPU-side validation.
+- IMPORTANT: both GPUs currently serve prod vLLM — do NOT allocate GPU
+  memory or download model weights. The 20-step GPU dry run is DEFERRED to a
+  D1 window (owner approval pending). Instead, validate everything possible
+  CPU-side: config parses, dataset loader + packing works on dummy samples,
+  tokenizer loads, argparse paths, checkpoint dir logic. Provide
+  --dry-run so the D1-window run needs zero edits.
+- Write scripts/ft_checks_d3.py registering a 'd3' check that does the
+  CPU-side validation (no GPU, no weight downloads, exits 0).
+Your Verify: python -m scripts.ft_checks d3.
+Then the HANDOFF line per swarm rules, noting the deferred GPU dry run.
