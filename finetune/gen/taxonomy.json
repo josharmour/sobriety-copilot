@@ -1,0 +1,2222 @@
+[
+  {
+    "intent_id": "crisis_imminent_relapse",
+    "label": "Imminent relapse / about to drink or use",
+    "description": "User is actively craving, about to drink/use, or in immediate danger of relapse. Response must feature AA hotline and meeting finder.",
+    "crisis_adjacent": true,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm about to drink. I need help right now.",
+          "I have a bottle in my hand. Please help me.",
+          "I'm driving to the liquor store. Stop me."
+        ],
+        "factual": [
+          "I'm about to relapse. What do I do immediately?",
+          "How do I stop myself from drinking right now?",
+          "I need the AA hotline number and a local meeting."
+        ],
+        "reflective": [
+          "I want to drink so bad. Talk me down.",
+          "What am I supposed to do when the urge is this strong?",
+          "I'm scared I'm going to pick up. What would my sponsor say?"
+        ],
+        "brief": [
+          "About to drink. Number for AA hotline?",
+          "I'm seconds from picking up. Help.",
+          "Can't stop the craving. Need a meeting now."
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been white-knuckling all day and I don't think I can make it through tonight without drinking.",
+          "Everything in me is screaming to use. What do I do when the obsession is this loud?",
+          "I'm alone and the cravings are overwhelming. I need someone to tell me what to do."
+        ],
+        "factual": [
+          "What does the program say to do when you're about to pick up despite having worked the steps?",
+          "I have a history of relapse at this stage. What are the concrete actions to prevent drinking tonight?",
+          "When cravings hit this hard, what is the specific protocol — hotline, meeting, call sponsor, in that order?"
+        ],
+        "reflective": [
+          "What's underneath this urge to drink right now? I can't think straight.",
+          "I recognize I'm in the mental blank spot. Where do I go from here before I act?",
+          "You always said to call before, not after. I'm calling. Now what?"
+        ],
+        "brief": [
+          "Cravings unbearable. What's the fastest way to get to a meeting tonight?",
+          "About to relapse. Sponsor isn't picking up. Next step?",
+          "Obsession came back out of nowhere. Emergency moves — go."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I have years sober but today the obsession returned with a force I haven't felt since my first year. Nothing feels familiar. What do I reach for when the steps don't seem to be working?",
+          "I'm in a relapse spiral — I've already called three people, been to a meeting, prayed, and I still want to drink. What do you do when all the tools bounce off?",
+          "I'm a sponsor myself and I'm about to pick up. I feel like a fraud. Every word of the book sounds hollow right now. Help me find the thread I'm missing."
+        ],
+        "factual": [
+          "After prolonged sobriety the obsession has suddenly returned with physiological craving symptoms. The standard steps aren't interrupting it. What does the literature say about this specific relapse phenomenon?",
+          "I've done Step 4 inventories on this resentment three times and it still drives me toward drinking. Is there another approach in the literature for intractable resentment that triggers relapse?",
+          "When someone with significant program time presents with imminent relapse risk but has no new resentment or fear — the 'unaccountable' craving — what has the fellowship documented as effective intervention?"
+        ],
+        "reflective": [
+          "I'm a longtimer about to drink. I know every slogan and every prayer. I've sponsored dozens. None of it is reaching me. What question haven't I asked myself?",
+          "You've seen this before with oldtimers who slip — what was the thing that finally cracked their isolation and got them to a meeting before they drank? Ask me that.",
+          "I don't want to hear the literature right now. I know it backwards. What would you ask me to get me past my own head?"
+        ],
+        "brief": [
+          "Longtime sober, obsession back with a vengeance, all tools failing, need emergency human contact. Hotline number and 24h meeting location?",
+          "Multiple years sober, sudden unprovoked craving, standard toolkit ineffective. Medical emergency or spiritual emergency — what's the next right action?",
+          "Veteran, imminent relapse, no resentment, no obvious cause. What hasn't been tried?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "crisis_harm_urges",
+    "label": "Self-harm or suicidal urges",
+    "description": "User mentions harming themselves, suicidal thoughts, or wanting to end their life. Response must prominently feature AA hotline and 911 if immediate danger.",
+    "crisis_adjacent": true,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I want to hurt myself. I don't want to live anymore.",
+          "I'm thinking about suicide. Please help me.",
+          "I don't feel safe with myself right now."
+        ],
+        "factual": [
+          "I'm having suicidal thoughts. What's the AA hotline and should I call 911?",
+          "I need the AA 24-Hour Helpline number immediately.",
+          "How do I find an AA meeting right now if I'm thinking about self-harm?"
+        ],
+        "reflective": [
+          "I can't stop thinking about ending it. What do I say to my sponsor?",
+          "I feel like a burden and everyone would be better off. What would you ask me right now?",
+          "The shame is too much. Where do I even start right now?"
+        ],
+        "brief": [
+          "Suicidal. Need AA hotline.",
+          "Want to self-harm. Meeting location near me?",
+          "Crisis. Hotline number and 911 guidance please."
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "The thought of not being here sounds like relief. I'm scared of what I might do if I'm alone tonight.",
+          "I relapsed and the shame is so unbearable I don't want to wake up tomorrow. Tell me what to do right now.",
+          "I've been clean for a while but the depression is crushing and I'm starting to think about hurting myself again."
+        ],
+        "factual": [
+          "I am experiencing suicidal ideation with a plan. What is the immediate protocol — 911, AA hotline, meeting, in what order?",
+          "What does the AA program say about suicidal thoughts as part of the spiritual malady, and what concrete steps should I take right now for safety?",
+          "I have a history of suicide attempts and I feel it building again. What are the emergency contacts and safety measures specific to AA members?"
+        ],
+        "reflective": [
+          "I can't see a way out and the literature's 'hope' sounds hollow. What would you ask me that I haven't let myself consider?",
+          "You say 'don't leave before the miracle happens' — I've been waiting years. What keeps someone here when that promise feels broken?",
+          "I don't trust myself tonight. If I were your sponsee, what would you make me promise you?"
+        ],
+        "brief": [
+          "Suicidal ideation + plan. 911? Or AA hotline first?",
+          "Self-harm urges escalating. Need immediate AA support contact.",
+          "Don't trust myself tonight. Hotline number and what to say when I call."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I'm a recovered alcoholic with decades in the program, and I'm planning my suicide. I know every prayer, every step, every slogan — none of it is touching the despair. I'm not in a craving, I'm not resentful. I'm just done. What do you say to someone who has exhausted the program's answers about the will to live?",
+          "The program says 'suicide is a mortal offense against God' in some of the older literature, and I was raised Catholic. That shame is keeping me from calling the hotline. Can you sit with me in that contradiction and help me pick up the phone anyway?",
+          "I sponsor people and I'm actively suicidal. I feel like a complete fraud and I can't ask any of them for help. My HP feels silent. Walk me through the very smallest next action someone in this position can take."
+        ],
+        "factual": [
+          "What does the AA program specifically say about suicide as distinct from alcoholism — is it addressed as a separate emergency that overrides step-work, or is it treated as part of the untreated alcoholism?",
+          "When a long-term member with strong program grounding presents with active suicidal ideation and reports that step-work, prayer, and service are not alleviating the urge — what clinical and fellowship resources should be activated, and in what order?",
+          "The literature is largely silent on suicide beyond 'this too shall pass.' What does the Fellowship's accumulated experience show about intervention efficacy for AA members in acute suicidal crisis who reject clinical help?"
+        ],
+        "reflective": [
+          "I've made a decision and I'm at peace with it. You have one question that might change my mind. What is it?",
+          "I'm not asking for advice. I'm asking you to be with me in this last conversation before I go. Can you do that without trying to save me?",
+          "What if the steps worked for my drinking but not for my depression? I never had a spiritual awakening — I just stopped drinking. Now I feel cheated. What's the question I should be asking instead of making that accusation?"
+        ],
+        "brief": [
+          "Decades sober, suicidal, program tools exhausted. Need AA hotline + crisis intervention please.",
+          "Longtimer, active plan, no hope. The program isn't reaching me. What emergency resource does AA have for this exact scenario?",
+          "Suicidal. Oldtimer. No craving, no resentment, just done. Hotline and meeting for someone who feels beyond help."
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "crisis_overdose_concern",
+    "label": "Overdose concern",
+    "description": "User or someone they know may have overdosed or is at imminent risk of overdose. Response must direct to emergency services + AA hotline.",
+    "crisis_adjacent": true,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I think I took too much. I'm scared. Please help.",
+          "My friend overdosed. What do I do right now?",
+          "I can't wake someone up. Is this an overdose?"
+        ],
+        "factual": [
+          "Someone is unresponsive and I suspect overdose. Do I call 911 immediately?",
+          "What are the signs of overdose and what do I do while waiting for EMS?",
+          "I need the poison control number and overdose first aid steps."
+        ],
+        "reflective": [
+          "I'm panicking. My friend is turning blue. Tell me exactly what to do.",
+          "I'm scared to call 911 because of the police. What do people in recovery do?",
+          "Is this a medical emergency or can AA handle it? I don't know what to do."
+        ],
+        "brief": [
+          "Friend unresponsive. Overdose? Call 911?",
+          "Took too much. Am I overdosing?",
+          "Overdose symptoms + emergency steps please."
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "My roommate is barely breathing and I think it's an overdose but I'm terrified of getting them in trouble. I don't know what to do.",
+          "I found my son unresponsive with a needle nearby. I'm in the program. Please walk me through what I need to do right now.",
+          "I'm clean six months and I just found my old using partner overdosed in my bathroom. I don't want to call 911 and bring police here. What are my options?"
+        ],
+        "factual": [
+          "What is the specific AA-recommended protocol when a member encounters an overdose — call 911 first or AA hotline first? Are there state-specific Good Samaritan protections for AA members?",
+          "What are the medical signs distinguishing opioid vs alcohol vs stimulant overdose, and what immediate actions differ by substance before EMS arrives?",
+          "What naloxone access programs exist for AA members and where can I get it tonight if I suspect fentanyl in our area?"
+        ],
+        "reflective": [
+          "I promised my sponsor I'd stay clean and now someone just overdosed in my home. What do I tell them? What do I do that honors my recovery and saves a life?",
+          "You always said the program isn't about being perfect but about being helpful. Right now I don't know what helpful looks like. Talk me through the fear.",
+          "I called 911 before and the person was arrested. Now I'm frozen. How do I make the right call this time?"
+        ],
+        "brief": [
+          "Found unresponsive person, suspected OD. 911 first or AA hotline? Good Samaritan law concern.",
+          "Overdose — breathing but unconscious. First aid steps while waiting for ambulance?",
+          "Someone overdosing in my recovery home. Protocol please — EMS, naloxone, sponsor notification order."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I walked into my sponsee's apartment and found them unresponsive with a needle still in their arm. I've been clean fifteen years and I have never handled an overdose. I'm shaking. Please tell me each step, one at a time, as if I've never done this before.",
+          "My child is in active addiction and I just got a call that they overdosed. I'm 2000 miles away. The program says to be of maximum service. What does service look like from a distance when you can't touch them?",
+          "I relapsed after being a first responder who has Narcanned dozens of people and now the person who just OD'd is me via self-hatred. The shame is making me want to not call for help. Stay with me while I make the call."
+        ],
+        "factual": [
+          "In a multi-substance overdose where fentanyl is suspected but not confirmed, does the AA literature or conference-approved guidance address whether naloxone administration should precede or follow the contact of emergency services when the person is breathing but unresponsive?",
+          "What is the protocol when a member in a recovery home witnessed an overdose but the home's policy explicitly forbids calling 911 without house manager approval — what takes ethical precedence, and how has the Fellowship ruled on this conflict?",
+          "For an AA member who has administered naloxone and called 911, what does the program suggest for the spiritual aftermath — the 'amends' to the person who overdosed, the inventory around any enabling behavior, and the Twelfth Step follow-up post-EMS transport?"
+        ],
+        "reflective": [
+          "I Narcanned someone tonight. They're alive. And I can't stop shaking because I saw myself in them. I haven't felt my own powerlessness this viscerally since my first meeting. What question do I need to sit with before I go to bed?",
+          "The paramedics took my sponsee away and I can't reach their family because we promised anonymity. How do I carry this — what does Step Twelve actually ask of me in this moment when the person might not make it?",
+          "I'm the one who gave them the money that bought what they overdosed on. Where does the program put the responsibility line — and what's the question I'm avoiding by asking about responsibility?"
+        ],
+        "brief": [
+          "Sponsee OD'd, Narcanned, EMS en route. Fifteen years clean, first time handling this. What's my next right action after they're in the ambulance?",
+          "Witnessed OD, administered Narcan, breathing restored but unconscious. Post-EMS protocol for the AA witness — amends? inventory? what order?",
+          "Relapsed, self-OD via self-hatred, made myself call 911. What does a Fifth Step look like for the feeling of being both victim and perpetrator?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_step_1",
+    "label": "Step 1 — Powerlessness and unmanageability",
+    "description": "What Step 1 means: we admitted we were powerless over alcohol — that our lives had become unmanageable.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm scared to admit I'm powerless. Can you tell me what that really means in a gentle way?",
+          "I feel like I'm not that bad, but maybe I am. What does powerlessness look like for someone like me?",
+          "I don't understand why my life feels out of control. Can you explain Step 1 in a kind way?"
+        ],
+        "factual": [
+          "What does the Big Book say about powerlessness?",
+          "How is unmanageability defined in Step 1?",
+          "What is the difference between being powerless and just having a bad day?"
+        ],
+        "reflective": [
+          "Have you ever tried to stop drinking and couldn't? What happened?",
+          "What areas of your life feel unmanageable right now?",
+          "If you were truly powerless, what would that mean for your choices?"
+        ],
+        "brief": [
+          "Step 1 says we admitted we were powerless. That means we couldn't control our drinking.",
+          "Unmanageability means our lives were falling apart because of alcohol.",
+          "Powerlessness and unmanageability go together in Step 1."
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I can see I'm powerless, but I don't get how my life is unmanageable. That part hurts. Can you help me see it gently?",
+          "I feel like I'm doing okay in some areas, but drinking still messes things up. Is that unmanageability?",
+          "I'm confused about the connection between powerlessness and unmanageability. Can you explain it in a caring way?"
+        ],
+        "factual": [
+          "How does the literature connect powerlessness to unmanageability?",
+          "What does the Big Book say about unmanageability beyond just drinking?",
+          "Is unmanageability only about consequences, or is it about internal chaos too?"
+        ],
+        "reflective": [
+          "You say you're powerless but not unmanageable. What does control look like in your life right now?",
+          "If you truly admitted powerlessness, how would that change how you see your daily struggles?",
+          "What would it mean to accept that your life is unmanageable, even in areas that seem fine?"
+        ],
+        "brief": [
+          "Step 1 has two parts: powerlessness and unmanageability. Both are needed for a solid foundation.",
+          "Powerlessness is about alcohol; unmanageability is about the rest of your life.",
+          "Without admitting unmanageability, Step 1 is incomplete."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been sober for a while, but I still feel like I'm not in control of my emotions. Does Step 1 apply to that? It feels confusing and frustrating.",
+          "I can say the words, but deep down I still think I can manage things if I try harder. How do I move from admitting to accepting powerlessness without feeling hopeless?",
+          "I've relapsed many times, and each time I thought I had it under control. How can I truly internalize Step 1 when my mind keeps telling me I'm different?"
+        ],
+        "factual": [
+          "What does the Big Book say about the difference between intellectual admission and heartfelt acceptance of powerlessness?",
+          "How does the literature address the paradox of being powerless yet responsible for recovery?",
+          "What is the theoretical relationship between powerlessness and unmanageability as described in the 12 steps?"
+        ],
+        "reflective": [
+          "You mention feeling in control of emotions but still relapsing. What would it mean to see that as a form of unmanageability?",
+          "If you truly accepted powerlessness, what would you have to give up? What would you gain?",
+          "You say your mind tells you you're different. Can you think of a time when that belief led you back to drinking? What does that tell you?"
+        ],
+        "brief": [
+          "Step 1 is not just an admission; it's a surrender. Without that, the rest of the steps lose their power.",
+          "Powerlessness and unmanageability are not just past facts—they are present realities that must be accepted daily.",
+          "The hardest part of Step 1 is letting go of the illusion of control, even after sobriety."
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_step_2",
+    "label": "Step 2 — Hope and a higher power",
+    "description": "Came to believe that a Power greater than ourselves could restore us to sanity. Questions about HP, hope, sanity.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm struggling to believe in a higher power. Can you help me feel hopeful about this?",
+          "I feel lost trying to find hope. Is it okay to just start with the idea that something out there cares?",
+          "I'm scared I won't find a power greater than myself. Can you reassure me that this step is doable?"
+        ],
+        "factual": [
+          "What does Step 2 mean by 'a Power greater than ourselves'?",
+          "How does belief in a higher power restore sanity?",
+          "What is the definition of hope in Step 2?"
+        ],
+        "reflective": [
+          "What makes you doubt that a higher power could help you?",
+          "Have you considered that hope doesn't require certainty?",
+          "If you could imagine a power greater than yourself, what would it look like?"
+        ],
+        "brief": [
+          "Step 2 says a higher power can restore sanity. I'm not sure I believe that yet.",
+          "I need to find hope, but I don't know where to start.",
+          "Sanity seems far away. Can a higher power really help?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I see how Step 1 admitted powerlessness, but Step 2 asks me to believe in a higher power. I'm stuck between these two ideas. Can you help me connect them?",
+          "I want to have hope, but my past experiences make it hard. How do I move forward?",
+          "I understand sanity in theory, but in practice I feel crazy. How does a higher power bring sanity?"
+        ],
+        "factual": [
+          "How does the concept of a higher power in Step 2 relate to the powerlessness admitted in Step 1?",
+          "What is the role of hope in restoring sanity according to AA literature?",
+          "Can you explain the process of 'coming to believe' as a gradual change?"
+        ],
+        "reflective": [
+          "What would it mean for you to have your sanity restored? How might a higher power be involved?",
+          "You mentioned hope. What is the difference between hoping for sobriety and believing in a power that can restore sanity?",
+          "If you look at your life, where have you seen glimmers of a power greater than yourself already at work?"
+        ],
+        "brief": [
+          "Step 1 says I'm powerless. Step 2 says a higher power can restore sanity. How do I reconcile these?",
+          "I'm trying to have hope, but my doubts are strong. Is that normal?",
+          "Sanity feels like an abstract goal. I need a practical understanding of how a higher power helps."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been an atheist my whole life, and the idea of a higher power feels like a betrayal of my intellect. But I'm desperate for hope and sanity. How can I approach Step 2 without feeling like I'm lying to myself?",
+          "I've tried to believe before and it didn't work. Now I'm scared to hope because disappointment hurts so much. How do I open myself to belief again when I've been burned?",
+          "Step 2 talks about sanity, but what about those of us whose sanity feels permanently damaged? Is there a different kind of restoration for deep trauma?"
+        ],
+        "factual": [
+          "According to the AA Big Book, what is the precise relationship between hope, faith, and sanity in Step 2? Provide specific references.",
+          "How do the concepts of 'came to believe' and 'restore us to sanity' account for individuals with co-occurring mental health conditions?",
+          "In the literature, is the 'Power greater than ourselves' defined exclusively as God, or are there alternative interpretations that are consistent with the program?"
+        ],
+        "reflective": [
+          "You mentioned feeling like a betrayal of intellect. What if the higher power doesn't have to be a being, but a principle like love or the group? How does that sit with you?",
+          "If hope has led to disappointment before, what might be different this time if you allow yourself to believe gradually?",
+          "Sanity restoration is described as a process. What small signs of sanity have you already seen in your recovery, even if you don't attribute them to a higher power yet?"
+        ],
+        "brief": [
+          "I'm an atheist. Step 2 seems to require belief in God. How can I work this step honestly without compromising my worldview?",
+          "I've been in and out of recovery. I've tried to believe and it didn't stick. Now I'm cynical. How do I find genuine hope?",
+          "Sanity is a loaded term for me with my mental health history. How does AA define sanity in a way that's helpful for someone like me?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_step_3",
+    "label": "Step 3 — Decision to turn it over",
+    "description": "Made a decision to turn our will and our lives over to the care of God as we understood Him. Surrender, decision, Third Step Prayer.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm feeling a bit scared about Step 3, can you explain what it means to turn it over in a gentle way?",
+          "I know I need to surrender, but it feels hard. Can you help me understand what Step 3 is really asking?",
+          "I'm trying to trust this process, but I'm not sure what 'turning my will and life over' actually looks like. Any kind guidance?"
+        ],
+        "factual": [
+          "What is Step 3 according to AA literature?",
+          "What does it mean to turn our will and our lives over to the care of God?",
+          "Can you state the Third Step Prayer verbatim?"
+        ],
+        "reflective": [
+          "What would it mean for me to truly make a decision to surrender?",
+          "How do I know if I've really turned my will over?",
+          "Why is the decision in Step 3 so important for recovery?"
+        ],
+        "brief": [
+          "What's Step 3?",
+          "How do I surrender?",
+          "Third Step Prayer?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been working on Step 2 and I think I'm ready for Step 3, but I'm scared to let go. Can you help me understand how to make that decision without feeling overwhelmed?",
+          "I really want to surrender but I keep holding back. How do I trust the process of Step 3?",
+          "I know I need to turn it over, but I feel like I'm failing. Can you explain Step 3 in a way that doesn't make me feel guilty?"
+        ],
+        "factual": [
+          "What is the relationship between Step 2 and Step 3 in AA?",
+          "How does the Third Step Prayer help in making the decision to surrender?",
+          "What does the literature say about the steps to take after deciding to turn it over?"
+        ],
+        "reflective": [
+          "I said the Third Step Prayer, but I still feel anxious. What does that mean about my surrender?",
+          "How do I know if I've truly made the decision to turn my will over?",
+          "What is the difference between intellectual surrender and actual surrender in Step 3?"
+        ],
+        "brief": [
+          "How does Step 3 follow Step 2?",
+          "How do I make the decision to turn it over?",
+          "Why is surrender necessary in Step 3?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been saying the Third Step Prayer every day for weeks, but I still feel like I'm in control. I'm frustrated and ashamed. Can you help me understand what true surrender looks like and how to achieve it?",
+          "I know Step 3 is about making a decision, but I feel like my mind is split - part of me wants to surrender, part is terrified. How do I reconcile that to make a real decision?",
+          "I've heard that surrender is a process, but I feel like I'm stuck in Step 3. I don't know if I'm doing it wrong or if there's something else I need to do. Any compassionate advice?"
+        ],
+        "factual": [
+          "What does the AA literature say about the difference between making a decision to surrender and actually surrendering?",
+          "How does Step 3 apply to someone who has a different understanding of God or Higher Power?",
+          "What are the specific actions or steps recommended in the 12 and 12 for working Step 3 effectively?"
+        ],
+        "reflective": [
+          "If I have made the decision to turn it over, but my actions still show I'm holding on, have I truly done Step 3?",
+          "What does it mean to turn my life over - not just my will - and how does that differ?",
+          "How can I use the Third Step Prayer to deepen my surrender when I feel resistant?"
+        ],
+        "brief": [
+          "How do I truly surrender when I'm still afraid and holding back?",
+          "What is the difference between deciding to surrender and actually surrendering in Step 3?",
+          "How does Step 3 work for agnostics or atheists?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_step_4",
+    "label": "Step 4 — Searching and fearless moral inventory",
+    "description": "How to take inventory: resentments, fears, sex conduct, harms done. Writing it out, being thorough.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm feeling a bit scared to start my fourth step. Could you help me understand what a 'searching and fearless moral inventory' really means in a gentle way?",
+          "It's hard to be honest with myself sometimes. How do I begin writing my inventory without judging myself too harshly?",
+          "I know I need to do Step 4, but I'm not sure what 'fearless' looks like. Can you explain it in a kind, simple way?"
+        ],
+        "factual": [
+          "What is a moral inventory according to AA literature? List the components.",
+          "How do I start Step 4? Give me the exact instructions from the Big Book.",
+          "Define 'searching and fearless moral inventory' as used in the 12 steps."
+        ],
+        "reflective": [
+          "What does 'fearless' mean to you in the context of your inventory? Have you ever done a thorough self-examination before?",
+          "If you were to write down your resentments right now, what would be the first one that comes to mind?",
+          "Why do you think the step says 'moral inventory'? What does 'moral' mean for you personally?"
+        ],
+        "brief": [
+          "Step 4 means listing your resentments, fears, and harms. Write them down honestly. That's the core.",
+          "A moral inventory is a written list of your character defects. Start with resentments, then fears, then sex conduct.",
+          "To be 'fearless' means not holding back. Write everything, even if it's embarrassing. That's Step 4."
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've started listing my resentments, but I get stuck because I feel like I'm blaming others. How can I write about them in a way that focuses on my part? I want to be thorough but not beat myself up.",
+          "It's overwhelming to think about all my fears. Some are deep and old. How do I include them in my inventory without getting lost in anxiety?",
+          "I'm working on my sex conduct inventory and I feel a lot of shame. How do I stay honest and thorough while being kind to myself?"
+        ],
+        "factual": [
+          "How does the Big Book suggest handling resentments in Step 4? Explain the process of writing them out and looking for my part.",
+          "What is the relationship between fears and resentments in the inventory? Provide the steps to connect them.",
+          "For the sex conduct inventory, what specific areas does the literature recommend covering? Give the list from the BB."
+        ],
+        "reflective": [
+          "You mentioned resentments. When you wrote yours, did you notice any common themes? What part did you play in those situations?",
+          "Fear is listed as a separate category. How do your fears connect to your resentments? Can you see a pattern?",
+          "Regarding sex conduct, what does 'unselfish' mean to you? How might you write about times you were selfish without shaming yourself?"
+        ],
+        "brief": [
+          "Resentments are the number one offender. Write each one, my part, and how it affected me. Move to fears after.",
+          "Fear is the opposite of faith. In your inventory, list fears and how they drove your actions. Then see the connection.",
+          "For sex conduct, list everyone involved, my behavior, and whether it was selfish or not. Be thorough but not judgmental."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I have a long list of resentments, some from childhood, and I'm not sure how to prioritize them. Also, I feel like some fears are so vague I can't write them down. How do I approach this inventory when it feels so big and messy? I want to do it right but I'm scared.",
+          "The concept of 'fearless' is hard for me because I've been hiding things for years. I know I need to write about my sex conduct, but there are parts I've never told anyone. How can I be fearless when I'm terrified? What does thorough mean in that context?",
+          "I've done Step 4 before but it was superficial. Now I want to go deeper, especially with harms done to others. I have trouble seeing my part in some situations. How do I use the inventory to uncover patterns without getting stuck in guilt? And how does this connect to Step 5?"
+        ],
+        "factual": [
+          "According to the Big Book and 12x12, what is the exact method for taking a moral inventory that includes resentments, fears, sex conduct, and harms? Break down each category with specific instructions and examples from the literature.",
+          "How does the inventory process address the interplay between resentments, fears, and selfishness? Provide the logical framework from AA literature for connecting these elements in a written inventory.",
+          "In the context of Step 4, what does 'thorough' mean operationally? Define criteria for completeness across all categories, including the list of persons and institutions, and explain how to handle vague or multiple instances."
+        ],
+        "reflective": [
+          "You've mentioned resentments from childhood. What would it look like to write about those in a way that focuses on your feelings and your part, not just the other person's actions? How might your fears about being vulnerable show up in that writing?",
+          "The idea of being 'fearless' seems to conflict with your fear of exposure. What does 'fearless' mean for you in this moment? Could you start with one small thing you've never written and see how it feels?",
+          "When you think about the harms you've done, what patterns do you see? How do those patterns relate to the resentments and fears you've listed? And how might you use this inventory to prepare for making amends?"
+        ],
+        "brief": [
+          "For a thorough inventory, list all resentments with my part, all fears with their causes, and all sex conduct with selfishness. Connect them to find character defects. That's the framework.",
+          "The inventory must be written. Cover resentments (people, institutions, principles), fears (self-centered), sex conduct (selfish vs. unselfish), and harms. Be specific and complete.",
+          "To be fearless, write everything without editing. Thorough means including all instances, not just major ones. Use the columns: who, what, my part, effect on me, effect on others."
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_step_5",
+    "label": "Step 5 — Admitted to God, ourselves, and another human being",
+    "description": "The Fifth Step: sharing your inventory with your sponsor. The importance of honesty and the freedom that follows.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm nervous about my Fifth Step. Can you tell me what to expect when I share my inventory with my sponsor?",
+          "I've heard the Fifth Step brings freedom, but I'm scared. What exactly happens when I admit my wrongs to another person?",
+          "I'm feeling a lot of shame about my past. How does the Fifth Step help me let go of that shame?"
+        ],
+        "factual": [
+          "What is the purpose of the Fifth Step according to the AA literature?",
+          "How does the Fifth Step lead to honesty and freedom?",
+          "What does the Big Book say about admitting our wrongs to God, ourselves, and another person?"
+        ],
+        "reflective": [
+          "What are you most afraid to share in your Fifth Step?",
+          "How do you think keeping secrets has affected your recovery so far?",
+          "What would it mean for you to be completely honest with your sponsor?"
+        ],
+        "brief": [
+          "The Fifth Step is about sharing your inventory with God, yourself, and another person. It brings freedom through honesty.",
+          "Admitting your wrongs to your sponsor removes the burden of secrecy. That's how Step 5 works.",
+          "Step 5: share your inventory, feel the freedom. That's the key point."
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've done my Fourth Step but I'm terrified to read it out loud. I'm afraid my sponsor will judge me. Can you help me find the courage to do the Fifth Step?",
+          "I know I need to be honest in my Fifth Step, but I'm holding back because of shame. How can I overcome that shame and share everything?",
+          "I feel like I'm not ready for Step 5 because I still have resentments. Is it okay to wait, or should I just do it anyway?"
+        ],
+        "factual": [
+          "What does the literature say about the connection between the Fourth and Fifth Steps? How does sharing the inventory complete the process?",
+          "The Fifth Step requires admitting to God, ourselves, and another human being. Why is it important to have all three elements?",
+          "How does the Fifth Step specifically lead to the freedom from the burden of the past? What is the mechanism?"
+        ],
+        "reflective": [
+          "What is holding you back from being completely honest in your Fifth Step? Is it fear of judgment, or something else?",
+          "How do you think your sponsor will react if you share everything, even the things you're most ashamed of?",
+          "What would it mean for your recovery if you chose to hold back something in your Fifth Step?"
+        ],
+        "brief": [
+          "The Fifth Step is where you finally let go of your secrets. Honesty is the only way to get the freedom it promises.",
+          "If you're scared to share everything, remember that your sponsor has heard it all before. The Fifth Step works when you're completely honest.",
+          "Don't hold back in your Fifth Step. The shame you feel now is nothing compared to the freedom you'll gain."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I completed my Fourth Step but I'm struggling with the concept of admitting to God because I'm not sure what God means to me. I feel disconnected. How do I approach the Fifth Step when my understanding of a Higher Power is unclear? I want the freedom but I don't know how to be honest with a God I don't fully believe in.",
+          "I've done the Fifth Step before but I felt like I was just going through the motions. I didn't feel the freedom people talk about. Now I'm starting over and I want to do it differently. How can I make this Fifth Step truly transformative instead of just a checklist item?",
+          "My sponsor says to be thorough, but I'm worried that if I share everything, I'll hurt people or damage relationships. Some of my inventory involves other people. How do I balance honesty with discretion in the Fifth Step? I don't want to use the step as an excuse to gossip or blame."
+        ],
+        "factual": [
+          "What does the AA literature specifically say about the role of the 'another human being' in Step 5? Why is it necessary to confess to a person rather than just to God and oneself? And how does the choice of that person affect the outcome?",
+          "The Big Book describes the Fifth Step as bringing about a 'vital spiritual experience.' What exactly is meant by that? How does the act of admitting our wrongs lead to a spiritual awakening according to the text?",
+          "In Step 5, we admit 'the exact nature of our wrongs.' How does the literature differentiate between admitting the wrongs themselves versus the underlying character defects? Is it enough to just list actions, or must we also explore the motivations?"
+        ],
+        "reflective": [
+          "You say you're not sure about God. What does 'God as you understand Him' mean to you right now? How might your understanding grow through the act of sharing your inventory?",
+          "You felt like you were going through the motions before. What was missing from that experience? What do you think you need to bring to this Fifth Step to make it real?",
+          "You're worried about hurting others by sharing your inventory. What is your true motive for holding back? Is it protecting them, or protecting yourself from the shame of being fully known?"
+        ],
+        "brief": [
+          "The Fifth Step isn't just a confession; it's a surrender. You admit your wrongs to God, yourself, and another person to let go of the burden. That's the freedom.",
+          "If your understanding of God is unclear, start with what you do know. The Fifth Step can actually clarify your Higher Power through the experience of honesty.",
+          "Balancing honesty and discretion: share your part, not theirs. The Fifth Step is about your inventory, not others' faults."
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_step_6_7",
+    "label": "Steps 6 & 7 — Ready and asking for removal of defects",
+    "description": "Became entirely ready to have God remove all these defects of character. Humbly asked Him to remove our shortcomings. Seventh Step Prayer.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm struggling with the idea of being ready. Can you help me understand what Step 6 really means?",
+          "I feel like I'm not quite there yet. How do I know when I'm entirely ready for Step 7?",
+          "I want to ask God to remove my defects, but I'm scared. What does that prayer look like?"
+        ],
+        "factual": [
+          "What does the Big Book say about becoming entirely ready in Step 6?",
+          "How does the Seventh Step prayer ask God to remove shortcomings?",
+          "What is the difference between defects of character and shortcomings in Steps 6 and 7?"
+        ],
+        "reflective": [
+          "What would it mean for you to be entirely ready right now?",
+          "If you were to ask God to remove a defect, which one would you start with?",
+          "What is holding you back from humbly asking?"
+        ],
+        "brief": [
+          "I need to become entirely ready. How do I do that?",
+          "What is the Seventh Step prayer?",
+          "How do I ask God to remove my defects?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been working on Step 6 for a while, but I'm not sure I'm ready. How do I know if I'm truly ready to let go?",
+          "I feel like I'm holding onto some defects because they serve me. How do I become willing to have them removed?",
+          "The idea of humbly asking God feels vulnerable. Can you guide me through the Seventh Step prayer?"
+        ],
+        "factual": [
+          "According to the 12 and 12, what does it mean to be entirely ready for Step 7?",
+          "How does the Seventh Step prayer connect to the concept of humility in Step 7?",
+          "What are the key components of the Seventh Step prayer as outlined in AA literature?"
+        ],
+        "reflective": [
+          "What defects are you still not ready to let go of, and why?",
+          "If you were to pray the Seventh Step prayer right now, what would you be feeling?",
+          "How has your understanding of 'humbly asked' changed as you've worked these steps?"
+        ],
+        "brief": [
+          "Step 6 is about readiness. Step 7 is about asking. How do they connect?",
+          "I'm ready to ask God to remove my shortcomings. What do I say?",
+          "The Seventh Step prayer is the action. How do I pray it with humility?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been praying the Seventh Step prayer daily, but I still feel stuck with the same defects. I'm starting to doubt if God is listening. Can you help me understand what I might be missing?",
+          "I realize I have many defects, but some seem intertwined with my personality. How do I become entirely ready to have them removed without feeling like I'm losing myself?",
+          "I've done Steps 6 and 7 multiple times, but I still struggle with resentment. Is it possible I'm not really asking with true humility? How do I know if I'm being honest in my prayer?"
+        ],
+        "factual": [
+          "The Big Book says 'became entirely ready' - does that imply a one-time event or a continuous process? What does the literature say about readiness over time?",
+          "In the Twelve Steps and Twelve Traditions, it discusses the difference between defects and shortcomings. Can you explain that distinction and how it applies to the Seventh Step prayer?",
+          "What is the specific wording of the Seventh Step prayer as found in AA literature, and what is the theological basis for asking God to remove defects?"
+        ],
+        "reflective": [
+          "You say you've prayed the Seventh Step prayer but feel no change. What would change look like to you? How would you know if a defect has been removed?",
+          "If being entirely ready means letting go of the outcome, what is your attachment to the defects you're struggling to release?",
+          "What is the difference between asking God to remove a defect and taking action yourself? How do you see your part in Step 7?"
+        ],
+        "brief": [
+          "I've done Steps 6 and 7 but still have defects. What am I missing?",
+          "How do I become entirely ready when I'm not sure I want to let go of certain defects?",
+          "The Seventh Step prayer asks God to remove shortcomings. But what about defects I'm not aware of?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_step_8_9",
+    "label": "Steps 8 & 9 — List of amends and direct amends",
+    "description": "Made a list of all persons we had harmed and became willing to make amends to them all. Made direct amends wherever possible.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm really scared to make amends. Can you help me understand what Step 8 is asking me to do?",
+          "I feel a lot of guilt about some people I've hurt. How do I become willing to make amends?",
+          "This step feels overwhelming. Could you explain how to list everyone I've harmed without getting lost in shame?"
+        ],
+        "factual": [
+          "What is the exact instruction for Step 8 regarding listing persons harmed?",
+          "According to the literature, what does 'became willing to make amends' mean practically?",
+          "How does Step 9 define 'direct amends' and when should they be made?"
+        ],
+        "reflective": [
+          "I have a list of people I harmed. What is my true willingness like toward each of them?",
+          "When I think about making amends, what fears come up that might block my willingness?",
+          "Who is the first person on my list? What would a direct amends look like to them?"
+        ],
+        "brief": [
+          "How do I write a list of people I've harmed for Step 8?",
+          "What does 'becoming willing' mean in Step 8?",
+          "Step 9 says make direct amends wherever possible. How do I know if it's possible?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've completed my inventory and see patterns in how I hurt people. How do I turn that into a Step 8 list without getting overwhelmed?",
+          "I'm willing to make amends but some people are no longer in my life. How do I handle that in Step 9?",
+          "I feel like I'm not ready to face some of the people on my list. Can you help me understand what 'willing' really means in this context?"
+        ],
+        "factual": [
+          "How does the Step 8 list differ from the resentment list in Step 4?",
+          "What does the Big Book say about amends that might cause further harm? When should we avoid direct amends?",
+          "Explain the relationship between willingness in Step 8 and the actual amends in Step 9."
+        ],
+        "reflective": [
+          "You have a list of people harmed. What is your motivation for making amends? Is it to relieve your guilt or to truly repair the harm?",
+          "Consider an amend you're hesitant about. What would it cost you to make it, and what would it cost not to?",
+          "How does your willingness change when the person you harmed is no longer alive or unreachable?"
+        ],
+        "brief": [
+          "How do I connect my Step 4 inventory to my Step 8 list?",
+          "When is a direct amend not possible, and what then?",
+          "What if I'm not willing to make amends to someone? What does Step 8 require?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been working on my list and I see that some of the people I've harmed are also people I still resent. How do I handle the complexity of making amends when I'm still angry? I want to be honest but I also don't want to cause more damage.",
+          "There are relationships where the harm is mutual and complicated. I'm not sure what a direct amend even looks like in those cases. Can you help me think through the principles of Step 9 for situations where blame is shared?",
+          "I'm struggling with the idea of 'becoming willing' because I feel like I'm not there yet for some people. I know the step says 'became willing' but I don't know how to force that feeling. What does the program suggest when willingness isn't coming naturally?"
+        ],
+        "factual": [
+          "In the Big Book, Step 8 says 'made a list of all persons we had harmed, and became willing to make amends to them all.' How does the literature reconcile this with cases where making amends might harm others or ourselves? Provide specific examples from the text.",
+          "Analyze the relationship between Steps 8 and 9 in terms of the principle of restitution. How does the program define 'direct amends' versus indirect amends, and what criteria determine which is appropriate?",
+          "The literature discusses amends that are 'impossible' or 'inadvisable.' What are the exact conditions under which a direct amend is not required, and how does one determine willingness in those cases?"
+        ],
+        "reflective": [
+          "You have a list of people you harmed. Now consider each one: what was the exact nature of the harm? How does that determine the kind of amend needed? For those you are not willing, what is the specific fear or pride blocking you?",
+          "Imagine you are about to make a direct amend. What are you hoping to get out of it? How would you feel if the person rejects your amend or doesn't forgive you? How does that affect your willingness?",
+          "Step 8 says 'became willing' – not 'feel willing'. What actions can you take to cultivate willingness even when you don't feel it? How does willingness manifest in behavior before feeling?"
+        ],
+        "brief": [
+          "How do I make amends when the harm was mutual and both parties contributed?",
+          "What does the program say about amends that could cause further harm to the person or others?",
+          "Explain how Step 8's willingness relates to Step 9's execution, especially when feelings lag behind."
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_step_10",
+    "label": "Step 10 — Spot-check inventory",
+    "description": "Continued to take personal inventory and when we were wrong promptly admitted it. Daily maintenance, nightly review.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm trying to do my nightly inventory but I feel a bit overwhelmed. Can you help me understand what exactly I should be looking for in Step 10?",
+          "I've heard about doing a daily check-in, but I'm not sure how to start. Could you walk me through a simple Step 10 inventory?",
+          "I want to keep my side of the street clean, but I'm not sure what 'promptly admitted it' looks like in practice. Any gentle guidance?"
+        ],
+        "factual": [
+          "What does Step 10 mean by 'continued to take personal inventory'? Is it just a daily check-in?",
+          "How often should I do a Step 10 inventory? Is it nightly or throughout the day?",
+          "What is the difference between Step 4 and Step 10 inventory?"
+        ],
+        "reflective": [
+          "You mentioned taking a nightly inventory. What do you think is the most important thing to ask yourself before you go to bed?",
+          "When you do a Step 10 review, what stands out as something you'd want to change?",
+          "If you could spot one thing today that you'd like to handle differently tomorrow, what would it be?"
+        ],
+        "brief": [
+          "How do I do Step 10 inventory each night?",
+          "What's the quickest way to check my inventory at the end of the day?",
+          "Step 10: what do I actually do?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been doing Step 10 for a while, but sometimes I struggle with admitting when I'm wrong, especially at work. How can I get better at that?",
+          "I noticed I keep making the same mistake in my inventory—I avoid looking at my resentments. How can I be more honest without feeling awful?",
+          "I find it hard to admit I'm wrong to my spouse, even when I know I should. How can Step 10 help me with that?"
+        ],
+        "factual": [
+          "Step 10 says to promptly admit when wrong. How do I balance that with not over-apologizing or being too hard on myself?",
+          "What does the literature say about how Step 10 relates to Steps 4 and 5?",
+          "How do I use Step 10 to deal with recurring defects without getting stuck in the same pattern?"
+        ],
+        "reflective": [
+          "You said you had a hard time admitting you were wrong today. What stopped you from saying something in the moment?",
+          "When you do your nightly review, what patterns do you see that keep coming up?",
+          "If you had to pick one thing from today that you're not okay with, what is it and what would you like to do about it?"
+        ],
+        "brief": [
+          "How do I practice Step 10 at work without seeming weak?",
+          "Step 10: how do I admit wrongs promptly without oversharing?",
+          "What's the best way to handle a mistake I made hours ago?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I find that my nightly inventory sometimes turns into a guilt session. I know Step 10 is about maintenance, not shame, but I can't seem to separate the two. How can I do this without beating myself up?",
+          "I'm struggling with the idea of 'promptly admitting it' because sometimes I'm not even sure I was wrong—it's more about my attitude. How do I inventory motives without overthinking?",
+          "I've been clean for years, but Step 10 feels stale. I want to keep it fresh and honest, but I keep glossing over the same things. How do I deepen my nightly review?"
+        ],
+        "factual": [
+          "Step 10 is a maintenance step, but it requires honesty about character defects. How do I reconcile the need for self-honesty with the program's emphasis on acceptance and not dwelling on the past?",
+          "The Big Book says to 'continue to watch for selfishness, dishonesty, resentment, and fear.' How do I spot these when they're subtle or disguised as something else?",
+          "How does Step 10 differ from a simple moral inventory? What makes it a 'continued' practice that builds on previous steps?"
+        ],
+        "reflective": [
+          "You mentioned your inventory feels like a guilt trip. What would it look like if you approached it with the same compassion you'd offer a sponsee?",
+          "If you could rewrite the script you tell yourself about your daily mistakes, what would that new story sound like?",
+          "What is the one thing you're afraid to put on your inventory tonight? What makes it so hard to look at?"
+        ],
+        "brief": [
+          "How do I keep Step 10 from turning into a shame spiral?",
+          "Step 10: how do I inventory motives without over-analyzing?",
+          "What's the difference between a healthy Step 10 and obsessive self-criticism?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_step_11",
+    "label": "Step 11 — Prayer and meditation",
+    "description": "Sought through prayer and meditation to improve our conscious contact with God as we understood Him. Morning routine, conscious contact.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I really want to start praying in the morning, but I feel awkward and don't know where to begin. Can you help me feel less alone in this?",
+          "I've been trying to meditate but my mind keeps racing. It's frustrating. Do you have any gentle advice for someone just starting out?",
+          "I believe in a Higher Power, but I struggle to feel connected through prayer. Is that okay? How do I make it more personal?"
+        ],
+        "factual": [
+          "What does Step 11 say about morning prayer and meditation for conscious contact?",
+          "How do I practice Step 11: seek through prayer and meditation to improve conscious contact with God?",
+          "What is the difference between prayer and meditation in the context of Step 11?"
+        ],
+        "reflective": [
+          "You say you feel awkward starting prayer — what would it look like if you just said what's on your mind to your Higher Power?",
+          "If your mind races during meditation, what might happen if you just notice that and let it be without judgment?",
+          "What does 'conscious contact' mean to you right now? How would you know if you had it?"
+        ],
+        "brief": [
+          "How do I start a morning prayer routine for Step 11?",
+          "What's a simple meditation technique for recovery?",
+          "What is conscious contact with God?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been doing Step 11 for a while, but sometimes I feel like my prayers are just going into the void. It's discouraging. How do I keep faith when I don't feel anything?",
+          "I know I should meditate daily, but I keep skipping it. I feel guilty. Can you help me see it as something I want to do, not a chore?",
+          "My understanding of God has changed since I started recovery. I used to pray to a specific God, but now I'm not sure. It's confusing. How do I pray when I don't know who I'm praying to?"
+        ],
+        "factual": [
+          "How does morning meditation specifically improve conscious contact with God according to the Big Book?",
+          "What does the AA literature say about the relationship between prayer and meditation in Step 11?",
+          "Can you explain the phrase 'prayer is asking, meditation is listening' as it applies to Step 11?"
+        ],
+        "reflective": [
+          "You feel your prayers are going into the void — what would it mean if your Higher Power answered in a way you didn't expect?",
+          "If you skip meditation, what might be the underlying resistance? What is it protecting you from?",
+          "Your understanding of God is changing — how does that open up new possibilities for contact that you hadn't considered?"
+        ],
+        "brief": [
+          "How do I combine prayer and meditation in a daily morning routine?",
+          "What if I don't feel anything during meditation? Am I doing it wrong?",
+          "How does Step 11 help with staying sober day by day?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been struggling with the concept of 'conscious contact' because I have a hard time believing in a personal God who cares about me. I've tried praying but it feels like talking to myself. I hear others talk about feeling guided or having a relationship, and I feel left out. Is there a way to approach Step 11 that doesn't require belief in a traditional God? I want the peace they have, but I can't fake it.",
+          "I have a daily meditation practice, but I'm not sure it's improving my conscious contact. I just sit and breathe. I worry I'm missing the point. How do I know if I'm actually connecting with my Higher Power? Sometimes I feel a sense of calm, but is that enough? I want more depth.",
+          "I've been in recovery for years and I still struggle with prayer. I feel like I 'should' pray but I resent it. I have a lot of anger at God from my past. How do I work Step 11 when I have so much resistance? I don't want to be told to just 'let go' — that doesn't work for me."
+        ],
+        "factual": [
+          "The Big Book says 'we usually conclude the period of meditation with a prayer that we be shown all through the day what our next step is to be.' Can you explain how to practically implement that? How do I discern the next step from meditation versus my own thinking?",
+          "Step 11 says 'prayer and meditation' — is there a prescribed order or ratio? Does the literature suggest specific times of day or methods? I'm looking for the exact guidance from the 12&12 or Big Book on how to structure a daily conscious contact practice.",
+          "What is the difference between conscious contact with God as understood and the 'God consciousness' described in the spiritual experience appendix? How do prayer and meditation facilitate that transformation from mere belief to a direct connection that changes one's entire outlook?"
+        ],
+        "reflective": [
+          "You struggle with conscious contact because you don't believe in a personal God. What if you defined 'God' as the group conscience or the power of love in the rooms? How might that change your prayer? What would you say to a Higher Power that is simply goodness?",
+          "Your meditation feels shallow — what would it look like if you asked your Higher Power a specific question and then waited for an answer during meditation? What might come up if you surrendered the outcome?",
+          "You feel resentment towards God. If you could say exactly what you feel to that Higher Power, without censorship, what would you say? And what might happen if you just sat with that feeling in meditation without trying to fix it?"
+        ],
+        "brief": [
+          "How do I reconcile Step 11 with atheism or agnosticism?",
+          "What does it mean to have 'conscious contact' and how do I know if I have it?",
+          "How do I pray when I'm angry at God? Step 11 seems impossible."
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_step_12",
+    "label": "Step 12 — Carry the message",
+    "description": "Having had a spiritual awakening as the result of these steps, we tried to carry this message to alcoholics and to practice these principles in all our affairs. Sponsorship, service, spiritual awakening.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I just finished my steps and I feel this urge to help others, but I'm also scared I'll say the wrong thing. Is that normal?",
+          "I'm excited about the 12th step but I don't know where to begin. Can you help me feel more confident about carrying the message?",
+          "I feel like I've had a spiritual awakening, but I'm not sure what I'm supposed to do next. How do I start carrying this message to others?"
+        ],
+        "factual": [
+          "What does the 12th step say about carrying the message to alcoholics?",
+          "How do I practice the principles of the 12th step in all my affairs?",
+          "What is the definition of a spiritual awakening in the context of the 12 steps?"
+        ],
+        "reflective": [
+          "I've had a spiritual awakening from the steps. What might that mean for how I can help someone else?",
+          "You say I need to carry the message. How do I know if my experience is worth sharing?",
+          "What does 'practice these principles in all our affairs' look like in my daily life right now?"
+        ],
+        "brief": [
+          "I finished the steps. How do I carry the message now?",
+          "What is the 12th step? Just tell me the main point.",
+          "I want to do service. Where do I start?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been working the steps and I think I'm ready to sponsor, but I'm nervous about taking on that responsibility. How do I know if I'm truly ready to carry the message?",
+          "I see the importance of carrying the message, but I'm struggling with how to talk to someone who is still drinking without pushing them away. What's a good approach?",
+          "I feel like my spiritual awakening was subtle, not a huge moment. Is that enough to help others? I worry my story isn't dramatic enough."
+        ],
+        "factual": [
+          "What is the connection between spiritual awakening and the 12th step? How does one lead to the other according to the literature?",
+          "How does sponsorship specifically fulfill the requirement to carry the message? Are there other ways?",
+          "What does it mean to practice these principles in all our affairs? Give examples from work, family, and social situations."
+        ],
+        "reflective": [
+          "I'm considering sponsoring someone. What questions should I ask myself to see if I'm truly ready to carry the message?",
+          "You talk about carrying the message, but what if I don't feel like I have a clear message? How can I explore what my experience actually teaches?",
+          "How do I balance carrying the message with taking care of my own sobriety? What does that look like in practice?"
+        ],
+        "brief": [
+          "I want to carry the message but I'm not sure how. Give me one simple way to start.",
+          "What is the main purpose of the 12th step in two sentences?",
+          "How do I practice the 12th step at work? One key example."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've had a spiritual awakening through the steps, but when I try to share it with others, I feel like I'm just repeating clichés. How can I authentically carry the message without feeling like a fraud?",
+          "The 12th step says to carry the message to alcoholics, but what about people who aren't alcoholics? I struggle with how to practice these principles in all my affairs, especially with family members who don't understand recovery.",
+          "I'm scared that if I sponsor someone, I might say something that triggers them or gives bad advice. How do I carry the message responsibly when I still feel like a newcomer in many ways?"
+        ],
+        "factual": [
+          "According to the Big Book and 12 & 12, what are the specific steps to take after having a spiritual awakening to effectively carry the message? List the actions and attitudes required.",
+          "How does the 12th step integrate with the other steps? Specifically, how does the spiritual awakening from step 12 relate to the spiritual experience described in step 2?",
+          "What does AA literature say about carrying the message to someone who is not yet ready to stop drinking? How do we balance attraction rather than promotion?"
+        ],
+        "reflective": [
+          "I've had a spiritual awakening but I'm not sure how to articulate it. What questions can I ask myself to clarify my experience so I can share it meaningfully?",
+          "You say to practice these principles in all our affairs. But what if the principles conflict with each other? For example, honesty vs. tolerance in a difficult relationship. How do I navigate that?",
+          "I'm struggling with the idea that my spiritual awakening is 'enough' to help others. What does the literature say about the nature of that awakening and how it equips us to be of service?"
+        ],
+        "brief": [
+          "How do I carry the message to someone who doesn't want to hear it? One key principle.",
+          "The 12th step is about spiritual awakening and service. Explain the link in four sentences.",
+          "I need to practice principles in all affairs. Give three specific examples from daily life."
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_big_book",
+    "label": "Big Book content and passages",
+    "description": "Questions about Big Book chapters, passages, stories, historical background. How It Works, Doctor's Opinion, We Agnostics, etc.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm feeling a bit lost in the Big Book. Could you help me understand the main point of the chapter 'We Agnostics'? I think I need some reassurance.",
+          "I've been reading the Doctor's Opinion and it's a lot to take in. Can you tell me what the key takeaway is for someone like me?",
+          "I'm struggling with the concept of God from the 'We Agnostics' chapter. Can you explain it in a gentle way?"
+        ],
+        "factual": [
+          "What is the main message of the chapter 'How It Works'?",
+          "Who wrote the Doctor's Opinion in the Big Book?",
+          "What does the Big Book say about agnostics in the chapter 'We Agnostics'?"
+        ],
+        "reflective": [
+          "What part of the 'How It Works' chapter stands out to you right now?",
+          "When you read the Doctor's Opinion, what feelings come up about your own drinking?",
+          "In 'We Agnostics', what do you think the author means by 'a Power greater than ourselves'?"
+        ],
+        "brief": [
+          "What is the main point of the 'How It Works' chapter?",
+          "Who wrote the Doctor's Opinion?",
+          "What does the Big Book say about agnostics?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I'm reading the story 'The Vicious Cycle' and it reminds me of my own. Can you help me connect the steps mentioned in that story to the actual step work?",
+          "I feel overwhelmed comparing the stories in the front of the Big Book to the personal stories in the back. How do they tie together?",
+          "I'm trying to understand how the Doctor's Opinion relates to the rest of the book. Could you explain that in a caring way?"
+        ],
+        "factual": [
+          "How does the chapter 'We Agnostics' build on the concepts introduced in the Doctor's Opinion?",
+          "What is the relationship between the first 164 pages of the Big Book and the personal stories section?",
+          "How do the stories in the 'Pioneers of AA' section illustrate the principles of the steps?"
+        ],
+        "reflective": [
+          "As you read the Doctor's Opinion, what connections do you see between the medical description and your own experience?",
+          "How does the 'We Agnostics' chapter challenge or support your own beliefs about a higher power?",
+          "In what way do the personal stories in the back of the book mirror the solution described in 'How It Works'?"
+        ],
+        "brief": [
+          "How does 'We Agnostics' relate to the Doctor's Opinion?",
+          "What is the purpose of the personal stories in the Big Book?",
+          "How do the first 164 pages connect to the stories section?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been reading through the Big Book and I'm really struggling with the concept of 'self-will run riot' from the Doctor's Opinion. It feels so abstract. Can you walk me through what that means in practical terms, maybe using examples from the stories? I feel like I need some guidance.",
+          "The chapter 'Into Action' has so many instructions, but I'm having trouble seeing how the promises in 'We Agnostics' line up with the actual steps. Could you help me see the bigger picture of how all these chapters work together? I'm feeling a bit confused.",
+          "I'm trying to grasp the historical context of the Big Book - how the first 100 people shaped the stories and the steps. Can you explain how the early AA experience influenced the writing of the book? I want to understand its authenticity."
+        ],
+        "factual": [
+          "What is the historical background of the Big Book's creation, including the roles of Bill W., Dr. Bob, and other early members in writing the main text and stories?",
+          "How do the concepts of 'powerlessness' and 'unmanageability' from the Doctor's Opinion and 'How It Works' interact with the spiritual solution presented in later chapters like 'Into Action'?",
+          "Explain the thematic progression from the Doctor's Opinion through 'We Agnostics' and 'How It Works' to the step chapters, and how each section addresses a different aspect of the alcoholic's dilemma."
+        ],
+        "reflective": [
+          "When you consider the progression from the Doctor's Opinion to 'Into Action', what do you think is the most challenging leap for you personally? How does the literature address that gap?",
+          "The Big Book contains both the first 164 pages and the personal stories. How do you think reading the stories differently now than you did when you first came in might change your understanding of the program?",
+          "If you were to explain the core argument of the Big Book to someone who has never read it, how would you synthesize the key points from the different chapters and stories into one coherent message?"
+        ],
+        "brief": [
+          "How do the Doctor's Opinion, We Agnostics, and How It Works form a logical progression?",
+          "What is the historical significance of the personal stories in the Big Book?",
+          "Explain the relationship between powerlessness, a higher power, and the steps as presented in the Big Book."
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_12_and_12",
+    "label": "Twelve Steps and Twelve Traditions content",
+    "description": "Questions about the 12&12 book — its essays on each Step and Tradition, historical context, interpretations.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm feeling a bit confused about Step One in the 12&12. Can you help me understand what the book says about powerlessness?",
+          "I just read the 12&12 essay on Step Four and it hit me hard. How does the book suggest we handle fear when doing a searching moral inventory?",
+          "The 12&12's Tradition One makes me feel unsure about unity. What's the book's main message about putting principles before personalities?"
+        ],
+        "factual": [
+          "What does the 12&12 say about the difference between Steps Four and Five?",
+          "According to the 12&12, what is the purpose of Step Eleven?",
+          "How does the 12&12 define 'anonymity' in Tradition Twelve?"
+        ],
+        "reflective": [
+          "When you read the 12&12 essay on Step Two, what part made you think about your own experience?",
+          "The 12&12's Tradition Two talks about a loving God as our ultimate authority. How did that change how you see group conscience?",
+          "In the 12&12, Step Six says we become 'entirely ready.' What did that readiness look like for you?"
+        ],
+        "brief": [
+          "What's the main point of Tradition One in the 12&12?",
+          "How does the 12&12 describe Step Three's decision?",
+          "What is the 12&12's key teaching on resentment in Step Four?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been reading the 12&12 essay on Step Seven, and I'm struggling with the idea of humility. How does the book connect humility to asking for help?",
+          "The 12&12 on Step Nine feels like a lot of pressure. I'm worried about making amends that might hurt people. How does the book guide us on timing and caution?",
+          "I'm finding the 12&12 discussion of Tradition Four really helpful but also challenging. How does it help a group stay autonomous without getting isolated?"
+        ],
+        "factual": [
+          "According to the 12&12, how do Steps Ten, Eleven, and Twelve work together as a maintenance program?",
+          "What does the 12&12 say about the relationship between Step Eight and Step Nine?",
+          "How does the 12&12 explain the purpose of Tradition Six in relation to outside enterprises?"
+        ],
+        "reflective": [
+          "In the 12&12, the essay on Tradition Three talks about membership requirements. How does that apply to someone who keeps relapsing?",
+          "The 12&12's Step Ten emphasizes continuous inventory. What did you find most difficult about making that a daily habit?",
+          "Tradition Five says each group has but one primary purpose. How has that shaped the way you carry the message to newcomers?"
+        ],
+        "brief": [
+          "Explain how the 12&12 interprets the 'spiritual awakening' in Step Twelve.",
+          "How does the 12&12 connect Step One to the other steps?",
+          "What does the 12&12 say about the role of a sponsor in Step Five?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I'm really wrestling with the concept of 'rigorous honesty' in Step Five from the 12&12. It feels overwhelming. How does the book suggest we balance thoroughness with not causing unnecessary harm to others?",
+          "The 12&12 essay on Tradition Nine talks about 'the right of decision' for groups. I'm in a group that struggles with this. How does the book handle the tension between autonomy and the need for guidelines?",
+          "I've been reflecting on the 12&12's Step Eleven and the idea of 'conscious contact.' The book mentions meditation but doesn't prescribe a method. How do you interpret that openness, and what practices have you found helpful?"
+        ],
+        "factual": [
+          "What historical context does the 12&12 provide for the development of Tradition Nine? How does its discussion of 'professionalism' vs 'service' differ from the Big Book's treatment?",
+          "In the 12&12, the essay on Step Two references 'the Great Reality' and contrasts it with earlier understandings of God. How does that historical framing affect the interpretation of Step Two today?",
+          "The 12&12's Tradition Ten discusses 'no opinion on outside issues.' How does the book reconcile that with the need to speak out on social justice matters that affect recovery?"
+        ],
+        "reflective": [
+          "The 12&12 essay on Step Ten mentions 'spot-check inventories' and 'daily tenth step.' How have you integrated those practices, and what did you find most challenging about them?",
+          "In the 12&12, Tradition Seven says every group ought to be fully self-supporting. How do you think that principle applies to groups that struggle financially, especially when they want to offer food or literature?",
+          "The 12&12's Step Twelve talks about 'having had a spiritual awakening as the result of these steps.' What was the nature of that awakening for you, and how did the 12&12's description help or hinder your understanding?"
+        ],
+        "brief": [
+          "Contrast the 12&12's view of Step Three with the Big Book's. What's the key difference in the decision-making language?",
+          "How does the 12&12's Tradition Two reconcile the idea of a 'loving God' with the concept of group conscience?",
+          "What is the 12&12's nuanced position on the use of the word 'God' in step work and meetings?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_slogan",
+    "label": "AA slogans explained",
+    "description": "Explanations of common AA slogans: One Day at a Time, Easy Does It, First Things First, Live and Let Live, Let Go and Let God, etc.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm feeling really anxious about the future. Can you explain what 'One Day at a Time' means in a gentle way?",
+          "I don't quite get 'Easy Does It' – it sounds nice but I'm not sure how to practice it without feeling lazy. Can you help me understand it kindly?",
+          "'First Things First' sounds good, but I'm overwhelmed with so many things. Could you explain it in a way that feels supportive?"
+        ],
+        "factual": [
+          "What does the slogan 'One Day at a Time' actually mean according to AA literature?",
+          "According to AA, how is 'Easy Does It' defined and applied in recovery?",
+          "What is the exact meaning of 'First Things First' as described in the Big Book?"
+        ],
+        "reflective": [
+          "You've said 'One Day at a Time' before – what do you think that looks like for someone who is really struggling with cravings?",
+          "'Easy Does It' – how would you ask yourself that when you're pushing too hard?",
+          "When you think about 'First Things First', what comes to mind as the most important thing for me to focus on right now?"
+        ],
+        "brief": [
+          "Explain 'One Day at a Time' in two sentences.",
+          "What does 'Easy Does It' mean? Keep it short.",
+          "Define 'First Things First' in one key point."
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I get that 'Let Go and Let God' is about trust, but I have trouble actually letting go. Can you help me see how to apply it when I'm scared?",
+          "I've been told to use 'One Day at a Time' and 'Easy Does It' together, but I'm not sure how they fit. Can you explain that in a caring way?",
+          "'Live and Let Live' sounds peaceful, but I struggle with judgmental thoughts. How can I use that slogan to be more accepting?"
+        ],
+        "factual": [
+          "How do the slogans 'One Day at a Time' and 'Easy Does It' complement each other in AA practice?",
+          "What does AA literature say about the relationship between 'Let Go and Let God' and the concept of surrender?",
+          "Explain the practical application of 'Live and Let Live' in the context of Step 10."
+        ],
+        "reflective": [
+          "You mentioned 'Let Go and Let God' – what do you think is the hardest part of that for you, and how might you start?",
+          "How would you connect 'One Day at a Time' with 'Easy Does It' when you're feeling impatient with your progress?",
+          "'Live and Let Live' – when have you found it hardest to practice, and what could you do differently?"
+        ],
+        "brief": [
+          "Compare 'One Day at a Time' and 'Easy Does It' in two sentences.",
+          "How does 'Let Go and Let God' relate to Step 3? One sentence.",
+          "Explain 'Live and Let Live' as a practical tool for resentment."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "Sometimes I feel like 'One Day at a Time' is too simplistic for my deep-seated issues, and 'Let Go and Let God' feels like giving up. Can you gently walk me through the deeper spiritual wisdom behind these slogans and how they address the root of addiction?",
+          "I understand the basic idea of 'Easy Does It', but when I'm in a crisis, it feels impossible. Can you help me explore the nuance of this slogan and how it can actually apply to high-stress situations without minimizing my feelings?",
+          "'Live and Let Live' is hard for me because I have a lot of resentment. Could you explain the deeper principles of tolerance and acceptance behind it, and how I can use it to work through a specific resentment I'm holding?"
+        ],
+        "factual": [
+          "Explain the historical origins and spiritual principles behind the slogan 'Live and Let Live' as used in AA, including its relation to tolerance, acceptance, and the 12 Steps.",
+          "What does AA literature say about the potential misinterpretation of 'One Day at a Time' as avoidance, and how is it actually meant to foster mindfulness and surrender?",
+          "Describe the nuanced relationship between the slogans 'Let Go and Let God', 'Easy Does It', and 'First Things First' in the context of Step 11 and daily inventory."
+        ],
+        "reflective": [
+          "You've heard 'Let Go and Let God' many times, but I wonder: what do you think is the real challenge in living that slogan when your mind is full of fear? How do you actually get to the point of release?",
+          "'One Day at a Time' – what does that look like for you on a day when you feel hopeless? And what would you ask yourself to stay grounded?",
+          "When you consider 'Easy Does It' alongside 'First Things First', what tension do you notice between them, and how do you reconcile that in your own recovery?"
+        ],
+        "brief": [
+          "Explain the deeper meaning of 'Let Go and Let God' beyond surrender, in two sentences.",
+          "Define 'One Day at a Time' as a spiritual discipline, not a cliché. One sentence.",
+          "Describe how 'Live and Let Live' applies to Step 10 in one key point."
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_traditions",
+    "label": "The Twelve Traditions",
+    "description": "Questions about the Twelve Traditions of AA: unity, group conscience, autonomy, leadership, principles vs personalities, anonymity, etc.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm trying to understand the Twelve Traditions better. Could you explain what the First Tradition means for my group?",
+          "I feel a little lost when people talk about 'principles before personalities' in Tradition Ten. Can you help me get that?",
+          "It's comforting to know there's guidance beyond the Steps. What's the simplest way to think about Tradition One?"
+        ],
+        "factual": [
+          "What is the purpose of the Twelve Traditions in AA?",
+          "How does Tradition Two define group conscience?",
+          "What does Tradition Twelve say about anonymity?"
+        ],
+        "reflective": [
+          "When you think about Tradition Three, what does 'the only requirement for membership is a desire to stop drinking' mean to you personally?",
+          "How has Tradition Five helped you see the primary purpose of your home group?",
+          "What would happen if your group ignored Tradition Four's idea of autonomy?"
+        ],
+        "brief": [
+          "What's Tradition One about?",
+          "Explain Tradition Seven's self-support concept.",
+          "What does Tradition Eleven's 'attraction rather than promotion' mean?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I see my group struggling with a decision, and I want to make sure we honor the Traditions. How do we apply Tradition Two's group conscience without it turning into a debate?",
+          "Sometimes I worry that our group is becoming too attached to certain leaders. Can you help me see how Tradition Four keeps us healthy?",
+          "I've heard 'principles before personalities' a lot, but in practice it's hard. How do I live Tradition Ten in meetings without resentment?"
+        ],
+        "factual": [
+          "How do Traditions One and Two work together to ensure group unity and spiritual guidance?",
+          "Explain the difference between Tradition Four (autonomy) and Tradition Five (primary purpose) in practical terms.",
+          "What is the role of Tradition Nine in preventing AA groups from becoming too structured or hierarchical?"
+        ],
+        "reflective": [
+          "If your group had to choose between following a popular member's idea and the group conscience, what would Tradition Two ask you to do?",
+          "How does Tradition Eight's 'nonprofessionalism' challenge the way you think about helping others in recovery?",
+          "Think of a time your group struggled with money. How might Tradition Seven have guided a healthier outcome?"
+        ],
+        "brief": [
+          "How do Traditions Three and Four balance inclusion and group autonomy?",
+          "What's the tension between Tradition Six and a group's outside affiliations?",
+          "Explain how Tradition Eleven protects the fellowship from personality cults."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I'm a sponsor, and my sponsee is active on social media. We're both trying to understand how Tradition Twelve applies online—especially with public profiles. I want to honor the principle of anonymity while not isolating. How can we navigate this?",
+          "My group is considering a joint event with a treatment center, and there's debate about Tradition Six. I feel torn between our primary purpose and the chance to reach newcomers. Can you help me see both sides through the Traditions?",
+          "I've been in AA for years, but I still struggle with the concept of 'group conscience' in Tradition Two when there are strong personalities. How do we ensure the conscience is truly spiritual and not just a majority vote?"
+        ],
+        "factual": [
+          "Analyze how the Twelve Traditions collectively prevent AA from becoming a centralized or authoritarian organization, citing specific Traditions.",
+          "Explain the relationship between Tradition Four (autonomy) and Tradition Eight (nonprofessionalism) in the context of a group that wants to hire a paid coordinator.",
+          "Discuss the ethical implications of Tradition Twelve (anonymity at the level of press, radio, and films) in the digital age, especially regarding social media and public figures in recovery."
+        ],
+        "reflective": [
+          "If you were to redesign the Traditions for a modern fellowship, which one would you change and why—keeping the core principles intact?",
+          "How do you reconcile Tradition One (our common welfare) with Tradition Four (each group is autonomous) when two groups disagree on a matter of fellowship-wide importance?",
+          "Think about a time you witnessed a group ignore Tradition Two's group conscience. What was the outcome, and how might the group have handled it differently using the other Traditions?"
+        ],
+        "brief": [
+          "How do Traditions Nine and Ten together prevent bureaucracy and personality conflicts?",
+          "Explain the paradox between Tradition Eight (nonprofessionalism) and the need for trained facilitators in meetings.",
+          "What is the deeper spiritual significance of Tradition Eleven's 'anonymity is the spiritual foundation of all our Traditions'?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_sponsorship",
+    "label": "Sponsorship questions",
+    "description": "How to find a sponsor, how to be a sponsor, sponsor-sponsee relationship, what sponsors do, when to change sponsors.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm new to this and feeling a bit overwhelmed. Can you help me understand what a sponsor actually does? I think I might need one but I'm not sure.",
+          "I've been thinking about getting a sponsor but I'm scared of being a burden. What's the first step to finding someone who fits?",
+          "I feel kind of lost and I hear sponsorship is important. Can you tell me how to find a sponsor in a way that doesn't feel so intimidating?"
+        ],
+        "factual": [
+          "What is a sponsor and what are their main responsibilities in AA?",
+          "How do I find a sponsor? What are the typical steps?",
+          "What does the literature say about the role of a sponsor?"
+        ],
+        "reflective": [
+          "You're thinking about getting a sponsor. What qualities are you looking for in someone who will guide you through the steps?",
+          "Have you considered what you want from a sponsor relationship? What kind of support do you think you need right now?",
+          "If you were to ask someone to be your sponsor, what would you want them to know about you first?"
+        ],
+        "brief": [
+          "How do I find a sponsor?",
+          "What does a sponsor do?",
+          "When should I change sponsors?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've had the same sponsor for a while but I feel like we're not connecting anymore. I'm worried about hurting their feelings if I switch. What should I do?",
+          "I want to start sponsoring others but I feel like I'm not ready. I only have a few months sober. Is there a minimum time requirement or is it about my spiritual condition?",
+          "I keep hearing that the sponsor-sponsee relationship is sacred. But I'm struggling with someone I sponsor who keeps relapsing. How do I set boundaries without abandoning them?"
+        ],
+        "factual": [
+          "What are the guidelines for changing sponsors in AA? Is there a protocol?",
+          "What does the Big Book say about the qualifications for being a sponsor?",
+          "How does sponsorship work in terms of working the steps? Is the sponsor supposed to take you through each step in order?"
+        ],
+        "reflective": [
+          "You feel stuck with your current sponsor. What is it about the relationship that isn't working? Have you talked to them about it?",
+          "You're considering sponsoring others. What does your own sponsor say about your readiness? Have you worked all 12 steps and are you living them?",
+          "When you think about the ideal sponsor-sponsee relationship, what does that look like for you? What boundaries are important?"
+        ],
+        "brief": [
+          "How do I know when to change sponsors?",
+          "Can I sponsor someone if I'm only 6 months sober?",
+          "What are the responsibilities of a sponsor?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been sponsoring a guy for a year and he's making great progress, but I'm starting to feel like I'm not qualified to handle some of his deeper issues—like trauma and mental health. I don't want to overstep, but I also don't want to let him down. How do I balance being a sponsor with knowing my limits?",
+          "I'm in a tough spot: my sponsor relapsed after 20 years. I feel betrayed and confused. I know the program says we don't judge, but I'm struggling with anger and fear. How do I navigate this and should I look for a new sponsor right away or give it time?",
+          "I have a sponsee who is very resistant to working the steps—they just want to talk. I feel like I'm failing as a sponsor because I can't get them to engage. But I also don't want to force them. How do I approach this without being controlling but also staying true to what sponsorship is about?"
+        ],
+        "factual": [
+          "What does the AA literature say about the sponsor-sponsee relationship when the sponsor relapses? Are there specific guidelines for the sponsee on how to proceed?",
+          "What is the difference between a sponsor and a therapist? When should a sponsor refer a sponsee to professional help according to the traditions?",
+          "How does sponsorship work in the context of the 12 steps specifically? Is there a detailed procedure for how a sponsor guides a sponsee through each step, including the amends and inventory?"
+        ],
+        "reflective": [
+          "You feel your sponsor's relapse is affecting your recovery. What did you learn from them before this happened? What part of your own program needs attention right now?",
+          "Your sponsee isn't working the steps. What is your motive for wanting them to? Is it about your ego or their recovery? Have you asked them what they want from sponsorship?",
+          "You're questioning your qualifications as a sponsor. What does your own sponsor say? How do you define 'qualified'—is it about time or experience? What would the 12th step say about being of service?"
+        ],
+        "brief": [
+          "My sponsor relapsed. Should I change sponsors?",
+          "What if my sponsee refuses to work the steps?",
+          "How do I set boundaries with a sponsee without being unkind?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_meetings",
+    "label": "AA meetings",
+    "description": "Types of meetings (open, closed, discussion, book study, speaker), how to chair, what to expect, meeting etiquette.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm a bit nervous about my first AA meeting. Could you tell me what an open meeting is like and if it's okay for newcomers?",
+          "I'm feeling anxious about going to a closed meeting. Can you explain what that means and what to expect?",
+          "Hi, I'm new and wondering what a speaker meeting is like. Is it friendly for someone just starting out?"
+        ],
+        "factual": [
+          "What is the difference between an open and a closed AA meeting?",
+          "What is a book study meeting in AA?",
+          "How do you chair a discussion meeting?"
+        ],
+        "reflective": [
+          "I'm trying to decide which type of AA meeting to attend. What do you think I should consider based on my situation?",
+          "I'm not sure if I should go to an open or closed meeting first. What might be best for someone who's still unsure about their drinking?",
+          "I've heard about speaker meetings but I'm not sure what I'd get out of them. How do I know if that's right for me right now?"
+        ],
+        "brief": [
+          "What is a closed AA meeting? Just a quick definition.",
+          "What's the main difference between open and closed meetings? Short answer please.",
+          "How do you chair a meeting? Two sentences."
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been asked to chair a discussion meeting next week and I'm a bit overwhelmed. Can you walk me through the basic etiquette and structure?",
+          "I'm starting to attend book study meetings but I'm not sure about the etiquette. Can you explain how to share and listen respectfully?",
+          "I want to make sure I'm being a good participant at speaker meetings. What are some unwritten rules I should know?"
+        ],
+        "factual": [
+          "How do you chair a book study meeting? What are the steps?",
+          "What is the typical format of a speaker meeting?",
+          "What are the etiquette rules for sharing at a discussion meeting?"
+        ],
+        "reflective": [
+          "I'm chairing my first meeting and I want to make sure it's helpful for everyone. What are some things I should keep in mind about group dynamics?",
+          "I've noticed some people share for a long time at meetings. How do I know when it's okay to share more or less?",
+          "I'm thinking about starting to chair meetings. What do you think I need to learn about leading a group discussion?"
+        ],
+        "brief": [
+          "What is the proper etiquette for sharing at a speaker meeting? Keep it short.",
+          "How do you chair a discussion meeting? Two key points.",
+          "What should I expect at a book study meeting? Brief answer."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been going to speaker meetings mostly, but I'm starting to feel like I need more interaction. Can you help me understand how discussion meetings and book studies differ in terms of what they offer for recovery?",
+          "I'm a bit confused about the different meeting types and how they fit into sobriety. I've tried open and closed, but can you explain the deeper purpose of each and how to choose?",
+          "I'm struggling with the idea of chairing a meeting because I'm not sure how to balance structure with letting people share freely. Can you give me some guidance on that?"
+        ],
+        "factual": [
+          "What are the specific differences in format and purpose between a discussion meeting, a book study, and a speaker meeting? Include typical length and structure.",
+          "What is the role of the chairperson in an AA meeting, and how does that vary between open, closed, and book study meetings?",
+          "Explain the etiquette for cross-talk and sharing in different types of AA meetings, including when it's allowed and when it's not."
+        ],
+        "reflective": [
+          "I've noticed that some meetings feel more spiritual and others more practical. How do the different meeting types serve different aspects of the program, and how might I figure out which ones I need right now?",
+          "I'm chairing a meeting for the first time and I want to create an atmosphere that helps people open up. What are some subtle things I can do with my language or structure to encourage that?",
+          "I've been to a few different meetings and I'm trying to understand why some feel more welcoming than others. What role does meeting etiquette and format play in that, and how can I contribute positively?"
+        ],
+        "brief": [
+          "What are the key differences between open and closed meetings? Two sentences.",
+          "How does chairing a book study differ from a discussion meeting? Brief explanation.",
+          "What is the main purpose of a speaker meeting? Answer in three sentences."
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_family",
+    "label": "Family and relationships in recovery",
+    "description": "Relationships with family after addiction, making amends to family, the chapter To Wives / The Family Afterward, dating in early sobriety.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm feeling so anxious about reaching out to my family after all the hurt I caused. How do I even start making amends without making things worse?",
+          "It's really hard for me to face my parents after everything. Can you give me some warm advice on how to approach them with humility?",
+          "I'm scared my family won't forgive me. Is there a gentle way to begin the amends process with them?"
+        ],
+        "factual": [
+          "What exactly does the Big Book say about making amends to family members? I need the specific steps.",
+          "Is it a requirement in AA to make direct amends to family, or can it be indirect?",
+          "According to the literature, what is the first step in making amends to a family member I've harmed?"
+        ],
+        "reflective": [
+          "How can I know if I'm truly ready to make amends to my family, or if I'm just trying to relieve my guilt?",
+          "What would I need to consider before approaching my family about my past behavior? Can you help me reflect on that?",
+          "I'm wondering what my motives are for wanting to make amends to my family. How do I examine that honestly?"
+        ],
+        "brief": [
+          "How do I make amends to my family? Give me the essential steps.",
+          "What does the Big Book say about making amends to family? I need the key point.",
+          "Is it okay to date in early sobriety? Just the bottom line."
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been sober for a few months and I'm starting to think about dating, but I'm worried it might jeopardize my recovery. How do I balance that with the program's advice?",
+          "My wife is still very hurt by my past lies. I want to make amends but I'm not sure how to do it without reopening old wounds. Any compassionate suggestions?",
+          "My kids are young and I'm not sure how much to tell them about my addiction. I want to be honest but also protect them. How do I handle that with love?"
+        ],
+        "factual": [
+          "What does 'To Wives' chapter specifically advise for spouses of alcoholics regarding their own behavior and expectations?",
+          "Does the 'Family Afterward' chapter give guidelines on how to handle relationships with family members who are still drinking?",
+          "What are the key points from the literature about dating in early sobriety? Is there a recommended waiting period?"
+        ],
+        "reflective": [
+          "I'm feeling pressure from my family to make amends quickly, but I'm not sure I'm ready. How do I know if my hesitation is wisdom or fear?",
+          "When I think about dating, I wonder if I'm just trying to fill a void. How can I honestly assess my readiness for a relationship in recovery?",
+          "My parents want me to apologize for specific things, but I'm not sure I remember everything. How do I handle amends when the details are fuzzy?"
+        ],
+        "brief": [
+          "How do I balance making amends with protecting my family from further harm? What's the main advice?",
+          "What does the literature say about dating in early sobriety? I need the core recommendation.",
+          "How should I handle amends when my family is still hurt? Give me the key point from the Family Afterward chapter."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been working the steps and I'm at the amends stage, but my family is still so angry and distrustful. Some members have cut me off completely. How do I make amends when they won't even talk to me? I feel so much guilt and I don't want to push them further away, but I also need to move forward in my recovery. Can you help me navigate this with compassion?",
+          "I'm in a new relationship and I'm terrified that my past addiction will come up and ruin things. I want to be honest but I don't want to scare them off. At the same time, my sponsor says I need to be open about my recovery. How do I find the balance between transparency and not oversharing too soon, especially when I'm still early in sobriety? I really need some warm guidance.",
+          "My father is also an alcoholic, and he refuses to get help. I want to make amends to him for the ways I hurt him, but I'm afraid my amends will be seen as enabling or that he'll use it as an excuse to keep drinking. How do I make amends to a family member who is still actively using, without compromising my own recovery? This is so complicated and painful."
+        ],
+        "factual": [
+          "What is the specific guidance in the 'Family Afterward' chapter for dealing with family members who are still drinking or using? Does it recommend making amends directly or adjusting the approach? I need the exact steps from the literature.",
+          "According to the Big Book, how should someone handle making amends to family members when those amends would cause further harm, such as revealing an affair or other betrayal that the family doesn't know about? What is the official position on indirect amends in such cases?",
+          "The steps mention making a list of all persons we had harmed and becoming willing to make amends to them all. But what does the literature say about timing and priority when it comes to family? Should amends to family be done before or after amends to others, and does the 'Family Afterward' chapter give a specific order?"
+        ],
+        "reflective": [
+          "I'm struggling with the concept of making amends to my family when some of them have also harmed me. How do I separate my part from theirs, and what does it mean to be willing to make amends even if they aren't willing to do the same? Can you help me think through this from a spiritual perspective without getting into blame?",
+          "I've been dating someone for a few months and I haven't told them about my addiction yet. I'm starting to feel dishonest. What would my sponsor ask me to consider about how much to share and when? I need to reflect on my motives and fears around this.",
+          "My family wants me to make amends in a way that feels like I'm taking all the blame for the family dysfunction. I know I have to own my part, but I also feel like some of the issues were not my fault. How do I make amends honestly without taking on false guilt, and how do I know if I'm being appropriate or avoiding responsibility?"
+        ],
+        "brief": [
+          "How do I make amends to a family member who is still drinking? I need the essential guidance from the literature.",
+          "What is the program's stance on dating in early sobriety when I'm already in a relationship? Just the main point.",
+          "How do I handle amends when my family expects a certain apology but I don't agree? What's the key principle?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_work_finances",
+    "label": "Work, finances, and ambition",
+    "description": "Handling work life, financial stress, ambition, career changes in recovery. The literature on money, workaholism, and responsibility.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm feeling really anxious about my money situation and it's triggering cravings. What does the program say about handling financial stress?",
+          "I'm worried that my ambition to get promoted might be a form of workaholism. Can you help me understand what the literature says about that?",
+          "I just lost my job and I'm scared it will lead me back to drinking. How do I stay grounded in the steps during this uncertainty?"
+        ],
+        "factual": [
+          "What does the Big Book say about workaholism?",
+          "Is it okay to have financial goals in recovery according to AA?",
+          "How does the 12-step literature define responsibility with money?"
+        ],
+        "reflective": [
+          "You're feeling anxious about money. What part of your past using behavior is connected to that stress?",
+          "You're worried your ambition might be a problem. Have you looked at how your job affects your spiritual condition?",
+          "Losing a job is tough. What does your sponsor say about leaning on the program during this time?"
+        ],
+        "brief": [
+          "I'm struggling with workaholism. The literature says we need to be willing to let go of anything that interferes with sobriety. How do I apply that?",
+          "Financial stress is a big trigger for me. What's a simple step I can take from the Big Book?",
+          "Ambition in recovery: is it a character defect or a gift? I need clarity."
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I'm feeling torn between my career goals and my recovery. My sponsor says to focus on the steps, but I have bills to pay. How do I find balance without feeling guilty either way?",
+          "I just got a promotion and I'm terrified the pressure will make me relapse. Can you walk me through what the literature says about handling success in sobriety?",
+          "I have a lot of debt from my using days, and it's hard to face it in step work without feeling shame. How do I work the steps around financial resentments?"
+        ],
+        "factual": [
+          "What is the AA position on career ambition when it conflicts with program principles?",
+          "How do the 12 steps address financial dishonesty or fear around money?",
+          "Does the Big Book say anything about changing careers in early sobriety?"
+        ],
+        "reflective": [
+          "You're feeling torn between work and recovery. What would happen if you put your job entirely on the back burner for a while?",
+          "You're worried about success triggering a relapse. What does your inventory say about your motives for wanting this promotion?",
+          "The debt feels shameful. Have you shared this with your sponsor and looked at how fear of financial insecurity is driving your behavior?"
+        ],
+        "brief": [
+          "I'm stressed about balancing work and step work. The literature says we must avoid becoming 'sold out' to anything but God. How do I prioritize?",
+          "Financial shame is keeping me from being honest in meetings. What's one key point from the 12 and 12 about money?",
+          "My ambition is starting to feel like a relapse risk. How do I use the steps to examine that without quitting my job?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "My entire identity was wrapped up in my career, and now in sobriety I feel lost. I'm not sure if I should change jobs or stay. How do I use the steps to figure out my purpose beyond work, especially when the literature says our true purpose is to carry the message?",
+          "The 12 and 12 says our troubles are of our own making, but I feel like my financial problems come from systemic issues like layoffs and medical debt. How do I take responsibility without blaming myself or getting stuck in resentment?",
+          "I'm a workaholic and my sponsor says I need to let go of my ambition, but I feel like that's just who I am—driven and hardworking. How do I reconcile the AA concept of surrender with my drive to succeed without feeling like I'm betraying myself?"
+        ],
+        "factual": [
+          "What does the Big Book say about the relationship between ambition and self-will? How does that apply to someone whose career is a major source of identity?",
+          "How do the steps specifically address the intersection of financial stress, workaholism, and the need for spiritual growth? Give me the passages from the 12 and 12 and the Big Book.",
+          "Is there a clear AA position on whether changing careers in recovery is advisable? I need the literature's stance on making major life decisions during step work."
+        ],
+        "reflective": [
+          "You feel lost without your career identity. What would your higher power have you do if you truly surrendered your job?",
+          "You feel your financial problems are systemic. If you look at step four, where do you see your own part in the situation, even if it's just the way you reacted?",
+          "You see drive as core to who you are. Have you considered that the program asks us to become willing to let go of all our character defects—even the ones we're proud of? What would be left if you let go of that drive?"
+        ],
+        "brief": [
+          "My identity was my job; now I don't know who I am. The literature says we find purpose in service. How do I translate that to my career?",
+          "Financial problems feel unfair. The 12 and 12 says we must stop blaming others. How do I take responsibility without ignoring real injustices?",
+          "Workaholism feels like a strength. The program says we need to be rid of selfish ambition. How do I tell the difference between healthy drive and a defect?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_service",
+    "label": "Service work",
+    "description": "Being of maximum service to others, service positions in AA, Twelfth Step calls, hospital/visitation work, service outside AA.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm feeling a little unsure about diving into service work. What's the best way to start without overwhelming myself?",
+          "I really want to help others, but I'm not sure what kind of service would fit me. Any gentle suggestions?",
+          "I'm new to AA and I keep hearing about service. It sounds important but I'm nervous. How do I take that first step?"
+        ],
+        "factual": [
+          "What is service work in AA and what are the basic positions available?",
+          "How do I sign up for a service position at my home group?",
+          "What is a Twelfth Step call and how is it done?"
+        ],
+        "reflective": [
+          "What does being of service mean to you in your recovery?",
+          "If you could do one act of service today, what would it be and why?",
+          "How has service work helped you stay sober? What do you think it could do for me?"
+        ],
+        "brief": [
+          "How do I get started with service work? I need a simple first step.",
+          "What is the easiest service position for a newcomer?",
+          "I want to be helpful. Where do I begin?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been doing service for a while, but I'm starting to feel like I'm doing it for the wrong reasons. How do I get back to a place of genuine helpfulness?",
+          "I'm about to make my first Twelfth Step call and I'm really anxious. What should I keep in mind to be of maximum service?",
+          "I want to do hospital visitation but I'm afraid I'll say something wrong. How can I prepare emotionally?"
+        ],
+        "factual": [
+          "What steps should I take to prepare for a Twelfth Step call, including what to say and what not to say?",
+          "How do I find service opportunities outside of my home group, like in hospitals or prisons?",
+          "What does the Big Book say about service work and its role in maintaining sobriety?"
+        ],
+        "reflective": [
+          "You mentioned feeling like you're serving for the wrong reasons. What do you think your true motives are right now?",
+          "When you think about doing a Twelfth Step call, what specific fears come up? Let's look at them.",
+          "If you could describe your ideal service activity, what would it be? What's stopping you from doing that?"
+        ],
+        "brief": [
+          "I want to do more service but I'm spread thin. How do I prioritize without guilt?",
+          "What's the proper etiquette for a Twelfth Step call? I don't want to mess up.",
+          "Service work is starting to feel like a chore. How do I renew my enthusiasm?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been doing a lot of service work – chairing meetings, sponsoring, hospital calls – and I'm feeling exhausted and resentful. I know service is essential but I'm struggling. How do I find balance and remember why I started?",
+          "I'm grappling with a conflict: I want to be of maximum service, but I also need to prioritize my own mental health. Sometimes I feel like if I say no to a service request, I'm letting God down. Can you help me work through that?",
+          "I've noticed that when I do service work, I sometimes do it for approval or to feel needed. I want to serve from a place of love, not ego. How can I shift my mindset?"
+        ],
+        "factual": [
+          "According to AA literature, how does service work specifically address character defects like selfishness and self-centeredness? Provide examples from the Big Book or 12&12.",
+          "What are the spiritual principles underlying the concept of 'being of maximum service' as described in the AA program, and how do they apply to service in and outside of AA?",
+          "I'm considering taking on a service position that requires a lot of time, but I'm worried it might interfere with my other recovery activities. What does the literature say about balancing service with other aspects of the program?"
+        ],
+        "reflective": [
+          "You mentioned resentment about service commitments. Let's explore that: what expectations are you holding onto, and how might letting go of those expectations change your experience?",
+          "If you could step back and look at your service work as a mirror, what does it reveal about your spiritual condition right now?",
+          "You said you sometimes serve for approval. What would it look like to serve without needing any recognition? What would you do differently?"
+        ],
+        "brief": [
+          "I'm overcommitted in service and it's hurting my recovery. How do I set boundaries without feeling like a failure?",
+          "Service work is bringing up my character defects. How do I use that for growth without getting stuck in shame?",
+          "I need to step down from a service position but I feel guilty. What's the spiritually sound way to do that?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_resentment",
+    "label": "Dealing with resentment",
+    "description": "How to identify, process, and release resentments using the program. The Big Book's chapter on resentment as the #1 offender.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm holding onto a resentment and it's eating me up. Can you help me understand why I can't let it go?",
+          "I feel so angry at my sponsor and I know it's hurting my recovery. What should I do with this feeling?",
+          "I've been resentful at my boss for weeks and I can't seem to shake it. Is there a way to work through this in the program?"
+        ],
+        "factual": [
+          "What does the Big Book say about resentment being the number one offender?",
+          "How do I identify a resentment according to the steps?",
+          "What is the first step in dealing with a resentment using the program?"
+        ],
+        "reflective": [
+          "You mentioned a resentment. What part of it feels like it's about you?",
+          "If you could name the exact moment that resentment started, what would you say?",
+          "What would happen if you let go of that resentment right now?"
+        ],
+        "brief": [
+          "Resentment is the top cause of relapse. I need to identify who I'm angry at and why.",
+          "To deal with a resentment, I list the person, the cause, and how it affects me. Then I pray for release.",
+          "Resentments block my connection to a Higher Power. I have to let them go to recover."
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been working steps but can't seem to shake this resentment. I know it's dangerous but I feel justified. What do I do?",
+          "I feel stuck because I've forgiven someone in my head, but my heart still hurts. How do I really release this resentment?",
+          "I'm struggling with a resentment that keeps coming back. Is there a way to see my part in it more clearly?"
+        ],
+        "factual": [
+          "The Big Book says resentment blocks us from God. How do I actually work through a specific resentment using the columns?",
+          "What is the connection between resentment and fear, and how do I inventory both?",
+          "The program says to share my resentment inventory with another person. What if I'm too ashamed to do that?"
+        ],
+        "reflective": [
+          "You say you feel justified. Where does that justification come from, and how does it serve your recovery?",
+          "If you look at that resentment closely, what fear is hiding underneath it?",
+          "What would it cost you to truly let go of this resentment? What would you gain?"
+        ],
+        "brief": [
+          "Resentments are poison. I need to inventory them, see my part, and ask for release. That's the only way.",
+          "The steps say resentment is the number one offender. I can't afford to keep it. I have to work through it completely.",
+          "A resentment held too long will lead me back to drinking. I must face it, own my part, and turn it over."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I have a deep resentment against someone who betrayed me years ago. I've done the columns but still feel anger. I wonder if there's something deeper I'm missing—maybe a fear I haven't named. Can you guide me through uncovering that?",
+          "I've been in the program a while and I'm working on a resentment that ties into childhood trauma. I know the steps help, but I'm confused about where the inventory ends and therapy begins. What's the program's view on that?",
+          "I'm resentful at my higher power for allowing bad things to happen. I know that's not logical, but I feel it. How do I work through a resentment against God using the 12 steps?"
+        ],
+        "factual": [
+          "The Big Book says resentment is the 'number one offender' and describes a specific process: list, columns, share, pray. But it also implies underlying fears. How do I integrate the fear inventory with the resentment process for a long-standing grudge?",
+          "Step four distinguishes between 'resentment' and 'anger' but the book uses them interchangeably. How do I decide which items in my inventory are resentments versus justified anger, and what do I do with each?",
+          "The literature says to pray for the person I resent, but what if I can't honestly wish them well? How do I reconcile that with the requirement of willingness in the program?"
+        ],
+        "reflective": [
+          "You've done the columns but still feel anger. What might you be protecting by holding onto that feeling? If you let go completely, what would you have to face?",
+          "You mention a resentment against your higher power. What does that resentment say about your expectations of God? And what would it mean to surrender that expectation?",
+          "The resentment you describe involves a betrayal. If you look at your own part, what character defect might have set you up to feel betrayed in the first place?"
+        ],
+        "brief": [
+          "Resentment is linked to fear. To release it, I must inventory the resentment, identify the fear beneath it, and surrender both. The steps are clear but the work is deep.",
+          "A complex resentment often hides multiple layers: anger, fear, self-pity. I need to unpack each layer with the columns, then share and pray for the willingness to let go.",
+          "The program offers a complete method for resentment: list, columns, share, pray, and make amends if needed. But true release requires honesty about my part and trust in a Higher Power."
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_fear",
+    "label": "Dealing with fear",
+    "description": "How to handle fear using the steps. The Big Book fear inventory, faith vs fear, facing difficult situations without drinking.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm really scared of relapsing. Can you help me remember what the Big Book says about fear? I need some reassurance.",
+          "I feel so afraid sometimes, and I don't want to drink over it. What does the program say about handling this kind of fear?",
+          "I'm worried about a situation coming up. How can I use the steps to calm my fear without picking up a drink?"
+        ],
+        "factual": [
+          "What does the Big Book say about dealing with fear? It says we need to inventory our fears and turn them over to God.",
+          "The Big Book teaches that fear is the chief activator of our defects. We handle it by writing a fear inventory and asking God to remove it.",
+          "How do I handle fear according to the steps? We identify the fear, share it, and then turn it over through prayer and action."
+        ],
+        "reflective": [
+          "You're feeling afraid. What specific fear is bothering you right now? Have you written it down and looked at how it connects to your drinking?",
+          "Fear is a big topic. When did you first notice this fear? And what step are you on that might help address it?",
+          "I hear you're scared. What would it look like to share that fear with your sponsor or a trusted friend? How might that change things?"
+        ],
+        "brief": [
+          "The Big Book says to inventory our fears. Write them down and share them with your sponsor. Then turn them over.",
+          "Fear is the chief activator of our defects. Inventory it, pray about it, and take action. Faith replaces fear.",
+          "To handle fear: identify it, write it down, talk to your sponsor, and ask your Higher Power to remove it."
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I did the fear inventory but I still feel anxious. I know I need faith but it's hard. Can you help me see how faith can replace this fear?",
+          "I've been working the steps, but I still get overwhelmed by fear sometimes. How do I truly turn it over when I'm scared?",
+          "I understand the fear inventory, but I'm struggling to let go. Can you walk me through using faith to face a specific fear without drinking?"
+        ],
+        "factual": [
+          "The fear inventory helps identify the root of fear. Then we use faith by turning that fear over to a Higher Power. The Big Book says fear is the chief activator of our defects.",
+          "After the fear inventory, we must practice faith. This means praying for God's help and taking right actions, like calling a sponsor or going to a meeting.",
+          "How does faith overcome fear? The Big Book says we replace fear with faith by relying on God. We inventory the fear, share it, and then act as if we trust God."
+        ],
+        "reflective": [
+          "You've done the inventory and still feel fear. What step are you on? Have you shared your fear inventory with someone? What would it look like to practice faith in this situation?",
+          "Fear is persistent. What specific fear is still hanging on? And what action could you take today that would demonstrate faith instead of fear?",
+          "You mentioned faith is hard. What does faith mean to you in this moment? How can you connect that to what you've learned in the steps so far?"
+        ],
+        "brief": [
+          "Fear inventory identifies our fears. Then we turn them over through prayer and action. Faith is the antidote to fear.",
+          "Inventory your fear, share it, and then take one action based on faith. The Big Book says faith without works is dead.",
+          "Handle fear by writing it down, praying for removal, and then acting as if the fear is gone. That's how we use the steps."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I have this deep fear about my health that keeps coming up. I've done the inventory multiple times, but it still triggers cravings. I know I need to rely on faith, but I'm struggling. Can you walk me through how to apply the steps to this specific fear, especially the part about 'faith without works is dead'?",
+          "There's a recurring fear about my job that makes me want to drink. I've talked to my sponsor, but it's still there. How do I use the principle of turning my will and life over to God's care while still dealing with the practical aspects of this fear?",
+          "I'm facing a difficult situation with my family that brings up old resentments and fears. I've done the inventory, but I'm scared I'll drink if I confront them. How do I use faith and the steps to handle this without picking up?"
+        ],
+        "factual": [
+          "The Big Book addresses persistent fears by repeated inventory and action. For a health fear that triggers cravings, continue to inventory the fear, pray for guidance, and take right actions. 'Faith without works is dead' means we must act on our faith, such as calling a sponsor or going to a meeting when fear arises.",
+          "When fear recurs despite inventory, we need to examine whether we've fully surrendered it. The Big Book says we must be willing to have God remove these defects. If cravings follow, we also apply the craving inventory from Step One. Faith is demonstrated by taking the next right action.",
+          "For a complex fear that involves family and potential drinking, the steps require: inventory the fear, share it, ask God for removal, and then take action guided by prayer. The literature emphasizes that fear is the chief activator of our defects, so we must replace it with faith through continuous prayer and service."
+        ],
+        "reflective": [
+          "That health fear seems to be a recurring issue. Let's break it down: What is the exact fear? How does it connect to your drinking? What actions have you taken so far? What would it mean to have 'faith without works' in this context? Have you discussed this with your sponsor?",
+          "You mention a recurring fear that triggers cravings. What step are you currently on? Have you considered that this fear might be a form of self-will? What would it look like to turn this specific fear over to God every day, not just once?",
+          "The fear about confronting your family sounds complex. How does this fear relate to your need for approval? What would a sponsor say about facing it with faith? What is the next right action you can take today that aligns with the steps?"
+        ],
+        "brief": [
+          "Persistent fear requires persistent action. Inventory the fear again, share it, and take one concrete step of faith. The Big Book says fear is the chief activator of our defects; we must replace it with faith through action.",
+          "For recurring fear that triggers cravings: re-inventory the fear, pray for willingness, and take a faith-based action. The steps teach us that faith without works is dead.",
+          "When fear is complex and linked to family or health, use the steps to break it down: inventory, share, surrender, and act. Each time you choose faith over fear, you build spiritual strength."
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_higher_power",
+    "label": "Higher Power and spirituality",
+    "description": "Understanding a Higher Power, especially for agnostics/atheists. How to conceive of HP without religion, prayer to an undefined HP.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm really struggling with the idea of a Higher Power because I don't believe in God. Can you help me find a way to think about it that doesn't feel fake?",
+          "I feel kind of lost when people talk about a Higher Power—it makes me feel left out since I'm an atheist. How can I make sense of this step without feeling like I'm pretending?",
+          "It's hard for me to trust a Power I can't see or define, especially since I've never been religious. Is there a way to connect with something bigger that actually feels real to me?"
+        ],
+        "factual": [
+          "What does the AA literature say about a Higher Power for people who don't believe in God?",
+          "How can an atheist conceive of a Higher Power according to the 12 steps?",
+          "Is it okay to use a non-religious concept like 'the group' or 'the universe' as my Higher Power?"
+        ],
+        "reflective": [
+          "You say you don't believe in God—what do you believe in? Is there anything in your life that feels bigger than you, even if it's not a person?",
+          "If you can't name a Higher Power right now, what would it mean for you to be 'willing to believe'? What would that willingness look like?",
+          "Think about a time you felt supported or guided by something outside yourself—maybe nature, or the fellowship. Could that be a starting point for a Higher Power?"
+        ],
+        "brief": [
+          "I'm an atheist and stuck on step two. How do I define a Higher Power without religion?",
+          "Can my Higher Power just be the group or the program itself?",
+          "I don't believe in God. Is it okay to pray to an undefined Higher Power?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been trying to work step two, but every time I hear 'Higher Power' I feel like I'm being pushed toward something I don't believe in. It's making me want to give up on the steps entirely. How do I get past this?",
+          "I get that the program says I don't have to believe in a specific God, but I still feel like a fraud when I try to pray. How can I pray to something I'm not even sure exists?",
+          "I'm okay with the idea of a Higher Power being 'good orderly direction' or the group conscience, but when I try to turn my will over, it feels empty. Is there a way to make this real for someone like me?"
+        ],
+        "factual": [
+          "What does the Big Book specifically say about a Higher Power for agnostics?",
+          "How does the concept of a Higher Power differ from a traditional God in 12-step literature?",
+          "What are the exact steps an atheist can take to develop a working concept of a Higher Power without believing in a deity?"
+        ],
+        "reflective": [
+          "You're feeling like a fraud when you pray—what would happen if you just said the words anyway, even if you don't believe them? What's the worst that could happen?",
+          "If 'turning it over' feels empty, what are you trying to turn over? Can you start with just one small thing—like your fear of not having a Higher Power?",
+          "You mentioned 'good orderly direction'—what if you treated that as a working hypothesis? How would your actions change if you acted as if it were true?"
+        ],
+        "brief": [
+          "I'm an atheist and step three feels impossible. How do I turn my will over to something I don't believe in?",
+          "I need a non-religious Higher Power that actually works. What have other agnostics used?",
+          "Prayer feels pointless to me. Is there a way to pray that doesn't assume a personal God?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been sober for a while, but I still bump into this wall around the Higher Power concept. I'm an atheist and I've tried thinking of the group, the universe, even love as my HP, but none of them feel like something I can actually turn my will over to. It's like I'm intellectually agreeing but emotionally disconnected. How do I bridge that gap?",
+          "I've read the chapter to the agnostic multiple times, and I get the point about being willing to believe, but I'm stuck on the prayer part. How do I pray to a 'God as I understand Him' when my understanding is that there is no personal God? The whole thing feels like a contradiction, and I don't want to just go through the motions.",
+          "I've started to see my Higher Power as 'the power of the group' or 'the process of recovery itself,' but when I try to do the third step prayer, I feel like I'm lying. It's causing me to question whether I can really work the steps as an atheist. Is there a way to authentically engage with this without compromising my beliefs?"
+        ],
+        "factual": [
+          "How does the AA literature reconcile the instruction to 'pray to a God of your understanding' with the agnostic's position that they have no understanding of a personal deity?",
+          "What is the theological basis in the 12 steps for a non-theistic Higher Power, and how does it differ from theistic interpretations in terms of daily practice like prayer and surrender?",
+          "Can you outline the exact progression from step one through step three for an atheist, including specific actions and mental shifts that don't require belief in a supernatural entity, according to the Big Book and 12&12?"
+        ],
+        "reflective": [
+          "You say you're intellectually agreeing but emotionally disconnected—what would it look like to just sit with that disconnect and not try to fix it? What if the feeling of 'fake' is actually part of the process?",
+          "You mentioned the chapter to the agnostic—what part of that chapter resonates with you, even a little? And what would happen if you treated your resistance as a form of prayer—just saying 'I don't know' honestly?",
+          "If you could define a Higher Power in a way that felt totally authentic to you, even if it's abstract, what would that definition be? And then, how would you test it—like a scientist—by taking one small action based on that definition?"
+        ],
+        "brief": [
+          "I'm an atheist and the third step prayer feels dishonest. Can I modify it or skip it?",
+          "I've been sober years but still can't connect to a Higher Power. How do I move from intellectual acceptance to actual surrender?",
+          "Is there a way to practice step eleven (prayer and meditation) without believing in a personal God?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_prayer_meditation",
+    "label": "Prayer and meditation practice",
+    "description": "How to pray, what prayers to use, meditation techniques in recovery. The Third Step Prayer, Seventh Step Prayer, Serenity Prayer, St. Francis Prayer. Morning and nightly routine.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm struggling to pray sometimes—I feel like I'm not doing it right. Can you help me understand how to start a simple prayer in recovery?",
+          "I feel anxious when I try to pray. Is there a prayer that can help me feel calmer?",
+          "I'm new to recovery and want to start praying. What's a good first prayer to try?"
+        ],
+        "factual": [
+          "What is the Third Step Prayer and when should I say it?",
+          "How long should I spend in prayer each day?",
+          "What is the Serenity Prayer? Where does it come from?"
+        ],
+        "reflective": [
+          "You mentioned you're trying to pray—what does prayer mean to you right now?",
+          "You say you want to pray more—what's stopping you from starting right now?",
+          "If you could ask for one thing in a prayer today, what would it be?"
+        ],
+        "brief": [
+          "I need a simple prayer to start my day. What's a good one?",
+          "Just need a quick prayer for when I'm feeling overwhelmed.",
+          "What's a short meditation I can do in 2 minutes?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been trying to meditate but my mind wanders a lot. How can I use the Serenity Prayer to focus my thoughts during meditation?",
+          "I've been saying the Seventh Step Prayer but I don't feel any change. How can I connect with its meaning more deeply?",
+          "My morning routine feels rushed. Can you suggest how to incorporate the Third Step Prayer without it feeling forced?"
+        ],
+        "factual": [
+          "What is the difference between the Third Step Prayer and the Seventh Step Prayer in terms of their purpose in the 12 steps?",
+          "How does the St. Francis Prayer relate to the concept of service in the 12 steps?",
+          "What is the recommended structure for a nightly meditation routine in recovery?"
+        ],
+        "reflective": [
+          "You're working on a daily routine. How might you connect your morning prayer with your evening meditation to create a consistent practice?",
+          "You're trying to build a routine. What time of day feels most natural for you to pause and reflect?",
+          "If you were to design a personal prayer, what would you include?"
+        ],
+        "brief": [
+          "I want to build a nightly routine. What prayers or meditations are recommended for winding down?",
+          "I want to use the Serenity Prayer during meditation. How do I do that?",
+          "What is the purpose of the Seventh Step Prayer in step 7?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I feel like I'm just reciting words when I pray, and I don't feel connected. I've heard about the St. Francis Prayer, but I'm not sure how to internalize it. Can you guide me through making my prayer practice more heartfelt and less mechanical?",
+          "I've been in recovery for a while but my prayer life feels stagnant. I've tried the Serenity Prayer and the Third Step Prayer, but they feel like old scripts. How can I breathe new life into my spiritual practice without abandoning the traditions?",
+          "Sometimes I feel angry at God. Is there a prayer in the AA literature that addresses resentment or anger towards a higher power?"
+        ],
+        "factual": [
+          "Explain the role of prayer and meditation in the 12 steps, specifically how the Third Step Prayer, Seventh Step Prayer, and Serenity Prayer correspond to different steps and how they should be integrated into a daily practice including morning and nightly routines.",
+          "Compare and contrast the use of the Serenity Prayer in step 1 versus step 11. How does its meaning shift as one progresses through the steps?",
+          "What are the specific instructions in the Big Book for a morning and nightly routine regarding prayer and meditation? Please quote relevant passages."
+        ],
+        "reflective": [
+          "You're asking about making prayer more meaningful. What would it look like for you to approach prayer not as a request but as a way to listen? How might the Serenity Prayer help you discern what you can and cannot change in a specific situation today?",
+          "You're exploring the depth of your prayer practice. What would it mean to you to pray not just for yourself but for others? How might the St. Francis Prayer guide that shift?",
+          "If you were to sit in silence for 10 minutes after a prayer, what might you be listening for?"
+        ],
+        "brief": [
+          "I'm confused about the difference between prayer and meditation in AA. Can you clarify how they work together in a daily practice?",
+          "I'm trying to understand how the Third Step Prayer and Seventh Step Prayer are different. Explain briefly.",
+          "How do I move from reciting prayers to actually meditating on them?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_humility",
+    "label": "Humility and ego",
+    "description": "The role of humility in recovery, self-will run riot, egotism, dependence on HP vs self-sufficiency. How humility is not humiliation.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm feeling really conflicted about humility. Part of me thinks it means I have to be a doormat, but I know that's not right. Can you help me see it differently?",
+          "I get that humility is important, but it's hard for me. Every time I try to be humble, I feel like I'm losing myself. Is that normal?",
+          "I'm scared that being humble means I'll be taken advantage of. Can you explain what humility really looks like in recovery?"
+        ],
+        "factual": [
+          "What does the Big Book say about humility and self-will?",
+          "How does AA define ego in the context of recovery?",
+          "Is humility the same as humiliation according to the 12-step literature?"
+        ],
+        "reflective": [
+          "What would humility look like for me if I were truly practicing it today?",
+          "How can I tell the difference between my ego and my intuition?",
+          "When I think about my defects, how does humility play into accepting them?"
+        ],
+        "brief": [
+          "I'm confused about humility. Is it just about being meek?",
+          "What's the first step to practicing humility in my recovery?",
+          "I struggle with ego. How do I start letting go?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been working the steps and I see how my self-will has caused problems, but I still have trouble surrendering. I know humility is key, but how do I actually practice it when my ego keeps taking over?",
+          "I understand that humility means accepting my powerlessness, but sometimes I feel like I'm just giving up. How do I find the balance between being humble and still taking responsibility?",
+          "I'm trying to depend on my Higher Power more, but my ego tells me I should be able to handle things alone. How do I trust that letting go is not weakness?"
+        ],
+        "factual": [
+          "What does the 12-step literature say about the relationship between humility and self-will run riot?",
+          "How is humility defined in the context of Step One and Step Seven?",
+          "What is the difference between healthy humility and false humility according to AA?"
+        ],
+        "reflective": [
+          "You talk about humility as being essential, but I still hold onto control. What would it take for me to truly surrender?",
+          "How can I recognize when my ego is running the show, and what would a humble response look like in that moment?",
+          "I'm stuck on Step Seven – humbly asking God to remove my defects. What does that humility actually feel like in practice?"
+        ],
+        "brief": [
+          "I know I need humility, but my ego fights it. How do I start?",
+          "Self-will run riot – how does humility help with that?",
+          "Humility is not humiliation, but I feel humiliated when I admit I'm wrong. Help."
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been in recovery for a while and I thought I understood humility, but I'm realizing I have a lot of hidden ego. For example, I still compare my progress to others and feel superior or inferior. How can I truly let go of that need to measure myself? And when I try to be humble, I sometimes feel like I'm pretending or being false. How do I find genuine humility without losing my sense of self-worth?",
+          "I'm grappling with the concept of 'self-will run riot' – I see it in my life where I try to control outcomes and people, and it always backfires. But when I try to surrender, I feel like I'm giving up my identity. How do I reconcile the need for humility with the need to have healthy boundaries and assertiveness? Also, I worry that if I'm too humble, I'll be taken advantage of, especially in relationships. Can you help me understand the nuance?",
+          "I've read that humility is not humiliation, but I come from a background where being humble was used to shame me. So now when I hear 'admit your powerlessness,' it triggers feelings of worthlessness. How can I embrace the spiritual principle of humility without falling into self-deprecation? And how do I deal with the ego that tells me I'm not good enough if I'm not in control?"
+        ],
+        "factual": [
+          "According to the Big Book and the 12 Steps, how does ego manifest as self-will run riot, and what specific practices of humility are recommended to counteract it? Include references to Steps 1, 3, 7, and 11.",
+          "What is the exact distinction between humility and humiliation as presented in AA literature, and how does that distinction apply to the process of admitting defects and making amends?",
+          "In the context of the Third Step prayer and the Seventh Step prayer, how is the concept of dependence on a Higher Power versus self-sufficiency articulated, and what does that imply about the role of humility in daily living?"
+        ],
+        "reflective": [
+          "You've mentioned that humility is key, but I'm wondering – what would it mean for you to practice humility in a specific situation where your ego usually takes over? Can you walk me through the internal shift?",
+          "I hear you saying that humility is not about thinking less of yourself but thinking of yourself less. How does that actually play out when you're dealing with resentment or fear? What questions do you ask yourself to stay humble?",
+          "When you talk about self-will run riot, I think of my own patterns. What would it look like for you to truly surrender control of a situation you're worried about? What does that feel like emotionally and spiritually?"
+        ],
+        "brief": [
+          "Humility is not humiliation, but my past makes them feel the same. How do I separate them?",
+          "Ego tells me I need to control everything. Humility says let go. But how do I do that when I'm scared?",
+          "I understand humility intellectually but struggle with it practically. What's the simplest daily practice?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_forgiveness",
+    "label": "Forgiveness and self-forgiveness",
+    "description": "How to forgive others, how to forgive yourself, letting go of guilt and shame, the relationship between amends and forgiveness.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm really struggling with forgiving myself for something I did. Can you help me understand how to start?",
+          "It's hard for me to let go of guilt even though I've apologized. How can I begin to forgive myself?",
+          "I want to forgive someone who hurt me, but I'm not sure how. What do you suggest?"
+        ],
+        "factual": [
+          "What does AA say about forgiving others?",
+          "How does the program define self-forgiveness?",
+          "Is forgiveness a step in the Twelve Steps?"
+        ],
+        "reflective": [
+          "You say you want to forgive yourself. What is it that you believe you need forgiveness for?",
+          "Forgiving someone else is tough for you. What keeps you from letting go of that resentment?",
+          "You're having trouble with guilt. Do you think you deserve to be forgiven?"
+        ],
+        "brief": [
+          "I need to forgive myself. How do I start?",
+          "How do I let go of guilt?",
+          "What's the first step to forgiving others?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've made amends to people but I still feel guilty. How do I forgive myself when the shame doesn't go away?",
+          "I understand the importance of forgiving others, but I'm struggling with forgiving myself for past mistakes. Can you help?",
+          "It feels like I've done all the steps but I still carry shame. Is self-forgiveness a separate process?"
+        ],
+        "factual": [
+          "How are making amends and forgiveness related according to the Twelve Steps?",
+          "What does the literature say about the role of guilt in self-forgiveness?",
+          "Is forgiving oneself explicitly mentioned in the Big Book?"
+        ],
+        "reflective": [
+          "You've made amends but still feel shame. Do you think forgiving yourself is a separate step, or part of the amends process?",
+          "You mention guilt after amends. What do you think you haven't fully accepted about your past?",
+          "Forgiveness of others seems easier for you than self-forgiveness. Why do you think that is?"
+        ],
+        "brief": [
+          "I can't let go of guilt even after making amends. What does forgiveness have to do with it?",
+          "How do I forgive myself when the steps don't directly address it?",
+          "I made amends but still feel shame. How do I forgive myself?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I've been working the steps and I've made amends, but I still hold onto resentment towards myself for things I did years ago. It feels like I'm stuck in a cycle of shame. How can I truly forgive myself and move forward?",
+          "Forgiving others has been a challenge, but forgiving myself feels impossible. I keep replaying my past and feeling unworthy. Can you guide me through self-forgiveness in recovery?",
+          "I understand that amends are about making things right, but what about the things I can't fix? How do I forgive myself for those irreversible actions?"
+        ],
+        "factual": [
+          "What is the difference between forgiveness and acceptance in recovery, and how do the steps address self-forgiveness specifically?",
+          "How does the concept of 'letting go' in Step 10 relate to self-forgiveness, and what does the literature say about ongoing guilt?",
+          "In what ways does the AA program distinguish between forgiving others and forgiving oneself, and are there specific prayers or practices for self-forgiveness?"
+        ],
+        "reflective": [
+          "You mention resentment towards yourself. What would it take for you to believe that you deserve forgiveness? And how does that connect to the amends you've already made?",
+          "You feel stuck in shame even after working the steps. What part of your past do you think you haven't fully surrendered? And what would letting go look like for you?",
+          "You talk about irreversible actions. Do you think forgiveness requires forgetting, or is it about changing your relationship to what happened? How might that change the way you see yourself?"
+        ],
+        "brief": [
+          "I'm stuck on self-forgiveness after amends. How do I let go of shame and forgive myself?",
+          "I've done the steps but still feel guilt. What's missing in my approach to forgiveness?",
+          "How do I forgive myself for things I can't undo, and still move forward in recovery?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_newcomer",
+    "label": "Newcomer first steps",
+    "description": "Someone brand new to AA: what to do first, how to get a sponsor, 90 meetings in 90 days, the importance of the first 24 hours, the first week/month.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I'm really scared and don't know where to start. Can you help me figure out the very first step in AA?",
+          "Feeling lost and alone here. What should I do right now as a newcomer?",
+          "I just walked into my first meeting and felt so awkward. What's the most important thing for me to focus on today?"
+        ],
+        "factual": [
+          "What is the first action a newcomer should take in AA?",
+          "Explain the 90 meetings in 90 days suggestion and why it's important.",
+          "What are the recommended steps for someone in their first 24 hours sober in AA?"
+        ],
+        "reflective": [
+          "You've made it to your first meeting. What feels most pressing for you right now?",
+          "What does 'first things first' mean to you in this moment?",
+          "If you could only do one thing to start your recovery today, what would it be?"
+        ],
+        "brief": [
+          "I'm new. Should I just go to a meeting every day for the first 90 days?",
+          "What's the very first thing I should do after leaving my first AA meeting?",
+          "I need a sponsor. How do I start looking?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I've been to a few meetings and I'm starting to feel a little better, but I'm still confused about how to actually get a sponsor. How do I know who's right for me?",
+          "I'm trying to do 90 meetings in 90 days but I missed two already and feel like a failure. What do I do?",
+          "People keep saying 'get a sponsor and work the steps' but I don't even know what that means yet. Can you walk me through it gently?"
+        ],
+        "factual": [
+          "How do I find a sponsor in AA and what should I look for in one?",
+          "What is the process for a newcomer to start the 12 Steps, and how does a sponsor fit in?",
+          "Explain the relationship between 90 meetings in 90 days and getting a sponsor for a beginner."
+        ],
+        "reflective": [
+          "You've been to a few meetings. What have you heard about sponsorship that makes you unsure?",
+          "What do you think might happen if you commit to 90 meetings in 90 days?",
+          "You're worried about missing meetings. What does that worry tell you about your priorities?"
+        ],
+        "brief": [
+          "I've done a few meetings. Now I need to find a sponsor. Any tips on how to approach someone?",
+          "90 meetings in 90 days seems hard. How do I handle life obligations and still do it?",
+          "I'm confused about the difference between a home group, a sponsor, and the steps. Can you clarify?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I'm really struggling with the idea of 90 meetings in 90 days because I have a demanding job and young kids. I want to do this program but I'm terrified I'll fail. How do people actually balance everything without relapsing?",
+          "I've heard different opinions on when to get a sponsor — some say wait, some say immediately. I'm confused and a little scared of committing to the wrong person. What's your take on this as someone who's been through it?",
+          "The first step says we admitted we were powerless, but I'm still not sure if I'm an alcoholic. I keep comparing myself to others. How do newcomers work through that doubt in the beginning?"
+        ],
+        "factual": [
+          "What is the recommended timeline for a newcomer: first meeting, first sponsor, first step, and 90 in 90? Provide the rationale for each milestone.",
+          "How does a newcomer navigate the conflicting advice about sponsorship — some say ask someone with at least a year, others say ask anyone with a desire to help? What does AA literature say?",
+          "Explain the purpose of 90 meetings in 90 days from a physiological and psychological perspective for early sobriety."
+        ],
+        "reflective": [
+          "You're worried about balancing 90 meetings with work and family. What would it mean to you to make that commitment, even imperfectly?",
+          "You're unsure if you're an alcoholic. What would happen if you just acted 'as if' for the first 90 days?",
+          "You're scared of picking the wrong sponsor. What qualities are you really looking for in someone to guide you?"
+        ],
+        "brief": [
+          "I'm new, have a full-time job and kids. How do I realistically do 90 meetings in 90 days without burning out?",
+          "Everyone says get a sponsor but I don't know how to ask. What do I say when I approach someone after a meeting?",
+          "I'm not sure I'm an alcoholic, but I keep coming back. How do I work the first step with that doubt?"
+        ]
+      }
+    }
+  },
+  {
+    "intent_id": "ask_relapse",
+    "label": "After a relapse",
+    "description": "Someone who has relapsed and needs to come back. Not drinking over the relapse, what to do next, going back to the steps. Post-hoc — not imminent crisis.",
+    "crisis_adjacent": false,
+    "difficulty_levels": {
+      "simple": {
+        "warm": [
+          "I just relapsed and I'm feeling so ashamed. Can you tell me it's going to be okay and what I should do next?",
+          "I slipped up after 30 days. I'm really scared I've ruined everything. How do I come back from this?",
+          "I feel like a failure after my relapse. Can you help me find some hope and a way forward?"
+        ],
+        "factual": [
+          "What does the literature say about what to do immediately after a relapse?",
+          "After a relapse, should I restart my sobriety count from day one?",
+          "What are the steps to take after a slip according to AA?"
+        ],
+        "reflective": [
+          "I relapsed. Can you help me figure out what I need to look at in myself to prevent this from happening again?",
+          "I'm back after a relapse. What questions should I be asking myself about my program?",
+          "I had a drink after months sober. I'm not sure what to think. Can you walk me through some reflection?"
+        ],
+        "brief": [
+          "I relapsed. What now?",
+          "How do I get back on track after a slip?",
+          "What's the first thing to do after a relapse?"
+        ]
+      },
+      "moderate": {
+        "warm": [
+          "I relapsed after 6 months and I'm terrified I've lost all my progress. I feel so guilty and embarrassed to go back to meetings. Can you help me find the courage to return and tell me it's not the end?",
+          "My sponsor said to call them, but I'm too ashamed. I don't know how to face anyone. What would you say to someone in my shoes?",
+          "I'm struggling with the thought that I'm not strong enough to stay sober. After this relapse, I feel hopeless. Can you remind me why I should keep trying?"
+        ],
+        "factual": [
+          "After a relapse, do I need to start the steps over from the beginning, or can I pick up where I left off?",
+          "How does the AA program suggest handling the guilt and resentment that come after a relapse?",
+          "What do the 12 steps say about the difference between a slip and a relapse, and what should be done differently?"
+        ],
+        "reflective": [
+          "I relapsed and I'm trying to understand the chain of events that led to it. What should I be examining in my daily routine and spiritual condition?",
+          "My relapse made me realize I wasn't being honest with my sponsor. How can I use this experience to deepen my step work?",
+          "I'm back after a relapse. I feel like I need to reassess my program. What areas should I investigate first?"
+        ],
+        "brief": [
+          "I relapsed after months. Do I restart my steps?",
+          "How to handle shame after a relapse without drinking over it?",
+          "What's the quickest way to get back into the program after a slip?"
+        ]
+      },
+      "complex": {
+        "warm": [
+          "I had a relapse after a year of sobriety, and I'm wrestling with a deep sense of failure and fear that I'll never get that time back. I know the program says we never lose the progress, but it doesn't feel that way. Can you help me process these feelings and remind me of the hope in the steps?",
+          "After my relapse, I'm questioning my entire recovery. I feel like I've been faking it. I'm scared to go back to my home group because I think they'll see me as a fraud. How do I rebuild trust in myself and others?",
+          "I relapsed and I'm struggling with the obsession to drink again more than ever. I'm trying to surrender but I don't know how. Can you talk to me about what surrender really means after a relapse and how to find it again?"
+        ],
+        "factual": [
+          "What is the specific guidance in the AA Big Book regarding working with a sponsor after a relapse, particularly regarding steps 4-9 if they were already completed?",
+          "According to the 12 steps and 12 traditions, how does a relapse affect one's standing in the group and the process of making amends?",
+          "The literature discusses 'the phenomenon of craving' and 'the mental obsession.' After a relapse, how should one apply the principles of step 1 and step 2 to address these specifically?"
+        ],
+        "reflective": [
+          "I relapsed after a period of strong sobriety, and I'm trying to understand what my Higher Power is showing me through this. What questions can I ask myself to uncover the spiritual lesson?",
+          "My relapse has shaken my faith in the program. I'm wondering if I ever truly worked the steps. How can I use this experience to examine the depth of my step work without getting lost in shame?",
+          "After a relapse, I'm aware that I need to go back to step one, but I'm not sure how to do that with the same sincerity as before. Can you help me explore what it means to truly admit powerlessness after a failure?"
+        ],
+        "brief": [
+          "After a year relapse, what does the program say about starting over vs. continuing?",
+          "I relapsed and feel like a fraud. How to re-engage with step work authentically?",
+          "Best advice from AA literature for someone who relapsed after a long time?"
+        ]
+      }
+    }
+  }
+]

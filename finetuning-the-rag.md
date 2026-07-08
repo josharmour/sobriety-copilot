@@ -309,8 +309,8 @@ are sequential.
 | B3 | todo | | needs D1 window |
 | B4 | todo | | gate vs A4 |
 | B5 | todo | | after B4 pass |
-| C1 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-07 ~21:00 |
-| C2 | todo | | blocked by C1 |
+| C1 | done | dsv4 | verified by Fable 2026-07-07: 1080 seeds, user-voice register clean, crisis seeds hash-match fixed wording, 0 dupes |
+| C2 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-07 ~21:45 |
 | C3 | todo | | blocked by C2 |
 | C4 | todo | | blocked by C3 |
 | C5 | todo | | blocked by C3 |

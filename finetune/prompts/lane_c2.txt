@@ -1,0 +1,26 @@
+Your task: FT-C2 (Track C — RAFT sample generator) →
+scripts/ft_gen_raft.py + finetune/gen/sft.jsonl (≥8k samples) per the
+roadmap spec (### C2 in finetuning-the-rag.md). Key requirements:
+- Each sample: {messages:[system,user,assistant], meta}. User turn embeds
+  3–5 retrieved passages (1–2 gold + distractors). The context-injection
+  format must BYTE-MATCH the app's localUserMessage template in
+  mobile_app/lib/features/private_mode/local_prompts.dart — train like we
+  infer.
+- User questions: sample from finetune/gen/taxonomy.json seeds (all 30
+  intents, all difficulty/register cells), lightly varied.
+- Assistant answers: generate with dsv4 (temp 0.7), must ground in the gold
+  passage(s), name the source title in prose, ignore distractors. Follow the
+  voice rules in src/prompts/templates.py (no fake lived experience, no
+  bracketed citations, hotline ONLY for crisis-adjacent intents).
+- Include 10% no-context samples and 5% "the corpus doesn't cover this"
+  refusals.
+- EXCLUDE the gold blocks used in finetune/eval/gold.jsonl (A2) if that file
+  exists; otherwise exclude blocks referenced by finetune/eval/questions.jsonl.
+- Corpus source: finetune/cache/search.db (auto-extracted by
+  scripts/ft_checks.py ensure_corpus_db from packs/library-v1.scpack).
+- For bulk dsv4 calls: pass reasoning_effort "low" / thinking off per
+  request; batch with modest concurrency (server max_num_seqs is 8).
+- Long generation: run under nohup, poll, keep going.
+Your Verify: python -m scripts.ft_checks c2 (write scripts/ft_checks_c2.py):
+schema, leakage guard, and a 50-row distractor-citation audit via dsv4 judge
+(< 5% cite-distractor rate).
