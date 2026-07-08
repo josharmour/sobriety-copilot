@@ -314,7 +314,7 @@ are sequential.
 | C3 | todo | | blocked by C2 |
 | C4 | todo | | blocked by C3 |
 | C5 | todo | | blocked by C3 |
-| D1 | todo | | owner approval required |
+| D1 | approved | owner | 2026-07-08: owner approved BOTH GPUs for one training window (prod chat fails over to R9700/10.0.0.100 during it). Plan: GPU0=B3 retriever, GPU1=SFT→DPO in parallel, ~3h. Window opens after data lanes drain (A4 baseline must run BEFORE — needs dsv4 serving) |
 | D2 | done | dsv4 | verified by Fable 2026-07-07: Unsloth 2026.7.1 native on Blackwell (torch 2.10 cu128), gemma-4-e2b-it smoke pass, QLoRA fits easily; CIFS venv workaround documented |
 | D3 | done* | dsv4 | verified by Fable 2026-07-07: CPU-side validation full pass (r=32, packing 2.67x, stratified split). *GPU 20-step dry run pending D1 window; note: full-LM loss (no completion-only masking) — revisit at dry run |
 | D4 | done* | dsv4 | verified by Fable 2026-07-07: CPU-side full pass; beta=0.15 documented w/ tuning guidance; prompt-masked DPO loss; assumed C4 schema documented in script header. *GPU dry run pending D1 window |
