@@ -293,7 +293,8 @@ are sequential.
 
 | id | status | agent | notes |
 |----|--------|-------|-------|
-| A1 | todo | | |
+| A0 | done | dsv4 | scaffolding + ft_checks skeleton; verified by Fable 2026-07-07 (f6b413e) |
+| A1 | in-progress(dsv4) | dsv4 | |
 | A2 | todo | | blocked by A1 |
 | A3 | todo | | blocked by A2 |
 | A4 | todo | | blocked by A3 |
