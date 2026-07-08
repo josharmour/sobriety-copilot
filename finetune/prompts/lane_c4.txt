@@ -1,0 +1,32 @@
+Your task: FT-C4 (Track C — DPO preference pairs) → finetune/gen/dpo.jsonl
+(≥1.5k pairs) per the roadmap spec (### C4 in finetuning-the-rag.md).
+
+Input: finetune/gen/sft.filtered.jsonl (6,446 quality-passed samples). Do
+NOT modify it. The DPO trainer's assumed schema is documented in the header
+of scripts/ft_train_dpo.py — MATCH IT EXACTLY ({prompt|messages, chosen,
+rejected, meta.flaw}).
+
+- chosen = the filtered sample's assistant answer (keep its system+user as
+  the prompt context).
+- rejected = a systematically flawed variant generated adversarially with
+  dsv4. Flaw taxonomy (spread pairs across all five):
+  1. fake_lived_experience — answer claims personal recovery ("when I got
+     sober...").
+  2. unneeded_hotline — hotline/911 pushed on a non-crisis question.
+  3. ignores_passages — answers from generic knowledge, contradicting or
+     ignoring the provided gold passages.
+  4. bracket_citations — [1]-style markers / filenames instead of titles.
+  5. rambles — blows past the register's tone budget (esp. brief).
+- Verify each generated rejected answer actually EXHIBITS its flaw with a
+  dsv4 judge call (temp 0); regenerate until it does (max 3 tries, then
+  skip that sample).
+- dsv4 calls MUST include "chat_template_kwargs": {"thinking": false}.
+  Generation temp 0.7, judge temp 0. Concurrency ≤16. Checkpointed
+  resumable script scripts/ft_gen_dpo.py under nohup.
+
+Write scripts/ft_checks_c4.py registering 'c4': ≥1500 pairs, every pair
+labeled with meta.flaw from the taxonomy, schema matches ft_train_dpo.py
+expectations, judge-confirm a 40-row random sample (each rejected exhibits
+its labeled flaw; chosen does NOT), print 3 pairs for spot-read.
+Your Verify: python -m scripts.ft_checks c4.
+Then the HANDOFF line per swarm rules.

@@ -1,0 +1,19 @@
+Your task: FT-C5 (Track C — Splits + dataset card) → train/val split files +
+finetune/gen/DATASET.md per the roadmap spec (### C5 in finetuning-the-rag.md).
+
+Input: finetune/gen/sft.filtered.jsonl (6,446 rows). Do NOT modify it.
+- finetune/gen/sft.train.jsonl + finetune/gen/sft.val.jsonl: 98/2 split,
+  stratified by meta.intent_id (every intent present in val when it has
+  ≥50 rows; deterministic seed documented).
+- finetune/gen/DATASET.md: sizes (total/by intent/by register/by
+  sample_type), generation lineage (taxonomy C1 → RAFT C2 → filter C3 with
+  drop stats from finetune/gen/filter_report.json), leakage guards
+  (A1/A2-gold exclusion, doc-scoped (doc_id, block_id) identity), and known
+  caveats (5 rows pending eval-set re-screen after A2 lands).
+- No LLM calls needed. Plain script scripts/ft_split_sft.py.
+
+Write scripts/ft_checks_c5.py registering 'c5': split sizes sum to input,
+no row in both splits, stratification holds, DATASET.md numbers match the
+actual files.
+Your Verify: python -m scripts.ft_checks c5.
+Then the HANDOFF line per swarm rules.

@@ -326,9 +326,9 @@ are sequential.
 | B5 | todo | | after B4 pass |
 | C1 | done | dsv4 | verified by Fable 2026-07-07: 1080 seeds, user-voice register clean, crisis seeds hash-match fixed wording, 0 dupes |
 | C2 | verify(fable) | dsv4 | 8000 samples done; ft_checks c2 green except 5 leaked rows pending final A1 set (doc-scoped guard added by Fable) |
-| C3 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-08 ~08:20 |
-| C4 | todo | | blocked by C3 |
-| C5 | todo | | blocked by C3 |
+| C3 | done | dsv4 | verified by Fable 2026-07-08: 6,446/8,000 kept (19.4% drop, mostly grounding: invented quotes/pages); kept-sample spot-read 60/60 clean |
+| C4 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-08 ~09:45 |
+| C5 | in-progress(fable-lane) | dsv4 | headless lane launched 2026-07-08 ~09:45 |
 | D1 | approved | owner | 2026-07-08: owner approved BOTH GPUs for one training window (prod chat fails over to R9700/10.0.0.100 during it). Plan: GPU0=B3 retriever, GPU1=SFT→DPO in parallel, ~3h. Window opens after data lanes drain (A4 baseline must run BEFORE — needs dsv4 serving) |
 | D2 | done | dsv4 | verified by Fable 2026-07-07: Unsloth 2026.7.1 native on Blackwell (torch 2.10 cu128), gemma-4-e2b-it smoke pass, QLoRA fits easily; CIFS venv workaround documented |
 | D3 | done* | dsv4 | verified by Fable 2026-07-07: CPU-side validation full pass (r=32, packing 2.67x, stratified split). *GPU 20-step dry run pending D1 window; note: full-LM loss (no completion-only masking) — revisit at dry run |
