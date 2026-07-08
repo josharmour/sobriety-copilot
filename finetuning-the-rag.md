@@ -43,7 +43,7 @@ No trained artifact ships unless its eval-gate task beats baseline.
   `blocks(doc_id, block_id, heading, text)` — 115,673 rows, 79 docs.
   Extracted copy for tooling: build your own tempdir; do NOT edit packs/.
 - Teacher/worker LLM: OpenAI-compatible at `http://10.0.0.10:8002/v1`,
-  model name `dsv4`, no API key. Use `temperature=0.7` for generation,
+  model name `deepseek-v4-flash` (the old `dsv4` alias is GONE), no API key. ALWAYS pass chat_template_kwargs {"thinking": false} for bulk/judge calls. Use `temperature=0.7` for generation,
   `0.0` for judging.
 - Embeddings today: server `all-minilm` (ollama); on-device EmbeddingGemma
   (`google/embeddinggemma-300m`, HF token at `~/.cache/huggingface/token`);
@@ -318,7 +318,7 @@ are sequential.
 || A1 | verify(fable) | dsv4 | FT-A1 targeted fix applied 2026-07-08: 8/9 crosswork deixis repaired via dsv4 (1 manually), 37/42 negatives regenerated as recovery-adjacent (5 sanity anchors kept). Extended ft_checks_a1.py enforces crosswork deixis + negative recovery-adjacency ≥75%. `python -m scripts.ft_checks a1` passes (0 deixis defects, 5 off-target neg = 88.1% on-target) |
 | A2 | verify(fable) | dsv4 | FT-A2 done 2026-07-08: scripts/ft_gen_gold.py + scripts/ft_checks_a2.py written; 256/256 gold rows generated; ft_checks a2 passes (1:1 coverage, all blocks existing, ≤130 words, titles present, negative refusals valid) |
 | A3 | done | dsv4 | verified 2026-07-08: ft_eval.py runner, smoke run green; full baseline = A4 |
-| A4 | in-progress(fable) | fable | baseline runs kicked 2026-07-08 ~11:20 (server + retriever-only, full 256) |
+| A4 | done | fable | 2026-07-08: BASELINE.md — citation_accuracy 0.322 (headline weakness), faithfulness 4.94, quality 4.56, refusal 4.29; retriever recall@4 0.372 / @8 0.400 (B4 yardstick) |
 | B1 | done | dsv4 | 61,448 pairs after doc-scoped gold re-exclude (251 removed 2026-07-08); full-corpus coverage |
 | B2 | done | dsv4+fable | verified 2026-07-08: 61,445 triplets 1:1 with pairs, 4 hard negs each, adjacency+leak clean (Fable backfilled 5,448 after re-exclude shifted pairs) |
 | B3 | todo | | needs D1 window |
