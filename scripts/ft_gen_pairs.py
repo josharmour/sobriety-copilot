@@ -81,7 +81,9 @@ def load_eligible_blocks() -> list[dict]:
     ]
 
 
-def load_gold_block_ids() -> set[str]:
+def load_gold_block_ids() -> set[tuple[str, str]]:
+    """Gold exclusion as (doc_id, block_id) pairs — bare block ids collide
+    across docs and would over-exclude ~10x."""
     if not GOLD_PATH.is_file():
         return set()
     blocked = set()
@@ -91,8 +93,13 @@ def load_gold_block_ids() -> set[str]:
             if not line:
                 continue
             row = json.loads(line)
-            for bid in row.get("gold_block_ids", []):
-                blocked.add(bid)
+            docs = row.get("gold_doc_ids", [])
+            blocks = row.get("gold_block_ids", [])
+            primary = docs[0] if docs else None
+            for i, bid in enumerate(blocks):
+                d = docs[i] if i < len(docs) else primary
+                if d:
+                    blocked.add((d, bid))
     return blocked
 
 
@@ -247,7 +254,7 @@ def re_exclude_pairs() -> int:
             if not line:
                 continue
             row = json.loads(line)
-            if row["block_id"] in gold_block_ids:
+            if (row["doc_id"], row["block_id"]) in gold_block_ids:
                 removed += 1
             else:
                 kept.append(row)
@@ -332,7 +339,7 @@ def generate(blocks: list[dict], dry_run: int = 0) -> int:
     gold_block_ids = load_gold_block_ids()
     if gold_block_ids:
         print(f"Gold.jsonl found — {len(gold_block_ids)} blocks excluded", flush=True)
-        blocks = [b for b in blocks if b["block_id"] not in gold_block_ids]
+        blocks = [b for b in blocks if (b["doc_id"], b["block_id"]) not in gold_block_ids]
         print(f"Eligible after exclusion: {len(blocks)}", flush=True)
 
     if dry_run:
