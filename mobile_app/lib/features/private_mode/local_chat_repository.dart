@@ -429,6 +429,15 @@ class LocalChatRepository implements ChatRepository {
           }
         }
       }
+
+      // 5. "Keep exploring" follow-ups — one short extra turn in the SAME
+      //    chat (its context already holds the answer, so prefill is cheap).
+      //    Mirrors the server's follow-up call; failure is non-fatal.
+      final followups = await _generateFollowups(chat);
+      if (followups.isNotEmpty) {
+        yield FollowupsEvent(followups);
+      }
+
       yield const DoneEvent();
     } catch (e) {
       yield ErrorEvent('On-device model error: $e');
@@ -443,6 +452,34 @@ class LocalChatRepository implements ChatRepository {
           await c.close();
         } catch (_) {}
       }
+    }
+  }
+
+  /// Asks the finished chat for 2–3 tappable follow-up questions. Bounded,
+  /// best-effort: any error or weird output returns an empty list.
+  Future<List<String>> _generateFollowups(InferenceChat chat) async {
+    try {
+      await chat.addQuery(Message.text(
+        text: 'Suggest three short follow-up questions the person might ask '
+            'next, continuing this conversation. One per line. No numbering, '
+            'no quotes, no other text. Each under twelve words.',
+        isUser: true,
+      ));
+      final buf = StringBuffer();
+      await for (final r in chat.generateChatResponseAsync()) {
+        if (r is TextResponse) buf.write(r.token);
+        if (buf.length > 500) break; // runaway guard
+      }
+      final lines = buf
+          .toString()
+          .split('\n')
+          .map((l) => l.trim().replaceFirst(RegExp(r'^[-*\d.)\s]+'), ''))
+          .where((l) => l.length > 8 && l.length < 90)
+          .take(3)
+          .toList();
+      return lines;
+    } catch (_) {
+      return const [];
     }
   }
 
