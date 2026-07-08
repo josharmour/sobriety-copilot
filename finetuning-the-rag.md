@@ -23,6 +23,12 @@ No trained artifact ships unless its eval-gate task beats baseline.
 - **Statuses** in the ledger: `todo → in-progress(agent) → verify(fable) → done`.
   Workers edit ONLY their task's deliverables + the ledger row. Never touch
   another track's files.
+- **Handoff (on Verify pass), in order:** (1) set your ledger row to
+  `verify(fable)`; (2) end your reply with a line
+  `HANDOFF: <task-ids> ready for Fable review`; (3) continue to the next
+  unblocked task WITHOUT waiting — review is asynchronous. Skipping the
+  ledger or the HANDOFF line is a protocol violation even when the work is
+  good.
 - **Commits**: one commit per task, message `FT-<id>: <summary>`. No pushes
   from workers; Fable pushes after verify.
 - **Artifacts** live under `finetune/` (gitignore large files; commit
