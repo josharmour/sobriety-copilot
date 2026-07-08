@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import collections.abc
+import json
 import shutil
 import sqlite3
 import sys
@@ -39,6 +40,8 @@ FINETUNE_DIRS = [
     REPO_ROOT / "finetune" / "runs",
     REPO_ROOT / "finetune" / "cache",
 ]
+
+KINDS = ["doctrine", "practical", "phrase", "crosswork", "personal", "negative"]
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +102,97 @@ def register(id: str):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# FT-A1  —  eval questions
+# ═══════════════════════════════════════════════════════════════════════════
+
+@register("a1")
+def check_a1(args: list[str]) -> int:
+    """Verify finetune/eval/questions.jsonl — schema, counts, source ids."""
+    q_path = REPO_ROOT / "finetune" / "eval" / "questions.jsonl"
+
+    if not q_path.is_file():
+        print(f"FAIL: {q_path} not found", file=sys.stderr)
+        return 1
+
+    errors: list[str] = []
+    rows: list[dict] = []
+    with open(q_path) as f:
+        for i, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as e:
+                errors.append(f"line {i}: invalid JSON — {e}")
+                continue
+            rows.append(row)
+
+    if len(rows) < 240:
+        errors.append(f"only {len(rows)} rows (need ≥240)")
+
+    # Schema check
+    required_keys = {"id", "question", "kind", "source_doc_id", "source_block_ids"}
+    kind_counts: dict[str, int] = {}
+    for i, row in enumerate(rows, 1):
+        missing = required_keys - set(row.keys())
+        if missing:
+            errors.append(f"row {i} (id={row.get('id','?')}): missing keys {missing}")
+            continue
+        kind = row["kind"]
+        kind_counts[kind] = kind_counts.get(kind, 0) + 1
+        if kind not in KINDS:
+            errors.append(f"row {i}: unknown kind '{kind}'")
+        if not isinstance(row["source_block_ids"], list):
+            errors.append(f"row {i}: source_block_ids must be a list")
+        if kind in ("doctrine", "practical", "phrase", "personal"):
+            if not row["source_doc_id"]:
+                errors.append(f"row {i}: missing source_doc_id for kind '{kind}'")
+        if kind == "negative":
+            if row["source_doc_id"] is not None:
+                errors.append(f"row {i}: negative kind should have null source_doc_id")
+            if row.get("source_block_ids"):
+                errors.append(f"row {i}: negative kind should have empty source_block_ids")
+        if kind == "crosswork":
+            # crosswork can have null source_doc_id
+            if len(row.get("source_block_ids", [])) < 2:
+                errors.append(f"row {i}: crosswork needs ≥2 source_block_ids")
+
+    # Check per-kind counts
+    for k in KINDS:
+        count = kind_counts.get(k, 0)
+        if count < 40:
+            errors.append(f"kind '{k}' has {count} rows (need ≥40)")
+
+    # Verify all source ids exist in corpus DB
+    try:
+        conn = open_corpus()
+        for row in rows:
+            for bid in row.get("source_block_ids", []):
+                exists = conn.execute(
+                    "SELECT 1 FROM blocks WHERE block_id = ?", (bid,)
+                ).fetchone()
+                if not exists:
+                    errors.append(
+                        f"row {row['id']}: block_id '{bid}' not found in corpus"
+                    )
+        conn.close()
+    except Exception as e:
+        errors.append(f"corpus DB check failed: {e}")
+
+    if errors:
+        for e in errors:
+            print(f"  FAIL: {e}", file=sys.stderr)
+        return 1
+
+    # Print summary
+    print(f"A1 OK — {len(rows)} questions")
+    for k in KINDS:
+        print(f"  {k}: {kind_counts[k]}")
+    return 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # FT-A0  —  scaffolding + ft_checks skeleton
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -146,7 +240,20 @@ def check_a0(args: list[str]) -> int:
 # Dispatch
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _load_task_modules() -> None:
+    """Auto-import scripts/ft_checks_*.py so parallel workers register their
+    checks in per-task modules instead of editing this shared file (swarm
+    mode: no two agents may write the same path)."""
+    import importlib
+    for mod in sorted(Path(__file__).parent.glob("ft_checks_*.py")):
+        try:
+            importlib.import_module(f"scripts.{mod.stem}")
+        except Exception as e:
+            print(f"WARN: failed to load {mod.name}: {e}", file=sys.stderr)
+
+
 def main() -> int:
+    _load_task_modules()
     ap = argparse.ArgumentParser(
         description="Fine-tuning pipeline verification checks",
     )
