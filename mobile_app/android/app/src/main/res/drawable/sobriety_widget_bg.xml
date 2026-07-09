@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Lighthouse navy card matching AppColors.darkSurface / accent. -->
+<!-- Semi-transparent dark background for a clean, innocuous look on any desktop wallpaper. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#121B2A" />
+    <solid android:color="#40000000" />
     <corners android:radius="16dp" />
-    <stroke android:width="1dp" android:color="#3348B8D0" />
 </shape>

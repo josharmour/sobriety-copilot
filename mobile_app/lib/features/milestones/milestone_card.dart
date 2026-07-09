@@ -57,15 +57,51 @@ class MilestoneCard extends ConsumerWidget {
     final toGo = next.days - days;
     final saved = state.moneySaved;
 
+    if (state.discreet) {
+      return Center(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppSpacing.radius),
+          onTap: () => showTrackerEditor(context, ref),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: (last ?? next).color,
+                    border: Border.all(color: Colors.white38),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  'Day $days',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                const Icon(Icons.edit_outlined,
+                    color: Colors.white38, size: 14),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final headline = days == 0
         ? 'Day one'
-        : state.discreet
-            ? 'Day $days'
-            : '$days ${days == 1 ? 'day' : 'days'} sober';
-    final subtitle = state.discreet
-        ? null
-        : '$toGo ${toGo == 1 ? 'day' : 'days'} to ${next.label}'
-            '${saved != null ? '  ·  ${NumberFormat.simpleCurrency().format(saved)} saved' : ''}';
+        : '$days ${days == 1 ? 'day' : 'days'} sober';
+    final subtitle = '$toGo ${toGo == 1 ? 'day' : 'days'} to ${next.label}'
+        '${saved != null ? '  ·  ${NumberFormat.simpleCurrency().format(saved)} saved' : ''}';
 
     return Center(
       child: ConstrainedBox(
@@ -105,14 +141,12 @@ class MilestoneCard extends ConsumerWidget {
                         color: Colors.white38, size: 16),
                   ],
                 ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: Colors.white70),
-                  ),
-                ],
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: Colors.white70),
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(3),

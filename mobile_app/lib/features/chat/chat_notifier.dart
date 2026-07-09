@@ -93,9 +93,13 @@ class ChatNotifier extends Notifier<ChatState> {
     }
 
     // Local-only tracker context: lets the assistant speak to "day 92"
-    // without the server ever storing the date.
+    // without the server ever storing the date. Only pass it when relevant.
     final sobriety = ref.read(sobrietyProvider);
-    final clientContext = sobriety.isTracking
+    final wantsDayCount = RegExp(
+      r'\b(day|days|sober|sobriety|clean|milestone|birthday|anniversary|how\s+long|how\s+am\s+i\s+doing)\b',
+      caseSensitive: false,
+    ).hasMatch(trimmed);
+    final clientContext = (sobriety.isTracking && wantsDayCount)
         ? 'They are ${sobriety.daysSober} days sober today.'
         : null;
 
