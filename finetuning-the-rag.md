@@ -1,4 +1,11 @@
-# finetuning-the-rag — Swarm Roadmap
+# finetuning-the-rag — Swarm Roadmap ✅ COMPLETE (2026-07-09)
+
+**Done:** retriever fine-tuned + gated + shipped (pack v3, live on prod); generator
+fine-tuned (SFT beats base E2B +0.25 quality) + eval-gated; full eval harness;
+training infra. **Deployment of the fine-tuned generator on-device (litertlm export)
+and the cloud retriever re-index moved to the next feature list.** See spike
+reports in finetune/deploy/. Retrieval recall (0.44) is the citation ceiling —
+the biggest future lever is better retrieval, not the generator.
 
 Goal: make the whole stack *measurably* smarter on 12-step literature by
 fine-tuning (1) the retriever, (2) the generator — while keeping RAG as the
@@ -333,11 +340,11 @@ are sequential.
 | D2 | done | dsv4 | verified by Fable 2026-07-07: Unsloth 2026.7.1 native on Blackwell (torch 2.10 cu128), gemma-4-e2b-it smoke pass, QLoRA fits easily; CIFS venv workaround documented |
 | D3 | done | dsv4+fable | GPU 20-step dry run PASSED 2026-07-08 (loss 1.70->0.99). Switched to unsloth loader (peft cant wrap Gemma4ClippableLinear) + bf16 LoRA (dropped 4bit). FULL SFT RUNNING now (GPU1, ~26%, loss 0.57) |
 | D4 | done* | dsv4 | verified by Fable 2026-07-07: CPU-side full pass; beta=0.15 documented w/ tuning guidance; prompt-masked DPO loss; assumed C4 schema documented in script header. *GPU dry run pending D1 window |
-| D5 | todo | | blocked by D3 |
+| D5 | done | fable | merge/export shipped via scripts/ft_merge_adapter.py; on-device litertlm export = next-list F2 | | blocked by D3 |
 | E1 | done | | C5 + D3 |
 | E2 | done | | gate; needs A4 + D5 |
 | E3 | done | | E1 + C4 + D4 |
 | E4 | done | | gate |
-| F1 | todo | | after E2 |
-| F2 | todo | | anytime |
-| F3 | todo | | anytime |
+| F1 | next-list | | server A/B flag for FT model |
+| F2 | spiked | | litertlm export FEASIBLE (needs GPU window); report in finetune/deploy/f2_report.md → next feature list |
+| F3 | spiked | | folded into F2 report; ai-edge-torch path works |
