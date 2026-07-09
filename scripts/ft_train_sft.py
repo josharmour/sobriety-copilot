@@ -567,15 +567,14 @@ def train(args: argparse.Namespace, cfg: dict) -> int:
     NOTE: This function allocates GPU memory.  Only call inside a D1 window
           (after freeing at least one GPU from vLLM).
     """
+    # unsloth must import before transformers/trl so its patches apply.
+    # Vanilla peft 0.19 cannot wrap Gemma4ClippableLinear; unsloth's
+    # get_peft_model knows the Gemma4 module layout. 4-bit/QLoRA dropped
+    # 2026-07-08 — a 2B model on 96 GB cards gains nothing from
+    # quantization; bf16 LoRA is simpler and faster.
+    from unsloth import FastLanguageModel  # noqa: I001
     import torch
-    import transformers
     from datasets import Dataset as HFDataset
-    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-    from transformers import (
-        AutoModelForCausalLM,
-        AutoTokenizer,
-        BitsAndBytesConfig,
-    )
     from trl import SFTConfig, SFTTrainer
 
     model_name = cfg["model"]["name"]
@@ -589,11 +588,27 @@ def train(args: argparse.Namespace, cfg: dict) -> int:
     seq_len = args.seq_len or train_cfg["sequence_length"]
     seed = cfg.get("seed", 42)
 
-    # ---- Load tokenizer ----
-    print(f"Loading tokenizer: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    # ---- Load model + tokenizer via unsloth (bf16, no quantization) ----
+    print(f"Loading model via unsloth (bf16, LoRA): {model_name}")
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name,
+        max_seq_length=seq_len,
+        dtype=torch.bfloat16,
+        load_in_4bit=False,
+    )
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
+
+    model = FastLanguageModel.get_peft_model(
+        model,
+        r=qlora_cfg["r"],
+        lora_alpha=qlora_cfg["lora_alpha"],
+        target_modules=qlora_cfg.get("target_modules"),
+        lora_dropout=qlora_cfg.get("lora_dropout", 0.05),
+        bias="none",
+        use_gradient_checkpointing="unsloth",
+        random_state=seed,
+    )
 
     # ---- Load dataset ----
     print(f"Loading dataset: {args.dataset}")
@@ -610,38 +625,6 @@ def train(args: argparse.Namespace, cfg: dict) -> int:
     val_texts = [format_fn(r)["text"] for r in val_rows]
     train_ds = HFDataset.from_dict({"text": train_texts})
     val_ds = HFDataset.from_dict({"text": val_texts})
-
-    # ---- QLoRA bitsandbytes config ----
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype=getattr(torch, qlora_cfg.get("bnb_4bit_compute_dtype", "bfloat16")),
-        bnb_4bit_quant_type=qlora_cfg.get("bnb_4bit_quant_type", "nf4"),
-        bnb_4bit_use_double_quant=qlora_cfg.get("bnb_4bit_use_double_quant", True),
-    )
-
-    # ---- Load model in 4-bit ----
-    print(f"Loading model (4-bit NF4): {model_name}")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        quantization_config=bnb_config,
-        device_map="auto",
-        torch_dtype=getattr(torch, cfg["model"].get("torch_dtype", "bfloat16")),
-        attn_implementation=cfg["model"].get("attn_implementation", "flash_attention_2"),
-        trust_remote_code=True,
-    )
-
-    # ---- LoRA config ----
-    lora_config = LoraConfig(
-        r=qlora_cfg["r"],
-        lora_alpha=qlora_cfg["lora_alpha"],
-        target_modules=qlora_cfg.get("target_modules"),
-        lora_dropout=qlora_cfg.get("lora_dropout", 0.05),
-        bias="none",
-        task_type="CAUSAL_LM",
-        modules_to_save=qlora_cfg.get("modules_to_save"),
-        use_dora=qlora_cfg.get("use_dora", False),
-        init_lora_weights=qlora_cfg.get("init_lora_weights", True),
-    )
 
     # ---- SFT config ----
     max_steps = args.max_steps if args.max_steps is not None else train_cfg.get("max_steps", -1)
@@ -696,8 +679,7 @@ def train(args: argparse.Namespace, cfg: dict) -> int:
         args=sft_config,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        tokenizer=tokenizer,
-        peft_config=lora_config,
+        processing_class=tokenizer,
     )
 
     # ---- Checkpoint resume ----

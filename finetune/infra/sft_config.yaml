@@ -23,7 +23,7 @@
 model:
   name: google/gemma-4-e2b-it
   torch_dtype: bfloat16
-  attn_implementation: flash_attention_2   # falls back to sdpa in dry-run
+  attn_implementation: sdpa   # flash-attn wheels unavailable on this stack (D2 note); sdpa is the Blackwell-safe choice
 
 qlora:
   r: 32
