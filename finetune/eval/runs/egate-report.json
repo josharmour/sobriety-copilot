@@ -7,27 +7,37 @@
  },
  "candidates": [
   {
-   "name": "ft-dpo",
+   "name": "base-e2b",
    "recall@4": 0.4439252336448598,
    "recall@8": 0.4439252336448598,
-   "citation_accuracy": 0.19626168224299065,
-   "faithfulness": 4.9766355140186915,
-   "answer_quality": 3.65234375,
-   "refusal_correctness": 4.928571428571429
+   "citation_accuracy": 0.19158878504672897,
+   "faithfulness": 4.97196261682243,
+   "answer_quality": 3.41015625,
+   "refusal_correctness": 5.0
   },
   {
-   "name": "ft-sft",
+   "name": "ft-sft-512",
    "recall@4": 0.4439252336448598,
    "recall@8": 0.4439252336448598,
    "citation_accuracy": 0.20093457943925233,
-   "faithfulness": 4.981308411214953,
-   "answer_quality": 3.5859375,
+   "faithfulness": 4.990654205607477,
+   "answer_quality": 3.65625,
    "refusal_correctness": 4.928571428571429
   }
  ],
- "caveats": [
-  "256-token generation cap truncated 94/256 (37%) answers \u2014 citation_accuracy and answer_quality are biased LOW",
-  "baseline is dsv4 (giant server model); correct on-device baseline (untuned Gemma-4-E2B) not yet measured",
-  "recall@8 0.444 caps citation_accuracy regardless of generator"
- ]
+ "clean_rerun_512tok": {
+  "base_e2b": {
+   "citation": 0.192,
+   "faithfulness": 4.972,
+   "quality": 3.41,
+   "refusal": 5.0
+  },
+  "ft_sft_512": {
+   "citation": 0.201,
+   "faithfulness": 4.991,
+   "quality": 3.656,
+   "refusal": 4.929
+  },
+  "verdict": "Fine-tuned SFT beats base E2B: quality +0.25, faithfulness +0.02, ~2x answer length; citation flat (retrieval-capped at recall@8 0.44); refusal -0.07. SHIP SFT on-device. DPO not worth its over-optimization risk (approx equal to SFT)."
+ }
 }

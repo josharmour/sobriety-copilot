@@ -21,7 +21,8 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 QUESTIONS = REPO / "finetune" / "eval" / "questions.jsonl"
 GOLD = REPO / "finetune" / "eval" / "gold.jsonl"
-FT_RETRIEVER = REPO / "finetune" / "retriever" / "model"
+FT_RETRIEVER = Path("/home/joshu/ft-runs/eval-assets/retriever-model")  # local (CIFS stalls parallel reads)
+LOCAL_DB = "/home/joshu/ft-runs/eval-assets/search.db"
 EMB_CACHE = Path("/home/joshu/ft-runs/corpus_ft_emb.pt")
 RUNS = REPO / "finetune" / "eval" / "runs"
 QUERY_PREFIX = "task: search result | query: "
@@ -68,9 +69,8 @@ def main() -> int:
     args = ap.parse_args()
 
     import torch
-    from scripts.ft_checks import ensure_corpus_db, open_corpus
-    ensure_corpus_db()
-    db = open_corpus()
+    import sqlite3
+    db = sqlite3.connect(LOCAL_DB)  # local copy — avoids CIFS read stalls
     rows = db.execute("SELECT doc_id, block_id, heading, text FROM blocks").fetchall()
     ids = [(r[0], r[1]) for r in rows]
     texts = {(r[0], r[1]): (r[2], r[3]) for r in rows}
@@ -113,7 +113,7 @@ def main() -> int:
                 {"role": "user", "content": f"Relevant passages:\n{ctx}\n\nQuestion: {q['question']}"}]
         prompt = tok.apply_chat_template(msgs, add_generation_prompt=True, tokenize=False)
         inp = tok(text=prompt, return_tensors="pt").to(model.device)
-        out = model.generate(**inp, max_new_tokens=256, do_sample=False,
+        out = model.generate(**inp, max_new_tokens=512, do_sample=False,
                              repetition_penalty=1.1, pad_token_id=tok.eos_token_id)
         ans = tok.decode(out[0][inp["input_ids"].shape[1]:], skip_special_tokens=True).strip()
         results.append({"id": q["id"], "kind": q["kind"], "question": q["question"],
