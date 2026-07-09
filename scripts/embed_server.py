@@ -28,7 +28,10 @@ from sentence_transformers import SentenceTransformer
 # ---------------------------------------------------------------------------
 # Paths & constants
 # ---------------------------------------------------------------------------
-MODEL_PATH = "/home/joshu/ft-runs/eval-assets/retriever-model"
+MODEL_PATH = os.environ.get(
+    "RETRIEVER_MODEL_PATH",
+    "/home/joshu/ft-runs/eval-assets/retriever-model",
+)
 DIMENSION = 768
 HOST = os.environ.get("EMBED_HOST", "0.0.0.0")
 PORT = int(os.environ.get("EMBED_PORT", "8190"))
@@ -60,6 +63,8 @@ app = FastAPI(title="Embedding Microservice (fine-tuned EmbeddingGemma)")
 # Request / response schemas (OpenAI-compatible)
 # ---------------------------------------------------------------------------
 class EmbeddingRequest(BaseModel):
+    model_config = {"extra": "allow"}  # Tolerate OpenAI-client extra fields (encoding_format, user, etc.)
+
     input: list[str] | str = Field(..., description="Text or list of texts to embed")
     model: str | None = None
     dimensions: int | None = None
@@ -105,20 +110,26 @@ async def get_embeddings(request: EmbeddingRequest):
     if not texts:
         raise HTTPException(status_code=400, detail="input must not be empty")
 
-    # Determine prefix
-    input_type = (request.input_type or "document").lower()
-    if input_type == "query":
-        prefix = QUERY_PREFIX
-    elif input_type == "document":
-        prefix = DOCUMENT_PREFIX
+    # Determine prefix (pass-through mode when input_type is omitted)
+    input_type_raw = request.input_type
+    if input_type_raw is None:
+        # No input_type supplied → pass-through mode (Option B2):
+        # the caller already prepends its own prefix, embed as-is.
+        prepared = texts
     else:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown input_type '{input_type}'. Use 'document' or 'query'.",
-        )
+        input_type = input_type_raw.lower()
+        if input_type == "query":
+            prefix = QUERY_PREFIX
+        elif input_type == "document":
+            prefix = DOCUMENT_PREFIX
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown input_type '{input_type}'. Use 'document' or 'query'.",
+            )
 
-    # Prepend prefix
-    prepared = [f"{prefix}{text}" for text in texts]
+        # Prepend prefix
+        prepared = [f"{prefix}{text}" for text in texts]
 
     # Encode (returns np.ndarray, shape [n, 768])
     embeddings: np.ndarray = model.encode(prepared, show_progress_bar=False)

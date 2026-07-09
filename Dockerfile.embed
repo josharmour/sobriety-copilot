@@ -1,0 +1,19 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install sentence-transformers (needs >=5.5.0 for the fine-tuned model's modules)
+RUN pip install --no-cache-dir \
+    sentence-transformers>=5.5.0 \
+    fastapi==0.115.0 \
+    uvicorn==0.30.0 \
+    numpy
+
+# The embed server handles both modes:
+# - with input_type → server-side prefixing (direct curl/API users)
+# - without input_type → embed as-is (app integration, Option B2)
+COPY scripts/embed_server.py .
+
+EXPOSE 8190
+
+CMD ["python", "embed_server.py"]

@@ -7,8 +7,18 @@ import os
 import numpy as np
 from openai import OpenAI
 
-DOCUMENT_PREFIX = "search_document: "
-QUERY_PREFIX = "search_query: "
+# Prefix style must match the model that built the ACTIVE index. "minilm"
+# (nomic-style) matches the live `recovery_literature` collection; "gemma" is
+# the fine-tuned EmbeddingGemma training format and must only be enabled
+# together with a collection indexed the same way (recovery_literature_gemma_v1
+# cutover). Enabling "gemma" against the old index silently degrades retrieval.
+EMBEDDING_PREFIX_STYLE = os.environ.get("EMBEDDING_PREFIX_STYLE", "minilm").lower()
+if EMBEDDING_PREFIX_STYLE == "gemma":
+    DOCUMENT_PREFIX = "title: none | text: "
+    QUERY_PREFIX = "task: search result | query: "
+else:
+    DOCUMENT_PREFIX = "search_document: "
+    QUERY_PREFIX = "search_query: "
 DEFAULT_EMBEDDING_BASE_URL = os.environ.get("LLM_BASE_URL", "http://172.20.48.1:11434/v1")
 EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "ollama").lower()
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "nomic-embed-text")
