@@ -1,0 +1,16 @@
+{
+ "bm25_only": {
+  "recall@4": 0.24299065420560748,
+  "recall@8": 0.2616822429906542
+ },
+ "hybrid_base_dense": {
+  "recall@4": 0.37383177570093457,
+  "recall@8": 0.4392523364485981
+ },
+ "hybrid_ft_dense": {
+  "recall@4": 0.4392523364485981,
+  "recall@8": 0.4719626168224299
+ },
+ "hybrid_ft_gain_vs_bm25_recall@8": 0.21028037383177572,
+ "hybrid_ft_gain_vs_hybrid_base_recall@8": 0.03271028037383178
+}
