@@ -334,10 +334,10 @@ are sequential.
 | D3 | done | dsv4+fable | GPU 20-step dry run PASSED 2026-07-08 (loss 1.70->0.99). Switched to unsloth loader (peft cant wrap Gemma4ClippableLinear) + bf16 LoRA (dropped 4bit). FULL SFT RUNNING now (GPU1, ~26%, loss 0.57) |
 | D4 | done* | dsv4 | verified by Fable 2026-07-07: CPU-side full pass; beta=0.15 documented w/ tuning guidance; prompt-masked DPO loss; assumed C4 schema documented in script header. *GPU dry run pending D1 window |
 | D5 | todo | | blocked by D3 |
-| E1 | todo | | C5 + D3 |
-| E2 | todo | | gate; needs A4 + D5 |
-| E3 | todo | | E1 + C4 + D4 |
-| E4 | todo | | gate |
+| E1 | partial(fable) | | C5 + D3 |
+| E2 | partial(fable) | | gate; needs A4 + D5 |
+| E3 | partial(fable) | | E1 + C4 + D4 |
+| E4 | partial(fable) | | gate |
 | F1 | todo | | after E2 |
 | F2 | todo | | anytime |
 | F3 | todo | | anytime |

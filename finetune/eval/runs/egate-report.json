@@ -1,0 +1,33 @@
+{
+ "baseline": {
+  "citation_accuracy": 0.32242990654205606,
+  "faithfulness": 4.94392523364486,
+  "answer_quality": 4.55859375,
+  "refusal_correctness": 4.285714285714286
+ },
+ "candidates": [
+  {
+   "name": "ft-dpo",
+   "recall@4": 0.4439252336448598,
+   "recall@8": 0.4439252336448598,
+   "citation_accuracy": 0.19626168224299065,
+   "faithfulness": 4.9766355140186915,
+   "answer_quality": 3.65234375,
+   "refusal_correctness": 4.928571428571429
+  },
+  {
+   "name": "ft-sft",
+   "recall@4": 0.4439252336448598,
+   "recall@8": 0.4439252336448598,
+   "citation_accuracy": 0.20093457943925233,
+   "faithfulness": 4.981308411214953,
+   "answer_quality": 3.5859375,
+   "refusal_correctness": 4.928571428571429
+  }
+ ],
+ "caveats": [
+  "256-token generation cap truncated 94/256 (37%) answers \u2014 citation_accuracy and answer_quality are biased LOW",
+  "baseline is dsv4 (giant server model); correct on-device baseline (untuned Gemma-4-E2B) not yet measured",
+  "recall@8 0.444 caps citation_accuracy regardless of generator"
+ ]
+}

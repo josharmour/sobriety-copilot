@@ -701,7 +701,7 @@ def train(args: argparse.Namespace, cfg: dict) -> int:
         target_modules=qlora_cfg.get("target_modules"),
         lora_dropout=qlora_cfg.get("lora_dropout", 0.05),
         bias="none",
-        use_gradient_checkpointing="unsloth",
+        use_gradient_checkpointing=False,  # 96GB card; avoids DPO double-forward recompute-metadata mismatch
         random_state=seed,
     )
 
@@ -771,7 +771,7 @@ def train(args: argparse.Namespace, cfg: dict) -> int:
         warmup_ratio=train_cfg.get("warmup_ratio", 0.1),
         weight_decay=train_cfg.get("weight_decay", 0.01),
         optim=train_cfg.get("optim", "adamw_torch_fused"),
-        gradient_checkpointing=train_cfg.get("gradient_checkpointing", True),
+        gradient_checkpointing=False,  # disabled: see get_peft_model note
         bf16=train_cfg.get("bf16", True),
         tf32=train_cfg.get("tf32", True),
         max_grad_norm=train_cfg.get("max_grad_norm", 1.0),
@@ -801,7 +801,7 @@ def train(args: argparse.Namespace, cfg: dict) -> int:
         # Misc
         seed=seed,
         remove_unused_columns=True,
-        dataloader_num_workers=2,
+        dataloader_num_workers=0,  # 0: py3.14 forkserver cant pickle unsloth/mergekit refs to workers
         dataloader_pin_memory=True,
     )
 
