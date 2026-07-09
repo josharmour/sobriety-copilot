@@ -15,5 +15,9 @@ Recovery-based AI assistant with RAG over 12-step literature.
 - src/
 - CLAUDE.md
 
+## RAG Architecture
+- **Private Mode:** Fine-tuned EmbeddingGemma (via pack v3) + Base Gemma-4-E2B generator (SFT gated).
+- **Cloud:** all-minilm + dsv4.
+
 ---
 *This file was generated to ensure AI agents maintain continuity across sessions.*

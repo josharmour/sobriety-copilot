@@ -72,7 +72,7 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 - [x] **LocalChatRepository**: implements the existing ChatRepository — FTS5/BM25 retrieval from the offline pack (sanitized MATCH query, category-aware titles), condensed on-device prompt port per tone, history folding under a small token budget, streaming TokenEvents, Sources with docId/blockIds that deep-link into the offline reader, Gemma 4 thinking mode wired to the reasoning panel.
 - [x] **Deterministic crisis interceptor** — keyword layer independent of the model, helpline-first block prepended before generation.
 - [x] **Provider switch**: chat flips to on-device when the toggle is on AND the model is installed; falls back to server otherwise. Android-only surface for now.
-- [ ] Phase 2: EmbeddingGemma vector retrieval (flutter_gemma has embedder + sqlite vector store APIs; needs an ungated embedder file or HF-token flow), sherpa-onnx ASR to replace /api/transcribe, ABI splits to trim the 400 MB APK for Play.
+- [x] Phase 2: **EmbeddingGemma vector retrieval** (shipped via offline pack v3), sherpa-onnx ASR to replace /api/transcribe (shipped). ABI splits to trim the 400 MB APK for Play (deferred). Note: on-device generator remains base Gemma-4-E2B; fine-tuned SFT model is gated on adapter conversion.
 - [x] **Sources/citations FIXED (morning)**: root cause was Android's platform SQLite shipping without FTS5 — every offline pack search failed silently on-device ('no such module: fts5'). Now bundling SQLite via sqlite3_flutter_libs, search DB opened through the FFI factory on all platforms. Confirmed on-device: 115,673 blocks indexed, 30 hits on a live query.
 - [x] **Crash fix (01:30)**: the Tensor-G5 NPU model build CHECK-aborts natively in flutter_gemma 0.13.6's LiteRT runtime (`Unknown model type: tf_lite_mtp_aux`) — NPU rung removed, G5 file deleted from device, standard model re-pushed. GPU/CPU chain retained. Do not re-add NPU until the plugin ships a newer litertlm runtime.
 - [x] **Private Mode indicator**: app-bar 'Private' shield chip + settings status card ("Answering on this device").
@@ -82,7 +82,7 @@ Single-codebase rule: everything is shared Dart core + thin per-surface conditio
 - [x] **Image chat wired server-side**: /api/chat now forwards photo attachments to the LLM as OpenAI image_url content parts behind `LLM_SUPPORTS_IMAGES` (default 0 — flip once the deployed model is confirmed multimodal). The app was already sending `images`; they were silently dropped.
 - [x] **On-device ASR (replaces /api/transcribe)**: sherpa-onnx streaming Zipformer EN (122 MB, GitHub release) with the same download/extract lifecycle as neural voices; transcription runs in an isolate. Mic uses on-device ASR when installed, server fallback otherwise. Settings → Private Mode → "On-device voice dictation" download tile. Fully offline, private dictation.
 - [ ] APK ABI splits to trim 400 MB fat APK for Play (deferred).
-- [ ] EmbeddingGemma vector retrieval (BM25 works well; vectors are a refinement, deferred).
+- [x] **EmbeddingGemma vector retrieval**: Delivered via pack v3 (115,673 int8 vectors). Hybrid search now fully active on-device.
 
 ## Owner-directed changes (2026-07-07 late night)
 - [x] **Excerpt-only reader**: the offline reader now shows a bounded study excerpt (±30 blocks around the cited passage, or the opening for book taps) bracketed by purchase notices — study aide, never full-book reproduction. Search still spans the whole pack.

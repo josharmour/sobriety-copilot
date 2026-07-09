@@ -70,6 +70,12 @@ To make the app run faster, you can disable the CPU-heavy reranker and/or skip t
 
 ## Architecture
 
+### RAG Models
+| Component | Private Mode (on-device) | Cloud (website + online app) |
+|---|---|---|
+| Retriever (embeddings) | **fine-tuned EmbeddingGemma** via pack v3 | `all-minilm` (fine-tuned retriever pending re-index) |
+| Generator | **base Gemma-4-E2B** (fine-tuned SFT pending conversion) | **dsv4 (deepseek-v4-flash)**, unchanged |
+
 - **`src/server.py`** — FastAPI app. Endpoints: `/api/chat` (SSE streaming with HyDE + hybrid retrieval; accepts `client_context` for device-supplied notes, never persisted), `/api/suggest`, `/api/explain-snippet[s-batch]`, `/api/meetings` (geo search), `/api/meetings/online` (worldwide online directory: OIAA + Virtual NA, live-now sorting), `/api/geocode`, `/api/packs/*` (offline library packs), `/api/doc/{id}` + `/api/render/...` (readers), `/api/index` (Celery), `/api/bugs` (GET requires X-Admin-Token = BUG_ADMIN_TOKEN), `/api/health`.
   There is NO `/api/transcribe` and never was — voice dictation is on-device (sherpa-onnx ASR in the Flutter app).
 - **`src/inference/engine.py`** — OpenAI-compatible streaming client. Splits `thinking` vs `token` chunks for the show-thinking UI.

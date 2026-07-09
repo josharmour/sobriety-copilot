@@ -116,14 +116,47 @@ class PrivateModelNotifier extends Notifier<PrivateModelState> {
     _downloadClient = client;
     IOSink? sink;
     try {
-      final res = await client.send(http.Request('GET', Uri.parse(kPrivateModelUrl)));
+      var existingBytes = 0;
+      if (await tmp.exists()) {
+        existingBytes = await tmp.length();
+        if (existingBytes == kPrivateModelBytes) {
+          if (await file.exists()) await file.delete();
+          await tmp.rename(file.path);
+          state = const PrivateModelState(PrivateModelPhase.installed);
+          return;
+        }
+      }
+
+      final req = http.Request('GET', Uri.parse(kPrivateModelUrl));
+      if (existingBytes > 0) {
+        req.headers['Range'] = 'bytes=$existingBytes-';
+      }
+
+      var res = await client.send(req);
+
+      if (res.statusCode == 416 && existingBytes > 0) {
+        existingBytes = 0;
+        final req2 = http.Request('GET', Uri.parse(kPrivateModelUrl));
+        res = await client.send(req2);
+      }
+
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw Exception('HTTP ${res.statusCode}');
       }
-      final total = res.contentLength ?? kPrivateModelBytes;
-      var received = 0;
-      var lastEmit = 0;
-      sink = tmp.openWrite();
+
+      final isPartial = res.statusCode == 206;
+      if (!isPartial && existingBytes > 0) {
+        existingBytes = 0;
+      }
+
+      final total = isPartial 
+          ? (res.contentLength ?? (kPrivateModelBytes - existingBytes)) + existingBytes 
+          : (res.contentLength ?? kPrivateModelBytes);
+          
+      var received = existingBytes;
+      var lastEmit = received;
+      sink = tmp.openWrite(mode: isPartial ? FileMode.append : FileMode.write);
+      
       await for (final chunk in res.stream) {
         if (_cancelRequested) throw const _CancelledDownload();
         sink.add(chunk);
