@@ -50,6 +50,15 @@ android {
         }
     }
 
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86_64", "x86")
+            isUniversalApk = true
+        }
+    }
+
     buildTypes {
         release {
             val fileStr = keystoreProperties["storeFile"] as? String

@@ -39,7 +39,6 @@ dependencies:
 
   # Meeting search: location
   geolocator: ^13.0.2
-  permission_handler: ^11.3.1
 
   # Scan / OCR text into the input box; also photo attachments (camera + gallery)
   image_picker: ^1.1.2
@@ -51,6 +50,9 @@ dependencies:
   # newer record_platform_interface; 6.1.1 has a consistent federated set and still
   # supports Dart 3.11. 7.x needs Dart 3.12.
   record: ^6.1.1
+
+  # Deep linking into the offline literature reader
+  app_links: ^6.4.0
 
   # Connectivity awareness
   connectivity_plus: ^6.1.0
@@ -71,6 +73,8 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.1
+  path_provider_platform_interface: ^2.1.2
+  plugin_platform_interface: ^2.1.8
 
 flutter_launcher_icons:
   android: true

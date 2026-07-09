@@ -40,6 +40,13 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Deep link: sobriety-copilot://offline-reader?docId=...&title=... -->
+            <intent-filter autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="sobriety-copilot"/>
+            </intent-filter>
         </activity>
         <!-- Scheduled daily reminders (flutter_local_notifications). -->
         <receiver
