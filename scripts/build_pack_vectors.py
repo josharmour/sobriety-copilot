@@ -41,6 +41,8 @@ def main() -> int:
     ap.add_argument("--out", required=True, help="output directory for vectors.*")
     ap.add_argument("--limit", type=int, default=0, help="embed only first N rows (proof runs)")
     ap.add_argument("--device", default="cuda", help="cuda | cpu")
+    ap.add_argument("--model", default=MODEL_ID,
+                    help="model id or local path (e.g. fine-tuned retriever)")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -59,8 +61,13 @@ def main() -> int:
     from sentence_transformers import SentenceTransformer
 
     t0 = time.monotonic()
-    model = SentenceTransformer(MODEL_ID, device=args.device)
-    print(f"[vectors] model loaded in {time.monotonic()-t0:.0f}s", flush=True)
+    model = SentenceTransformer(args.model, device=args.device)
+    model.max_seq_length = 512
+    print(f"[vectors] model {args.model} loaded in {time.monotonic()-t0:.0f}s", flush=True)
+    # Explicit document prefix — identical string to encode_document's
+    # "title: none | text: ", but guarantees parity with how the fine-tuned
+    # retriever was trained/evaluated (manual prefix + encode).
+    DOC_PREFIX = "title: none | text: "
 
     i8_path = out / "vectors.i8"
     idx_lines: list[str] = []
@@ -68,10 +75,8 @@ def main() -> int:
     with open(i8_path, "wb") as fout:
         for start in range(0, len(rows), BATCH):
             chunk = rows[start:start + BATCH]
-            texts = [r[2] or "" for r in chunk]
-            # encode_document applies EmbeddingGemma's official document
-            # prompt ("title: none | text: ..."), matching flutter_gemma.
-            emb = model.encode_document(
+            texts = [DOC_PREFIX + (r[2] or "") for r in chunk]
+            emb = model.encode(
                 texts,
                 normalize_embeddings=True,
                 convert_to_numpy=True,
@@ -97,7 +102,7 @@ def main() -> int:
         "count": written,
         "scale": SCALE,
         "dtype": "int8",
-        "model": MODEL_ID,
+        "model": args.model,
         "prompt": "document",
         "layout": "row-major, DIM int8 per row, aligned to vectors.idx",
     }), encoding="utf-8")

@@ -29,3 +29,5 @@ finetune/**/*.jsonl
 !finetune/**/sample*.jsonl
 packs/library-v2*.scpack
 /unsloth-*.whl
+packs/library-v3*.scpack
+packs/embedder-v3/vectors.i8

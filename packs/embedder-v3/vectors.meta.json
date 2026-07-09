@@ -1,0 +1,1 @@
+{"dim": 768, "count": 115673, "scale": 127.0, "dtype": "int8", "model": "finetune/retriever/model (FT-B3 fine-tuned EmbeddingGemma)", "prompt": "document", "layout": "row-major, DIM int8 per row, aligned to vectors.idx"}

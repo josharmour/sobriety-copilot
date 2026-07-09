@@ -323,7 +323,7 @@ are sequential.
 | B2 | done | dsv4+fable | verified 2026-07-08: 61,445 triplets 1:1 with pairs, 4 hard negs each, adjacency+leak clean (Fable backfilled 5,448 after re-exclude shifted pairs) |
 | B3 | done | fable | verified & committed 2026-07-08 D1 window: full-FT EmbeddingGemma, dev rank@1 0.683->0.842, loss 1.55->0.43, embeds (8,768). B4 gate next (recall on eval set is the real test) |
 | B4 | done | fable | 2026-07-08: fine-tuned retriever beats base in dense (0.365->0.402, +3.7) AND hybrid (0.439->0.472, +3.3); hybrid abs 0.472 > A4 0.400. +5 stretch not met but strictly beats the base it replaces -> ships to B5 |
-| B5 | in-progress(fable) | fable | building pack v3 vectors with fine-tuned retriever (GPU0) 2026-07-08 |
+| B5 | done | fable | 2026-07-08: library-v3.scpack (135MB, pack_version 3, 115,673 fine-tuned int8 vectors, one per block, training-parity prefix). NAS-only/gitignored. Deploy = replace on-device pack (confirm app pack_version gate) |
 | C1 | done | dsv4 | verified by Fable 2026-07-07: 1080 seeds, user-voice register clean, crisis seeds hash-match fixed wording, 0 dupes |
 | C2 | done | dsv4 | 8000 samples; C2FIX purge+backfill verified 2026-07-08 (0 leaks across sft/filtered/splits) |
 | C3 | done | dsv4 | verified by Fable 2026-07-08: 6,446/8,000 kept (19.4% drop, mostly grounding: invented quotes/pages); kept-sample spot-read 60/60 clean |

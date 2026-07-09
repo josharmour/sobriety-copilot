@@ -27,6 +27,8 @@ def main() -> int:
     ap.add_argument("--v1", required=True)
     ap.add_argument("--vectors", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--version", type=int, default=2,
+                    help="pack_version to stamp (3 = fine-tuned retriever vectors)")
     args = ap.parse_args()
 
     vdir = Path(args.vectors)
@@ -45,7 +47,7 @@ def main() -> int:
             data = zin.read(item.filename)
             if item.filename == "pack.json":
                 pack = json.loads(data)
-                pack["pack_version"] = 2
+                pack["pack_version"] = args.version
                 pack["created_utc"] = int(time.time())
                 pack["vectors"] = {
                     "dim": meta["dim"],
