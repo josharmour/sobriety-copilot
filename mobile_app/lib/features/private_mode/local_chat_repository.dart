@@ -39,8 +39,12 @@ class LocalChatRepository implements ChatRepository {
 
   LocalChatRepository({required this.library});
 
-  static const int _maxContextChunks = 4;
+  /// Max passages injected into the prompt — reduced to 3 for faster prefill
+  /// on small edge models (was 4, goal TTFT <2s on-device).
+  static const int kMaxInjectedPassages = 3;
+
   static const int _maxChunkChars = 700;
+  static const int _maxContextChars = 2100;
   static const int _maxHistoryTurns = 4;
   static const int _maxHistoryChars = 320;
 
@@ -292,7 +296,8 @@ class LocalChatRepository implements ChatRepository {
       ..sort((a, b) => scores[b]!.compareTo(scores[a]!));
 
     final out = <_RetrievedBlock>[];
-    for (final kk in ranked.take(_maxContextChunks)) {
+    var totalChars = 0;
+    for (final kk in ranked.take(kMaxInjectedPassages)) {
       var t = text[kk];
       var hd = heading[kk] ?? '';
       if (t == null) {
@@ -304,6 +309,14 @@ class LocalChatRepository implements ChatRepository {
         hd = block.heading;
       }
       final (d, b) = ids[kk]!;
+      // Total context cap: stop adding passages once we exceed the budget.
+      // Count post-truncation length — chunks are clipped to _maxChunkChars
+      // when the prompt is rendered, so that is what actually hits the prefill.
+      final renderedChars =
+          (t.length > _maxChunkChars ? _maxChunkChars + 1 : t.length) +
+              hd.length;
+      totalChars += renderedChars;
+      if (totalChars > _maxContextChars && out.isNotEmpty) break;
       out.add(_RetrievedBlock(d, b, hd, t, scores[kk]!));
     }
     return out;
