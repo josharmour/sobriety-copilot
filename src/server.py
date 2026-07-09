@@ -60,12 +60,21 @@ INDEX_HTML_PATH = os.path.join(STATIC_DIR, "index.html")
 
 BASE_URL = os.environ.get("LLM_BASE_URL", "http://10.0.0.10:8002/v1")
 MODEL = os.environ.get("LLM_MODEL", "dsv4")
+LLM_MODEL_FT = os.environ.get("LLM_MODEL_FT", "") or None  # None when unset/empty
 API_KEY = os.environ.get("LLM_API_KEY", "")
 DOCUMENTS_DIR = os.environ.get("DOCUMENTS_DIR", "documents")
 RAG_DB_PATH = os.environ.get("RAG_DB_PATH", "rag_db")
 RAG_COLLECTION = os.environ.get("RAG_COLLECTION", DEFAULT_COLLECTION)
 
 engine = InferenceEngine(base_url=BASE_URL, model=MODEL, api_key=API_KEY)
+# Secondary engine for fine-tuned model A/B testing. Created only when
+# LLM_MODEL_FT is set (non-empty). The per-request model_variant="ft" flag
+# routes to this engine; unset env = no-op, flag rejected cleanly.
+engine_ft: InferenceEngine | None = (
+    InferenceEngine(base_url=BASE_URL, model=LLM_MODEL_FT, api_key=API_KEY)
+    if LLM_MODEL_FT
+    else None
+)
 memory_manager = UserMemoryManager()
 retriever: RAGRetriever | None = None
 retriever_version = "0"
@@ -144,6 +153,10 @@ class ChatRequest(BaseModel):
     # image_url content parts when LLM_SUPPORTS_IMAGES=1; otherwise dropped
     # (the app was already sending these; they were silently ignored).
     images: list[str] | None = None
+    # A/B flag for fine-tuned server model routing. Accepted values:
+    #   None / absent  → default model (LLM_MODEL)
+    #   "ft"           → fine-tuned model (LLM_MODEL_FT); 400 if unset
+    model_variant: str | None = None
 
 
 class IndexRequest(BaseModel):
@@ -1308,6 +1321,9 @@ def explain_snippet(payload: ExplainSnippetRequest):
 
 @app.post("/api/chat")
 def chat(payload: ChatRequest):
+    import time as _chat_time
+    _chat_t0 = _chat_time.monotonic()
+    
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="missing 'message' field")
 
@@ -1319,6 +1335,25 @@ def chat(payload: ChatRequest):
     query = payload.message
     history = payload.history
     categories = _normalize_categories(payload.categories)
+
+    # A/B model variant routing -------------------------------------------------
+    selected_model_variant = "default"
+    active_engine: InferenceEngine = engine
+    variant = (payload.model_variant or "").strip().lower()
+    if variant and variant != "default":
+        if variant != "ft":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported model_variant {variant!r}. Accepted: 'ft' or absent.",
+            )
+        if not LLM_MODEL_FT:
+            raise HTTPException(
+                status_code=400,
+                detail="model_variant='ft' requested but LLM_MODEL_FT is not configured. Set LLM_MODEL_FT env var to enable.",
+            )
+        active_engine = engine_ft  # type: ignore[assignment]
+        selected_model_variant = "ft"
+    # ---------------------------------------------------------------------------
 
     # Use conversation-aware query for retrieval so follow-ups resolve correctly.
     retrieval_query = _build_retrieval_query(query, history)
@@ -1347,7 +1382,9 @@ def chat(payload: ChatRequest):
     # Diagnostic — flushed to stdout (Docker captures it). Strip if/when noisy.
     try:
         print("=" * 70, flush=True)
-        print(f"[CHAT] tone={payload.tone or 'brief'!s:9} history_len={len(history)} cats={categories}", flush=True)
+        print(f"[CHAT] tone={payload.tone or 'brief'!s:9} history_len={len(history)} cats={categories} model_variant={selected_model_variant}", flush=True)
+        if selected_model_variant == "ft":
+            print(f"[ABFLAG] variant=ft model={active_engine.model} base_url={BASE_URL}", flush=True)
         print(f"[QUERY]  {query!r}", flush=True)
         if hyde_passage:
             print(f"[HYDE]   {hyde_passage[:400]!r}{'…' if len(hyde_passage) > 400 else ''}", flush=True)
@@ -1380,6 +1417,17 @@ def chat(payload: ChatRequest):
     want_diffusion = bool(payload.diffusion_view)
 
     def generate():
+        # Immediate SSE priming comment — forces proxies (nginx, Cloudflare) to
+        # commit the TCP connection and start streaming *before* the first data
+        # event.  The header bytes hit the wire right away; any downstream
+        # buffering heuristic that waits for N bytes is defeated.
+        yield ": primed\n\n"
+
+        # Wall-clock timing instrumentation
+        _t_retrieval_done = _chat_time.monotonic()
+        _t_retrieval_ms = int((_t_retrieval_done - _chat_t0) * 1000)
+        yield f"data: {json.dumps({'server_timing_ms': {'chat': _t_retrieval_ms}})}\n\n"
+
         first_event = {"sources": sources}
         if hyde_passage:
             first_event["expanded_query"] = hyde_passage
@@ -1410,7 +1458,7 @@ def chat(payload: ChatRequest):
                 block_raw = ""
                 block_tokens = 0
                 finish = None
-                for kind, text in engine.stream_typed(
+                for kind, text in active_engine.stream_typed(
                     cur_prompt,
                     history=history,
                     system_message=sys_msg,
@@ -1462,6 +1510,7 @@ def chat(payload: ChatRequest):
                 draft = "".join(response_buffer).strip()
                 if not draft:
                     continue  # still inside the thought channel; nothing to ground on yet
+                _re_t0 = _chat_time.monotonic()
                 try:
                     regrounded = retriever_instance.retrieve(
                         retrieval_query,
@@ -1471,6 +1520,9 @@ def chat(payload: ChatRequest):
                 except Exception as rg_exc:
                     print(f"[REGROUND-ERR] {type(rg_exc).__name__}: {rg_exc}", flush=True)
                     continue
+                _re_elapsed = _chat_time.monotonic() - _re_t0
+                print(f"[REGROUND] block {block_i}: retrieve in {_re_elapsed:.2f}s, "
+                      f"returned {len(regrounded)} chunks", flush=True)
                 fresh = []
                 for r in regrounded:
                     chunk_key = (r.source, (r.excerpt or r.text or "")[:80])
@@ -1503,6 +1555,9 @@ def chat(payload: ChatRequest):
             except Exception as fu_exc:
                 print(f"[FOLLOWUPS-ERR] {type(fu_exc).__name__}: {fu_exc}", flush=True)
             yield "data: {\"done\": true}\n\n"
+            # Total wall-clock time from request start
+            _t_total_ms = int((_chat_time.monotonic() - _chat_t0) * 1000)
+            print(f"[CHAT-DONE] {_t_total_ms}ms total", flush=True)
         except Exception as exc:
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
         finally:
@@ -1711,6 +1766,7 @@ def health():
         "status": "ok",
         "framework": "fastapi",
         "model": MODEL,
+        "model_ft": LLM_MODEL_FT,
         "documents_dir": _get_abs_documents_dir(),
         "rag_collection": RAG_COLLECTION,
         "active_collection": active_collection,

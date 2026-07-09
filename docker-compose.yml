@@ -2,6 +2,7 @@ x-app-env: &app-env
   REDIS_URL: redis://redis:6379/0
   LLM_BASE_URL: "${LLM_BASE_URL:-http://10.0.0.10:8002/v1}"
   LLM_MODEL: "${LLM_MODEL:-dsv4}"
+  LLM_MODEL_FT: "${LLM_MODEL_FT:-}"
   # LLM_BASE_URL_DIFFUSION removed — single model on 10.0.0.10:8002
   # LLM_MODEL_DIFFUSION removed — single model on 10.0.0.10:8002
   LLM_BASE_URL_STANDARD: "${LLM_BASE_URL_STANDARD:-http://10.0.0.10:8002/v1}"
@@ -12,6 +13,8 @@ x-app-env: &app-env
   EMBEDDING_MODEL: "${EMBEDDING_MODEL:-nomic-embed-text}"
   EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-http://host.docker.internal:11434/v1}"
   SENTENCE_TRANSFORMER_MODEL: "${SENTENCE_TRANSFORMER_MODEL:-/app/models/fine-tuned-embeddings}"
+  # The embed microservice computes embeddings from this model path on its own
+  # container; this mount is for app-side fallback only.
   BUG_REPORT_DB_PATH: "${BUG_REPORT_DB_PATH:-/home/app/memory/bug_reports.db}"
   ENABLE_HYDE: "${ENABLE_HYDE:-1}"
   OLLAMA_KEEP_ALIVE: "-1"
@@ -122,6 +125,27 @@ services:
       - chroma_data:/data
     expose:
       - "8000"
+
+  # Embedding microservice for the fine-tuned EmbeddingGemma retriever.
+  # DO NOT run this on the NAS: loading the model OOM-crash-looped the 8GB box
+  # on 2026-07-09 and degraded prod chat. It runs on blackwell (10.0.0.10)
+  # instead; this block is kept for dev/other hosts and gated behind an
+  # explicit profile so a plain `docker-compose up -d` never starts it.
+  embed:
+    profiles: ["embed"]
+    build:
+      context: .
+      dockerfile: Dockerfile.embed
+    image: sobriety-copilot-embed
+    restart: "no"
+    environment:
+      EMBED_HOST: "0.0.0.0"
+      EMBED_PORT: "8190"
+      RETRIEVER_MODEL_PATH: "/models/retriever-model"
+    volumes:
+      - ./models/retriever-model:/models/retriever-model:ro
+    expose:
+      - "8190"
 
   nginx:
     build:
