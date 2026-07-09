@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import os
 import re
+import threading
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
@@ -50,6 +51,8 @@ QUERY_CANDIDATE_MULTIPLIER = int(os.environ.get("RAG_CANDIDATE_MULTIPLIER", "8")
 CACHE_BATCH_SIZE = int(os.environ.get("RAG_CACHE_BATCH_SIZE", "2000"))
 SCALE_DIVERSITY_MIN_RATIO = float(os.environ.get("RAG_SCALE_DIVERSITY_MIN_RATIO", "0.5"))
 MAX_RESULTS_PER_SOURCE = int(os.environ.get("RAG_MAX_PER_SOURCE", "2"))
+# How long the cached ChromaDB collection count is trusted before re-fetching.
+RAG_COUNT_TTL_S = float(os.environ.get("RAG_COUNT_TTL_S", "60"))
 SCALE_BOOST = {
     "small": 1.0,
     "medium": 0.97,
@@ -217,19 +220,42 @@ class RAGRetriever:
         self._document_count = 0
         self._cache_initialized = False
         self._enum_penalty: dict[str, float] = {}
+        # Cached collection count — ChromaDB count() is an HTTP round-trip, so
+        # cache it with a TTL. A cached 0 is never trusted (always re-checked)
+        # so an empty-at-startup collection can't latch retrieve() into
+        # returning [] forever after an out-of-band index.
+        self._cached_count: int | None = None
+        self._cached_count_ts: float = 0.0
+        # Serialize cache rebuilds: without this, a user request racing the
+        # startup warmup triggers concurrent duplicate ~500MB pickle loads.
+        self._cache_lock = threading.Lock()
+        self._cache_generation = 0
 
     def _tokenize(self, text: str) -> list[str]:
         return [token.lower() for token in TOKEN_RE.findall(text)]
 
     def refresh_cache(self) -> None:
-        import pickle
+        gen = self._cache_generation
+        with self._cache_lock:
+            if self._cache_generation != gen:
+                # Another thread rebuilt the cache while we waited on the lock.
+                return
+            self._refresh_cache_locked()
+            self._cache_generation += 1
 
+    def _refresh_cache_locked(self) -> None:
+        import pickle
+        import time as _time
+
+        _t0 = _time.monotonic()
         self._chunks_by_id = {}
         self._postings = defaultdict(list)
         self._doc_lengths = {}
         self._enum_penalty = {}
         self._avg_doc_length = 0.0
         self._document_count = self.collection.count()
+        self._cached_count = self._document_count
+        self._cached_count_ts = _time.monotonic()
         self._cache_initialized = True
 
         if self._document_count == 0:
@@ -317,9 +343,14 @@ class RAGRetriever:
                 }
                 with open(cache_file, "wb") as f:
                     pickle.dump(cache_data, f, protocol=pickle.HIGHEST_PROTOCOL)
-                print(f"[BM25-CACHE] Saved {self._document_count} chunks to {cache_file}", flush=True)
+                _elapsed = _time.monotonic() - _t0
+                print(f"[BM25-CACHE] Saved {self._document_count} chunks to {cache_file} in {_elapsed:.1f}s", flush=True)
             except Exception as e:
                 print(f"[BM25-CACHE-ERR] Failed to save cache to {cache_file}: {e}", flush=True)
+
+        _elapsed = _time.monotonic() - _t0
+        if _elapsed > 0.5 and self._document_count > 0:
+            print(f"[BM25-CACHE] refresh_cache done: {self._document_count} chunks, {_elapsed:.1f}s", flush=True)
 
     def _keyword_scores(
         self,
@@ -464,11 +495,23 @@ class RAGRetriever:
         BM25 keyword scoring always uses the raw `query`, so literal matches
         aren't lost.
         """
-        collection_count = self.collection.count()
+        import time as _rtime
+
+        collection_count = self._cached_count
+        if (
+            collection_count is None
+            or collection_count == 0
+            or (_rtime.monotonic() - self._cached_count_ts) > RAG_COUNT_TTL_S
+        ):
+            collection_count = self.collection.count()
+            self._cached_count = collection_count
+            self._cached_count_ts = _rtime.monotonic()
         if collection_count == 0:
             return []
         if not self._cache_initialized or self._document_count != collection_count:
             self.refresh_cache()
+
+        _t0 = _rtime.monotonic()
 
         where = None
         if categories:
@@ -609,6 +652,12 @@ class RAGRetriever:
             )
         elif len(retrieval_results) > top_k:
             retrieval_results = retrieval_results[:top_k]
+
+        _elapsed = _rtime.monotonic() - _t0
+        if _elapsed > 0.2:
+            print(f"[RETRIEVE] {_elapsed:.1f}s top_k={top_k} candidates={len(retrieval_results)} "
+                  f"semantic={len(semantic_scores)} keyword={len(keyword_scores)} "
+                  f"query={query[:80]!r}", flush=True)
 
         return retrieval_results
 
