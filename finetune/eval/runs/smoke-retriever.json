@@ -1,0 +1,585 @@
+{
+  "meta": {
+    "system": "retriever-only",
+    "name": "smoke-retriever",
+    "limit": 12,
+    "total": 12,
+    "timestamp": "2026-07-08T10:22:32",
+    "judge_model": "dsv4",
+    "judge_base_url": "http://10.0.0.10:8002/v1"
+  },
+  "aggregates": {
+    "retrieval.recall@4": 0.25,
+    "retrieval.recall@8": 0.25,
+    "citation_accuracy": null,
+    "faithfulness": null,
+    "answer_quality": null,
+    "refusal_correctness": null
+  },
+  "results": [
+    {
+      "id": "eval-crosswork-0000",
+      "kind": "crosswork",
+      "question": "How do \"Twenty-Four Hours a Day\" and \"Drop the Rock\" differ in the obstacles or prerequisites they emphasize for achieving surrender in recovery?",
+      "retrieval": {
+        "recall@4": 0.0,
+        "recall@8": 0.0,
+        "retrieved_top8": [
+          [
+            "codependent-no-more",
+            "b02231"
+          ],
+          [
+            "a-quiet-peace",
+            "b02895"
+          ],
+          [
+            "daily-reflections",
+            "b00089"
+          ],
+          [
+            "a-program-for-you",
+            "b01530"
+          ],
+          [
+            "daily-reflections",
+            "b00299"
+          ],
+          [
+            "not-god",
+            "b01758"
+          ],
+          [
+            "a-quiet-peace",
+            "b03234"
+          ],
+          [
+            "twenty-four-hours-a-day",
+            "b00008"
+          ]
+        ]
+      },
+      "citation_accuracy": null,
+      "faithfulness": null,
+      "answer_quality": null,
+      "refusal_correctness": null
+    },
+    {
+      "id": "eval-practical-0001",
+      "kind": "practical",
+      "question": "How do I remind myself not to rush my recovery when I feel impatient and want to see quick results?",
+      "retrieval": {
+        "recall@4": 0.0,
+        "recall@8": 0.0,
+        "retrieved_top8": [
+          [
+            "living-sober",
+            "b00491"
+          ],
+          [
+            "the-twelve-steps-and-twelve-traditions-of-overeaters-anonymous",
+            "b00182"
+          ],
+          [
+            "living-clean",
+            "b00707"
+          ],
+          [
+            "more-language-of-letting-go",
+            "b00350"
+          ],
+          [
+            "it-works-how-and-why",
+            "b00118"
+          ],
+          [
+            "daily-reflections",
+            "b01333"
+          ],
+          [
+            "alcoholics-anonymous",
+            "b00896"
+          ],
+          [
+            "journey-to-the-heart",
+            "b01391"
+          ]
+        ]
+      },
+      "citation_accuracy": null,
+      "faithfulness": null,
+      "answer_quality": null,
+      "refusal_correctness": null
+    },
+    {
+      "id": "eval-phrase-0002",
+      "kind": "phrase",
+      "question": "I hear you talk about regulating arousal\u2014what does that actually mean when I feel myself getting shut down or overexcited?",
+      "retrieval": {
+        "recall@4": 1.0,
+        "recall@8": 1.0,
+        "retrieved_top8": [
+          [
+            "the-body-keeps-the-score",
+            "b00395"
+          ],
+          [
+            "adult-children-of-alcoholics",
+            "b00612"
+          ],
+          [
+            "the-body-keeps-the-score",
+            "b00392"
+          ],
+          [
+            "loving-what-is-revised-edition",
+            "b04207"
+          ],
+          [
+            "writing-the-big-book",
+            "b01104"
+          ],
+          [
+            "dare-to-lead",
+            "b01191"
+          ],
+          [
+            "more-language-of-letting-go",
+            "b00188"
+          ],
+          [
+            "just-for-today",
+            "b01212"
+          ]
+        ]
+      },
+      "citation_accuracy": null,
+      "faithfulness": null,
+      "answer_quality": null,
+      "refusal_correctness": null
+    },
+    {
+      "id": "eval-personal-0003",
+      "kind": "personal",
+      "question": "I'm scared to go to events where alcohol is served because I don't trust myself, but I see others thriving there\u2014how do I get past that fear?",
+      "retrieval": {
+        "recall@4": 0.0,
+        "recall@8": 0.0,
+        "retrieved_top8": [
+          [
+            "journey-to-the-heart",
+            "b01210"
+          ],
+          [
+            "in-the-realm-of-hungry-ghosts",
+            "b00453"
+          ],
+          [
+            "loving-what-is-revised-edition",
+            "b03417"
+          ],
+          [
+            "loving-what-is-revised-edition",
+            "b01959"
+          ],
+          [
+            "codependent-no-more",
+            "b01038"
+          ],
+          [
+            "recovery",
+            "b00701"
+          ],
+          [
+            "beyond-codependency",
+            "b00502"
+          ],
+          [
+            "recovery",
+            "b00479"
+          ]
+        ]
+      },
+      "citation_accuracy": null,
+      "faithfulness": null,
+      "answer_quality": null,
+      "refusal_correctness": null
+    },
+    {
+      "id": "eval-phrase-0004",
+      "kind": "phrase",
+      "question": "I hear that my success with Steps Four through Nine depends on how much I turn over my will and life to my Higher Power \u2014 what does that actually look like in practice?",
+      "retrieval": {
+        "recall@4": 1.0,
+        "recall@8": 1.0,
+        "retrieved_top8": [
+          [
+            "a-program-for-you",
+            "b00686"
+          ],
+          [
+            "a-program-for-you",
+            "b00617"
+          ],
+          [
+            "the-twelve-steps-and-twelve-traditions-of-overeaters-anonymous",
+            "b00296"
+          ],
+          [
+            "a-program-for-you",
+            "b01314"
+          ],
+          [
+            "a-quiet-peace",
+            "b02820"
+          ],
+          [
+            "a-program-for-you",
+            "b00685"
+          ],
+          [
+            "just-for-today",
+            "b01961"
+          ],
+          [
+            "a-quiet-peace",
+            "b03453"
+          ]
+        ]
+      },
+      "citation_accuracy": null,
+      "faithfulness": null,
+      "answer_quality": null,
+      "refusal_correctness": null
+    },
+    {
+      "id": "eval-phrase-0005",
+      "kind": "phrase",
+      "question": "I hear people talk about \"living in my own skin\" \u2014 what does that actually mean for someone new like me?",
+      "retrieval": {
+        "recall@4": 0.0,
+        "recall@8": 0.0,
+        "retrieved_top8": [
+          [
+            "loving-what-is-revised-edition",
+            "b01354"
+          ],
+          [
+            "the-power-of-positive-thinking",
+            "b01565"
+          ],
+          [
+            "little-red-book",
+            "b00713"
+          ],
+          [
+            "codependent-no-more",
+            "b00653"
+          ],
+          [
+            "daring-greatly",
+            "b01267"
+          ],
+          [
+            "living-sober",
+            "b00835"
+          ],
+          [
+            "the-gifts-of-imperfection",
+            "b00318"
+          ],
+          [
+            "the-acoa-trauma-syndrome",
+            "b00901"
+          ]
+        ]
+      },
+      "citation_accuracy": null,
+      "faithfulness": null,
+      "answer_quality": null,
+      "refusal_correctness": null
+    },
+    {
+      "id": "eval-doctrine-0006",
+      "kind": "doctrine",
+      "question": "What does our recovery literature teach about the willingness to remain in needless suffering and worry, and the choice to stop?",
+      "retrieval": {
+        "recall@4": 0.0,
+        "recall@8": 0.0,
+        "retrieved_top8": [
+          [
+            "living-clean",
+            "b00510"
+          ],
+          [
+            "narcotics-anonymous",
+            "b00168"
+          ],
+          [
+            "the-varieties-of-religious-experience",
+            "b01069"
+          ],
+          [
+            "narcotics-anonymous",
+            "b00153"
+          ],
+          [
+            "touchstones",
+            "b00713"
+          ],
+          [
+            "smart-recovery-handbook",
+            "b00481"
+          ],
+          [
+            "drop-the-rock",
+            "b00147"
+          ],
+          [
+            "came-to-believe",
+            "b00707"
+          ]
+        ]
+      },
+      "citation_accuracy": null,
+      "faithfulness": null,
+      "answer_quality": null,
+      "refusal_correctness": null
+    },
+    {
+      "id": "eval-crosswork-0007",
+      "kind": "crosswork",
+      "question": "How do \"Plain Language Big Book\" and \"A Program for You\" differ in their focus when addressing the role of service in recovery?",
+      "retrieval": {
+        "recall@4": 0.0,
+        "recall@8": 0.0,
+        "retrieved_top8": [
+          [
+            "a-program-for-you",
+            "b01545"
+          ],
+          [
+            "plain-language-big-book",
+            "b00051"
+          ],
+          [
+            "smart-recovery-family-friends",
+            "b00458"
+          ],
+          [
+            "plain-language-big-book",
+            "b00666"
+          ],
+          [
+            "a-program-for-you",
+            "b00039"
+          ],
+          [
+            "a-program-for-you",
+            "b00115"
+          ],
+          [
+            "narcotics-anonymous",
+            "b02322"
+          ],
+          [
+            "smart-recovery-handbook",
+            "b00201"
+          ]
+        ]
+      },
+      "citation_accuracy": null,
+      "faithfulness": null,
+      "answer_quality": null,
+      "refusal_correctness": null
+    },
+    {
+      "id": "eval-crosswork-0008",
+      "kind": "crosswork",
+      "question": "How do the views of acceptance in \"Living Sober\" and \"Touchstones\" differ regarding whether it involves a conscious change in attitude or a surrender beyond personal control?",
+      "retrieval": {
+        "recall@4": 0.0,
+        "recall@8": 0.0,
+        "retrieved_top8": [
+          [
+            "the-spirituality-of-imperfection-ernest-kurtz",
+            "b00683"
+          ],
+          [
+            "little-red-book",
+            "b00590"
+          ],
+          [
+            "the-promise-of-a-new-day",
+            "b01145"
+          ],
+          [
+            "on-becoming-a-person",
+            "b01370"
+          ],
+          [
+            "recovery",
+            "b00812"
+          ],
+          [
+            "the-spirituality-of-imperfection-ernest-kurtz",
+            "b00925"
+          ],
+          [
+            "on-becoming-a-person",
+            "b01611"
+          ],
+          [
+            "it-works-how-and-why",
+            "b00085"
+          ]
+        ]
+      },
+      "citation_accuracy": null,
+      "faithfulness": null,
+      "answer_quality": null,
+      "refusal_correctness": null
+    },
+    {
+      "id": "eval-doctrine-0009",
+      "kind": "doctrine",
+      "question": "What does our literature teach about the way subconscious processes mature and then suddenly become conscious?",
+      "retrieval": {
+        "recall@4": 1.0,
+        "recall@8": 1.0,
+        "retrieved_top8": [
+          [
+            "twenty-four-hours-a-day",
+            "b01480"
+          ],
+          [
+            "the-varieties-of-religious-experience",
+            "b01007"
+          ],
+          [
+            "the-varieties-of-religious-experience",
+            "b00911"
+          ],
+          [
+            "codependent-no-more",
+            "b01457"
+          ],
+          [
+            "more-language-of-letting-go",
+            "b02970"
+          ],
+          [
+            "the-language-of-letting-go",
+            "b00930"
+          ],
+          [
+            "honoring-the-self",
+            "b00151"
+          ],
+          [
+            "the-language-of-letting-go",
+            "b00031"
+          ]
+        ]
+      },
+      "citation_accuracy": null,
+      "faithfulness": null,
+      "answer_quality": null,
+      "refusal_correctness": null
+    },
+    {
+      "id": "eval-doctrine-0010",
+      "kind": "doctrine",
+      "question": "What does the Big Book teach about the importance of avoiding arguments between a sponsor and sponsee to protect sobriety?",
+      "retrieval": {
+        "recall@4": 0.0,
+        "recall@8": 0.0,
+        "retrieved_top8": [
+          [
+            "hope-faith-courage",
+            "b01009"
+          ],
+          [
+            "a-quiet-peace",
+            "b00987"
+          ],
+          [
+            "a-quiet-peace",
+            "b00066"
+          ],
+          [
+            "living-clean",
+            "b00247"
+          ],
+          [
+            "a-program-for-you",
+            "b01396"
+          ],
+          [
+            "a-quiet-peace",
+            "b00900"
+          ],
+          [
+            "step-working-guides",
+            "b00779"
+          ],
+          [
+            "not-god",
+            "b03509"
+          ]
+        ]
+      },
+      "citation_accuracy": null,
+      "faithfulness": null,
+      "answer_quality": null,
+      "refusal_correctness": null
+    },
+    {
+      "id": "eval-practical-0011",
+      "kind": "practical",
+      "question": "How do I use the technique of questioning my fearful thoughts when I\u2019m alone at night and start believing something scary or triggering from my past?",
+      "retrieval": {
+        "recall@4": 0.0,
+        "recall@8": 0.0,
+        "retrieved_top8": [
+          [
+            "journey-to-the-heart",
+            "b01075"
+          ],
+          [
+            "living-sober",
+            "b00323"
+          ],
+          [
+            "smart-recovery-user-guide",
+            "b00390"
+          ],
+          [
+            "rising-strong",
+            "b00386"
+          ],
+          [
+            "loving-what-is-revised-edition",
+            "b03862"
+          ],
+          [
+            "a-program-for-you",
+            "b01159"
+          ],
+          [
+            "loving-what-is-revised-edition",
+            "b01694"
+          ],
+          [
+            "narcotics-anonymous",
+            "b02495"
+          ]
+        ]
+      },
+      "citation_accuracy": null,
+      "faithfulness": null,
+      "answer_quality": null,
+      "refusal_correctness": null
+    }
+  ]
+}

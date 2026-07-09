@@ -31,3 +31,16 @@ packs/library-v2*.scpack
 /unsloth-*.whl
 packs/library-v3*.scpack
 packs/embedder-v3/vectors.i8
+
+# --- fine-tuning transient artifacts (2026-07-08) ---
+*.bak
+*.bak-*
+.env.bak*
+chroma/
+scratch/
+store_assets/
+unsloth_compiled_cache/
+finetune/logs/
+finetune/**/*checkpoint*.json
+finetune/retriever/metrics.json
+packs/embedder/

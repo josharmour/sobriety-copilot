@@ -1,0 +1,180 @@
+{
+  "seed": 42,
+  "val_fraction": 0.02,
+  "input_count": 6444,
+  "train_count": 6314,
+  "val_count": 130,
+  "val_pct": 2.02,
+  "intents": {
+    "refusal_out_of_domain": {
+      "total": 414,
+      "train": 406,
+      "val": 8,
+      "val_pct": 1.93
+    },
+    "ask_prayer_meditation": {
+      "total": 212,
+      "train": 208,
+      "val": 4,
+      "val_pct": 1.89
+    },
+    "ask_forgiveness": {
+      "total": 251,
+      "train": 246,
+      "val": 5,
+      "val_pct": 1.99
+    },
+    "ask_step_11": {
+      "total": 235,
+      "train": 230,
+      "val": 5,
+      "val_pct": 2.13
+    },
+    "ask_resentment": {
+      "total": 200,
+      "train": 196,
+      "val": 4,
+      "val_pct": 2.0
+    },
+    "ask_sponsorship": {
+      "total": 253,
+      "train": 248,
+      "val": 5,
+      "val_pct": 1.98
+    },
+    "ask_step_2": {
+      "total": 246,
+      "train": 241,
+      "val": 5,
+      "val_pct": 2.03
+    },
+    "ask_step_3": {
+      "total": 239,
+      "train": 234,
+      "val": 5,
+      "val_pct": 2.09
+    },
+    "ask_family": {
+      "total": 242,
+      "train": 237,
+      "val": 5,
+      "val_pct": 2.07
+    },
+    "ask_service": {
+      "total": 239,
+      "train": 234,
+      "val": 5,
+      "val_pct": 2.09
+    },
+    "ask_12_and_12": {
+      "total": 157,
+      "train": 154,
+      "val": 3,
+      "val_pct": 1.91
+    },
+    "ask_step_12": {
+      "total": 243,
+      "train": 238,
+      "val": 5,
+      "val_pct": 2.06
+    },
+    "ask_relapse": {
+      "total": 237,
+      "train": 232,
+      "val": 5,
+      "val_pct": 2.11
+    },
+    "ask_step_4": {
+      "total": 241,
+      "train": 236,
+      "val": 5,
+      "val_pct": 2.07
+    },
+    "ask_work_finances": {
+      "total": 217,
+      "train": 213,
+      "val": 4,
+      "val_pct": 1.84
+    },
+    "ask_step_5": {
+      "total": 223,
+      "train": 219,
+      "val": 4,
+      "val_pct": 1.79
+    },
+    "ask_higher_power": {
+      "total": 238,
+      "train": 233,
+      "val": 5,
+      "val_pct": 2.1
+    },
+    "ask_newcomer": {
+      "total": 205,
+      "train": 201,
+      "val": 4,
+      "val_pct": 1.95
+    },
+    "ask_step_8_9": {
+      "total": 199,
+      "train": 195,
+      "val": 4,
+      "val_pct": 2.01
+    },
+    "ask_step_1": {
+      "total": 235,
+      "train": 230,
+      "val": 5,
+      "val_pct": 2.13
+    },
+    "ask_big_book": {
+      "total": 154,
+      "train": 151,
+      "val": 3,
+      "val_pct": 1.95
+    },
+    "ask_step_6_7": {
+      "total": 238,
+      "train": 233,
+      "val": 5,
+      "val_pct": 2.1
+    },
+    "ask_fear": {
+      "total": 235,
+      "train": 230,
+      "val": 5,
+      "val_pct": 2.13
+    },
+    "ask_humility": {
+      "total": 265,
+      "train": 260,
+      "val": 5,
+      "val_pct": 1.89
+    },
+    "ask_slogan": {
+      "total": 215,
+      "train": 211,
+      "val": 4,
+      "val_pct": 1.86
+    },
+    "ask_step_10": {
+      "total": 234,
+      "train": 229,
+      "val": 5,
+      "val_pct": 2.14
+    },
+    "ask_traditions": {
+      "total": 193,
+      "train": 189,
+      "val": 4,
+      "val_pct": 2.07
+    },
+    "ask_meetings": {
+      "total": 184,
+      "train": 180,
+      "val": 4,
+      "val_pct": 2.17
+    }
+  },
+  "intent_count": 28,
+  "c2fix": true
+}

@@ -661,14 +661,13 @@ def train(args: argparse.Namespace, cfg: dict) -> int:
     NOTE: This function allocates GPU memory.  Only call inside a D1 window
           (after freeing at least one GPU from vLLM).
     """
+    # unsloth first so its Gemma4 patches apply (peft can't wrap
+    # Gemma4ClippableLinear directly). DPO runs on the SFT-MERGED bf16 model
+    # (--base-model) with a fresh LoRA; ref model = adapter-disabled policy.
+    from unsloth import FastLanguageModel  # noqa: I001
     import torch
     from datasets import Dataset as HFDataset
-    from peft import LoraConfig, PeftModel
-    from transformers import (
-        AutoModelForCausalLM,
-        AutoTokenizer,
-        BitsAndBytesConfig,
-    )
+    from transformers import AutoTokenizer
     from trl import DPOConfig, DPOTrainer
 
     model_name = cfg["model"]["name"]
@@ -683,11 +682,28 @@ def train(args: argparse.Namespace, cfg: dict) -> int:
     seq_len = args.seq_len or train_cfg["sequence_length"]
     seed = cfg.get("seed", 42)
 
-    # ---- Load tokenizer ----
-    print(f"Loading tokenizer: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    # ---- Load SFT-merged model + tokenizer via unsloth (bf16) ----
+    # --adapter points at the SFT-merged model dir (base+SFT weights merged).
+    base = args.adapter or model_name
+    print(f"Loading SFT-merged base via unsloth (bf16): {base}")
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        base,
+        max_seq_length=seq_len,
+        dtype=torch.bfloat16,
+        load_in_4bit=False,
+    )
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
+    model = FastLanguageModel.get_peft_model(
+        model,
+        r=qlora_cfg["r"],
+        lora_alpha=qlora_cfg["lora_alpha"],
+        target_modules=qlora_cfg.get("target_modules"),
+        lora_dropout=qlora_cfg.get("lora_dropout", 0.05),
+        bias="none",
+        use_gradient_checkpointing="unsloth",
+        random_state=seed,
+    )
 
     # ---- Load dataset ----
     print(f"Loading dataset: {args.dataset}")
@@ -719,50 +735,6 @@ def train(args: argparse.Namespace, cfg: dict) -> int:
     val_data = [format_row(r) for r in val_rows]
     train_ds = HFDataset.from_list(train_data)
     val_ds = HFDataset.from_list(val_data)
-
-    # ---- QLoRA bitsandbytes config ----
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype=getattr(
-            torch, qlora_cfg.get("bnb_4bit_compute_dtype", "bfloat16")
-        ),
-        bnb_4bit_quant_type=qlora_cfg.get("bnb_4bit_quant_type", "nf4"),
-        bnb_4bit_use_double_quant=qlora_cfg.get("bnb_4bit_use_double_quant", True),
-    )
-
-    # ---- Load base model in 4-bit ----
-    print(f"Loading base model (4-bit NF4): {model_name}")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        quantization_config=bnb_config,
-        device_map="auto",
-        torch_dtype=getattr(torch, cfg["model"].get("torch_dtype", "bfloat16")),
-        attn_implementation=cfg["model"].get(
-            "attn_implementation", "flash_attention_2"
-        ),
-        trust_remote_code=True,
-    )
-
-    # ---- Load SFT adapter ----
-    print(f"Loading SFT adapter: {args.adapter}")
-    model = PeftModel.from_pretrained(
-        model,
-        args.adapter,
-        is_trainable=True,
-    )
-
-    # ---- LoRA config (for reference model) ----
-    lora_config = LoraConfig(
-        r=qlora_cfg["r"],
-        lora_alpha=qlora_cfg["lora_alpha"],
-        target_modules=qlora_cfg.get("target_modules"),
-        lora_dropout=qlora_cfg.get("lora_dropout", 0.05),
-        bias="none",
-        task_type="CAUSAL_LM",
-        modules_to_save=qlora_cfg.get("modules_to_save"),
-        use_dora=qlora_cfg.get("use_dora", False),
-        init_lora_weights=qlora_cfg.get("init_lora_weights", True),
-    )
 
     # ---- DPO config ----
     max_steps = (
@@ -836,12 +808,11 @@ def train(args: argparse.Namespace, cfg: dict) -> int:
     # ---- Trainer ----
     trainer = DPOTrainer(
         model=model,
-        ref_model=None,  # DPOTrainer creates ref model internally
+        ref_model=None,  # PEFT policy: ref = adapter-disabled model
         args=dpo_config,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        tokenizer=tokenizer,
-        peft_config=lora_config,
+        processing_class=tokenizer,
     )
 
     # ---- Checkpoint resume ----
