@@ -1,0 +1,34 @@
+You are a headless deployment-spike agent. Repo: /mnt/repos/sobriety-copilot.
+GOAL (FT-F2): get the FINE-TUNED on-device generator into a format the Flutter
+app's flutter_gemma (0.13.6) can run. Two routes — try BOTH, report which works:
+
+  Route A (LoRA, preferred): convert the SFT LoRA adapter to the format
+    MediaPipe/LiteRT-LM accepts, loaded at runtime via
+    flutter_gemma createChat(loraPath:) on the base gemma-4-E2B .litertlm.
+  Route B (full): convert the MERGED model to .litertlm/.task via
+    Google ai-edge-torch (ai_edge_torch.generative), or the AI Edge
+    MediaPipe LLM conversion toolchain.
+
+Inputs (LOCAL disk — /mnt/repos is a slow CIFS mount, keep heavy IO local):
+  - SFT LoRA adapter dir:  /mnt/repos/sobriety-copilot/finetune/runs/sft-01
+    (adapter_config.json + adapter_model.safetensors, base google/gemma-4-e2b-it)
+  - Merged SFT model:      /home/joshu/ft-runs/sft-merged  (10GB bf16)
+  - HF cache is local at ~/.cache/huggingface; base model already downloaded.
+  - Fresh venvs: python3.11 (/home/joshu/.local/bin/python3.11) works with the
+    Google toolchains; the repo's py3.14 does NOT. Build venvs on LOCAL disk.
+
+RULES:
+  1. Write outputs ONLY under finetune/deploy/ (small files: report + scripts)
+     and /home/joshu/ft-runs/ (large artifacts). Do NOT commit or push. Do NOT
+     touch prod, docker, or the dsv4 vLLM container (it serves production).
+  2. Heavy conversions are CPU/local — do not allocate the RTX 6000 GPUs
+     (both are running prod dsv4).
+  3. Deliverables: finetune/deploy/f2_report.md (toolchain used, exact
+     commands, what worked / precise wall with error text, and whether the
+     artifact loads), scripts/ft_convert_ondevice.py (the working path or the
+     furthest-working attempt), and any produced .litertlm/.task/lora artifact
+     under /home/joshu/ft-runs/ (note its path + size in the report).
+  4. When done OR definitively blocked, end your final message with exactly:
+     HANDOFF: F2 <one-line outcome>   (or BLOCKED: <question> if you need a
+     decision). Long installs/conversions: nohup + poll, don't hold one call
+     open >10 min.

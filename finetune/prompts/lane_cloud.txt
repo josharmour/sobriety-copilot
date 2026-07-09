@@ -1,0 +1,27 @@
+You are a headless deployment-spike agent. Repo: /mnt/repos/sobriety-copilot.
+GOAL (FT-#3, SAFE PREP ONLY): make the CLOUD server able to use the fine-tuned
+EmbeddingGemma retriever — WITHOUT touching production. The ollama/GGUF path is
+DEAD (llama.cpp asserts on the sentence-transformers 2_Dense/3_Dense heads —
+already proven). Use a sentence-transformers embedding MICROSERVICE instead.
+
+Do:
+  1. Build scripts/embed_server.py — a small FastAPI, OpenAI-compatible
+     POST /v1/embeddings, serving the fine-tuned model at
+     /home/joshu/ft-runs/eval-assets/retriever-model (a SentenceTransformer).
+     Apply the SAME prompt prefixes the app/pack use: documents
+     "title: none | text: ", queries "task: search result | query: ".
+     Runs CPU (do NOT take the RTX 6000 GPUs — prod dsv4 uses them).
+  2. PARITY TEST: embeddings from the microservice must match
+     SentenceTransformer(...).encode() for the same text (cosine ~1.0) AND be
+     768-dim. Put the test + numbers in the report.
+  3. Write finetune/deploy/cloud_reindex_plan.md: the exact turnkey steps to
+     (a) run the microservice on a host the NAS app reaches, (b) point the
+     server's EMBEDDING_BASE_URL/MODEL at it, (c) re-index into a SHADOW
+     ChromaDB collection (768-dim; the existing collection is 384-dim
+     all-minilm — must be a new collection), (d) verify, (e) cut over. Do NOT
+     execute (b)-(e); those touch prod and are Fable's call.
+
+RULES: write ONLY under finetune/deploy/ + scripts/embed_server.py. Do NOT
+commit/push. Do NOT change any prod config, docker, ChromaDB collection, or
+.env. Do NOT trigger a re-index. CPU only. End with:
+  HANDOFF: CLOUD <one-line outcome>   (or BLOCKED: <question>).
