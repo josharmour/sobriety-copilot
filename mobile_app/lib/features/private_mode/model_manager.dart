@@ -43,10 +43,39 @@ class PrivateModelState {
   bool get isDownloading => phase == PrivateModelPhase.downloading;
 }
 
-/// Owns the model file lifecycle: download with progress, verify, delete.
+/// Owns the model file lifecycle: download with resume, verify, delete.
+///
+/// ## Download architecture
+///
+/// Hugging Face's URL redirects to a **Xet CDN signed URL** with a limited
+/// expiry.  The Dart `http` package's `IOClient` strips the `Range` header
+/// when following cross-origin redirects, and a stale signed URL returns 403.
+///
+/// To work around both, this notifier:
+///
+///  1. Resolves the redirect chain with a HEAD request to get a *fresh*
+///     signed CDN URL before every download attempt.
+///  2. Sends the GET/Range request **directly** to the CDN URL — no
+///     cross-origin redirect to strip headers.
+///  3. Preserves the `.part` file on transient errors so a subsequent
+///     `retry()` can resume where it left off.
+///  4. Handles 403 (expired URL) by re-resolving and retrying
+///     automatically, with a bounded attempt count.
 class PrivateModelNotifier extends Notifier<PrivateModelState> {
   http.Client? _downloadClient;
   bool _cancelRequested = false;
+
+  /// Test seam: override to inject a mock [http.Client].  Defaults to
+  /// constructing a real client when null.
+  http.Client Function()? clientFactory;
+
+  /// Test seam: override to use a different expected model size.
+  /// Defaults to [kPrivateModelBytes].
+  int expectedBytes = kPrivateModelBytes;
+
+  /// Test seam: override to point at a test server instead of HF.
+  /// Defaults to [kPrivateModelUrl].
+  String modelUrl = kPrivateModelUrl;
 
   @override
   PrivateModelState build() {
@@ -68,12 +97,16 @@ class PrivateModelNotifier extends Notifier<PrivateModelState> {
   /// Finds a complete model file in either supported location: the in-app
   /// download target, or the app's external-files dir (sideload target —
   /// `adb push <file> /sdcard/Android/data/<pkg>/files/` for testing).
-  static Future<File?> resolveModelFile() async {
-    final candidates = <(String, int)>[(await modelPath(), kPrivateModelBytes)];
+  static Future<File?> resolveModelFile(
+      {int expectedBytes = kPrivateModelBytes}) async {
+    final candidates = <(String, int)>[(await modelPath(), expectedBytes)];
     try {
       final ext = await getExternalStorageDirectory();
       if (ext != null) {
-        candidates.add((p.join(ext.path, kPrivateModelFile), kPrivateModelBytes));
+        candidates.add((
+          p.join(ext.path, kPrivateModelFile),
+          expectedBytes,
+        ));
       }
     } catch (_) {
       // External storage unavailable; only the download target applies.
@@ -91,7 +124,7 @@ class PrivateModelNotifier extends Notifier<PrivateModelState> {
 
   Future<void> _probe() async {
     try {
-      if (await resolveModelFile() != null) {
+      if (await resolveModelFile(expectedBytes: expectedBytes) != null) {
         state = const PrivateModelState(PrivateModelPhase.installed);
       }
     } catch (_) {
@@ -101,6 +134,37 @@ class PrivateModelNotifier extends Notifier<PrivateModelState> {
 
   /// Re-check the filesystem (e.g. after a sideload while the app was open).
   Future<void> refresh() => _probe();
+
+  /// Resolves the Hugging Face URL through its redirect chain and returns
+  /// the final signed CDN URL.  Every call issues a new HEAD request so the
+  /// returned URL has a fresh expiry window.
+  ///
+  /// In http 1.6.0, [IOClient.send] returns `_IOStreamedResponseV2` which
+  /// implements [http.BaseResponseWithUrl].  The `url` on that interface
+  /// is set from `response.redirects.last.location` (the post-redirect URL)
+  /// by IOClient — see io_client.dart:219-221.
+  Future<Uri> _resolveSignedUrl(http.Client client) async {
+    final headReq = http.Request('HEAD', Uri.parse(modelUrl));
+    final headRes = await client
+        .send(headReq)
+        .timeout(const Duration(seconds: 30));
+
+    await headRes.stream.drain();
+
+    if (headRes.statusCode < 200 || headRes.statusCode >= 300) {
+      throw Exception('HEAD request failed with HTTP ${headRes.statusCode}');
+    }
+
+    // Pattern-match on BaseResponseWithUrl to extract the post-redirect URL.
+    // IOClient returns _IOStreamedResponseV2 which implements this interface.
+    if (headRes case http.BaseResponseWithUrl(:final url)) {
+      return url;
+    }
+
+    // Fallback for non-IO clients (e.g. test mocks that don't follow
+    // redirects).
+    return Uri.parse(modelUrl);
+  }
 
   Future<void> download() async {
     if (state.isDownloading) return;
@@ -112,82 +176,122 @@ class PrivateModelNotifier extends Notifier<PrivateModelState> {
     final tmp = File('$path.part');
     await tmp.parent.create(recursive: true);
 
-    final client = http.Client();
+    final client = clientFactory?.call() ?? http.Client();
     _downloadClient = client;
     IOSink? sink;
+
     try {
+      // Bound total attempts to avoid infinite loops (403/416 cycles).
+      var attempts = 0;
+      const maxAttempts = 5;
+
+      // 1. Resolve the signed CDN URL fresh — never reuse a stale URL.
+      var signedUrl = await _resolveSignedUrl(client);
+
+      // 2. Check for an existing partial download (e.g. from a prior failure).
       var existingBytes = 0;
       if (await tmp.exists()) {
         existingBytes = await tmp.length();
-        if (existingBytes == kPrivateModelBytes) {
-          if (await file.exists()) await file.delete();
-          await tmp.rename(file.path);
-          state = const PrivateModelState(PrivateModelPhase.installed);
-          return;
+        if (existingBytes >= expectedBytes) {
+          if (existingBytes == expectedBytes) {
+            // Completed part that wasn't renamed yet — promote to final.
+            if (await file.exists()) await file.delete();
+            await tmp.rename(file.path);
+            state = const PrivateModelState(PrivateModelPhase.installed);
+            return;
+          }
+          // Oversized / mismatched .part — discard and restart from zero.
+          await tmp.delete();
+          existingBytes = 0;
         }
       }
 
-      final req = http.Request('GET', Uri.parse(kPrivateModelUrl));
-      if (existingBytes > 0) {
-        req.headers['Range'] = 'bytes=$existingBytes-';
-      }
+      // 3. Download loop — may re-resolve on 403/416.
+      while (attempts < maxAttempts) {
+        attempts++;
+        final req = http.Request('GET', signedUrl);
+        if (existingBytes > 0) {
+          req.headers['Range'] = 'bytes=$existingBytes-';
+        }
 
-      var res = await client.send(req);
+        var res = await client.send(req);
 
-      if (res.statusCode == 416 && existingBytes > 0) {
-        existingBytes = 0;
-        final req2 = http.Request('GET', Uri.parse(kPrivateModelUrl));
-        res = await client.send(req2);
-      }
+        // 3a. 403 → signed URL expired; re-resolve and retry.
+        if (res.statusCode == 403) {
+          await res.stream.drain();
+          signedUrl = await _resolveSignedUrl(client);
+          continue;
+        }
 
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw Exception('HTTP ${res.statusCode}');
-      }
+        // 3b. 416 → range not satisfiable; restart from zero, re-resolve.
+        if (res.statusCode == 416) {
+          await res.stream.drain();
+          existingBytes = 0;
+          signedUrl = await _resolveSignedUrl(client);
+          continue;
+        }
 
-      final isPartial = res.statusCode == 206;
-      if (!isPartial && existingBytes > 0) {
-        existingBytes = 0;
-      }
+        // 3c. Any other error status → fail.
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          await res.stream.drain();
+          throw Exception('HTTP ${res.statusCode}');
+        }
 
-      final total = isPartial 
-          ? (res.contentLength ?? (kPrivateModelBytes - existingBytes)) + existingBytes 
-          : (res.contentLength ?? kPrivateModelBytes);
-          
-      var received = existingBytes;
-      var lastEmit = received;
-      sink = tmp.openWrite(mode: isPartial ? FileMode.append : FileMode.write);
-      
-      await for (final chunk in res.stream) {
-        if (_cancelRequested) throw const _CancelledDownload();
-        sink.add(chunk);
-        received += chunk.length;
-        // Throttle state updates to ~every 8 MB.
-        if (received - lastEmit > 8 * 1024 * 1024) {
-          lastEmit = received;
-          state = PrivateModelState(
-            PrivateModelPhase.downloading,
-            progress: received / total,
+        // 3d. 200 on a Range request → server ignored Range; restart.
+        final isPartial = res.statusCode == 206;
+        if (!isPartial && existingBytes > 0) {
+          existingBytes = 0;
+        }
+
+        // 4. Stream the response body to the .part file.
+        final total = isPartial
+            ? (res.contentLength ?? (expectedBytes - existingBytes)) +
+                existingBytes
+            : (res.contentLength ?? expectedBytes);
+
+        var received = existingBytes;
+        var lastEmit = received;
+        sink = tmp.openWrite(
+            mode: isPartial ? FileMode.append : FileMode.write);
+
+        await for (final chunk in res.stream) {
+          if (_cancelRequested) throw const _CancelledDownload();
+          sink.add(chunk);
+          received += chunk.length;
+          // Throttle state updates to ~every 8 MB.
+          if (received - lastEmit > 8 * 1024 * 1024) {
+            lastEmit = received;
+            state = PrivateModelState(
+              PrivateModelPhase.downloading,
+              progress: received / total,
+            );
+          }
+        }
+        await sink.flush();
+        await sink.close();
+        sink = null;
+
+        // 5. Integrity check: verify the expected file size.
+        final size = await tmp.length();
+        if (size != expectedBytes) {
+          throw Exception(
+            'Download incomplete ($size of $expectedBytes bytes)',
           );
         }
-      }
-      await sink.flush();
-      await sink.close();
-      sink = null;
 
-      final size = await tmp.length();
-      if (size != kPrivateModelBytes) {
-        throw Exception(
-          'Download incomplete ($size of $kPrivateModelBytes bytes)',
-        );
+        // 6. Rename .part → final file.
+        if (await file.exists()) await file.delete();
+        await tmp.rename(file.path);
+        state = const PrivateModelState(PrivateModelPhase.installed);
+        return; // Success!
       }
-      if (await file.exists()) await file.delete();
-      await tmp.rename(file.path);
-      state = const PrivateModelState(PrivateModelPhase.installed);
+
+      throw Exception('Download failed after $maxAttempts attempts');
     } on _CancelledDownload {
+      // Explicit cancellation — .part is cleaned up in `finally` below.
       state = const PrivateModelState(PrivateModelPhase.notInstalled);
     } catch (e) {
-      // Closing the client mid-stream surfaces as a ClientException; treat
-      // any failure after a cancel request as a plain cancel, not an error.
+      // Transient error: preserve .part so retry() can resume.
       state = _cancelRequested
           ? const PrivateModelState(PrivateModelPhase.notInstalled)
           : PrivateModelState(PrivateModelPhase.error, error: e.toString());
@@ -195,23 +299,34 @@ class PrivateModelNotifier extends Notifier<PrivateModelState> {
       try {
         await sink?.close();
       } catch (_) {}
-      try {
-        if (await tmp.exists()) await tmp.delete();
-      } catch (_) {}
+      // Only clean up .part on explicit cancellation, not on transient errors.
+      if (_cancelRequested) {
+        try {
+          if (await tmp.exists()) await tmp.delete();
+        } catch (_) {}
+      }
       client.close();
-      _downloadClient = null;
+      // Guard: only null _downloadClient if it still refers to this client.
+      // A slow finally from a cancelled download should not clobber a
+      // newly started download's client.
+      if (identical(_downloadClient, client)) _downloadClient = null;
     }
   }
 
+  /// Cancel an in-flight download.  Cleans up the partial file.
   void cancelDownload() {
     _cancelRequested = true;
     // Closing the client aborts the in-flight response stream promptly.
     _downloadClient?.close();
   }
 
+  /// Retry a failed download, preserving any partial progress (.part file).
+  /// Falls through to [download] which resumes from the existing .part data.
+  Future<void> retry() => download();
+
   Future<void> delete() async {
     try {
-      final file = await resolveModelFile();
+      final file = await resolveModelFile(expectedBytes: expectedBytes);
       if (file != null) await file.delete();
     } catch (_) {}
     state = const PrivateModelState(PrivateModelPhase.notInstalled);
