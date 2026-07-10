@@ -75,6 +75,21 @@ engine_ft: InferenceEngine | None = (
     if LLM_MODEL_FT
     else None
 )
+
+# Latency circuit-breaker: the primary generator (gemma on plex) is fast when
+# uncontended but can slow under bursty load. When one request's time-to-first-
+# token exceeds SLOW_TTFT_MS, we trip a shared (Redis) breaker so subsequent
+# requests route to the faster fallback (dsv4) for SLOW_COOLDOWN_S, then revert.
+# No single user has to sit through the slow path repeatedly, and it self-heals.
+LLM_MODEL_FALLBACK = os.environ.get("LLM_MODEL_FALLBACK", "") or None
+SLOW_TTFT_MS = int(os.environ.get("SLOW_TTFT_MS", "5000"))
+SLOW_COOLDOWN_S = int(os.environ.get("SLOW_COOLDOWN_S", "120"))
+_BREAKER_KEY = "sc:generator:slow_until"
+engine_fallback: InferenceEngine | None = (
+    InferenceEngine(base_url=BASE_URL, model=LLM_MODEL_FALLBACK, api_key=API_KEY)
+    if LLM_MODEL_FALLBACK
+    else None
+)
 memory_manager = UserMemoryManager()
 retriever: RAGRetriever | None = None
 retriever_version = "0"
@@ -1355,6 +1370,20 @@ def chat(payload: ChatRequest):
         selected_model_variant = "ft"
     # ---------------------------------------------------------------------------
 
+    # Latency circuit-breaker: if the primary generator recently went slow, a
+    # shared Redis flag routes requests to the faster fallback (dsv4) until the
+    # cooldown expires — so no user queues behind a slow gemma. Only applies to
+    # the default variant; explicit A/B requests are honored as asked.
+    breaker_active = False
+    if selected_model_variant == "default" and engine_fallback is not None:
+        try:
+            if get_redis_client().get(_BREAKER_KEY):
+                active_engine = engine_fallback
+                selected_model_variant = "fallback"
+                breaker_active = True
+        except Exception:
+            pass
+
     # Use conversation-aware query for retrieval so follow-ups resolve correctly.
     retrieval_query = _build_retrieval_query(query, history)
 
@@ -1454,6 +1483,7 @@ def chat(payload: ChatRequest):
             raw_answer = ""   # verbatim committed text (incl. thought tags) fed back as continue_text
             agg_tokens = 0
             gen_t0 = time.monotonic()
+            _first_tok_t: float | None = None
             for block_i in range(GROUND_MAX_BLOCKS):
                 block_raw = ""
                 block_tokens = 0
@@ -1501,6 +1531,25 @@ def chat(payload: ChatRequest):
                             # models can reason longer than that before any token).
                             yield ": keepalive\n\n"
                     else:
+                        if _first_tok_t is None:
+                            _first_tok_t = time.monotonic()
+                            # Trip the breaker if the PRIMARY generator was slow to
+                            # first token, so subsequent requests use the fallback.
+                            if (not breaker_active and engine_fallback is not None
+                                    and (_first_tok_t - gen_t0) * 1000 > SLOW_TTFT_MS):
+                                try:
+                                    get_redis_client().set(
+                                        _BREAKER_KEY, "1", ex=SLOW_COOLDOWN_S
+                                    )
+                                    print(
+                                        f"[BREAKER] gen TTFT "
+                                        f"{(_first_tok_t - gen_t0) * 1000:.0f}ms > "
+                                        f"{SLOW_TTFT_MS}ms -> routing to "
+                                        f"{LLM_MODEL_FALLBACK} for {SLOW_COOLDOWN_S}s",
+                                        flush=True,
+                                    )
+                                except Exception:
+                                    pass
                         response_buffer.append(text)
                         yield f"data: {json.dumps({'token': text})}\n\n"
                 raw_answer += block_raw

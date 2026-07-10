@@ -53,6 +53,10 @@ SCALE_DIVERSITY_MIN_RATIO = float(os.environ.get("RAG_SCALE_DIVERSITY_MIN_RATIO"
 MAX_RESULTS_PER_SOURCE = int(os.environ.get("RAG_MAX_PER_SOURCE", "2"))
 # How long the cached ChromaDB collection count is trusted before re-fetching.
 RAG_COUNT_TTL_S = float(os.environ.get("RAG_COUNT_TTL_S", "60"))
+# Max chars of retrieved context injected into the generator prompt. Smaller =
+# faster prefill + less GPU time per request (better under concurrent load).
+# Default preserves prior behavior; cloud sets a diet value (e.g. 8000).
+RAG_MAX_CONTEXT_CHARS = int(os.environ.get("RAG_MAX_CONTEXT_CHARS", "12000"))
 # Bumped whenever the on-disk BM25 cache layout changes so stale pickles rebuild.
 _POSTINGS_FORMAT = 2
 # A query term appearing in more than this many chunks is "common": it carries
@@ -706,7 +710,7 @@ class RAGRetriever:
     def format_context(
         self,
         results: list[RetrievalResult],
-        max_total_chars: int = 12000,
+        max_total_chars: int = RAG_MAX_CONTEXT_CHARS,
     ) -> str:
         sections = []
         chars_used = 0

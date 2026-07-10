@@ -3,6 +3,13 @@ x-app-env: &app-env
   LLM_BASE_URL: "${LLM_BASE_URL:-http://10.0.0.10:8002/v1}"
   LLM_MODEL: "${LLM_MODEL:-dsv4}"
   LLM_MODEL_FT: "${LLM_MODEL_FT:-}"
+  # Latency circuit-breaker: when the primary generator's first-token time
+  # exceeds SLOW_TTFT_MS, route to LLM_MODEL_FALLBACK for SLOW_COOLDOWN_S.
+  LLM_MODEL_FALLBACK: "${LLM_MODEL_FALLBACK:-}"
+  SLOW_TTFT_MS: "${SLOW_TTFT_MS:-5000}"
+  SLOW_COOLDOWN_S: "${SLOW_COOLDOWN_S:-120}"
+  # Cloud RAG context diet — cap injected context chars (smaller = faster prefill).
+  RAG_MAX_CONTEXT_CHARS: "${RAG_MAX_CONTEXT_CHARS:-12000}"
   # LLM_BASE_URL_DIFFUSION removed — single model on 10.0.0.10:8002
   # LLM_MODEL_DIFFUSION removed — single model on 10.0.0.10:8002
   LLM_BASE_URL_STANDARD: "${LLM_BASE_URL_STANDARD:-http://10.0.0.10:8002/v1}"
@@ -81,6 +88,14 @@ services:
       OLLAMA_KV_CACHE_TYPE: "q8_0"
       OLLAMA_KEEP_ALIVE: "-1"
       OLLAMA_HOST: "0.0.0.0:11434"
+      # KV-cache budget on the 32GB R9700 (ComfyUI reserves 16GB, qwen competes):
+      # NUM_PARALLEL=4 x 32K default ctx overflowed VRAM and swapped over the
+      # Gen3-x4 eGPU link -> 25-35s TTFT. Cap ctx to 16K and serialize so the
+      # KV cache fits in VRAM; typical RAG prompt is ~1.6K tokens. Bump PARALLEL
+      # back up later only if VRAM headroom allows.
+      OLLAMA_NUM_PARALLEL: "2"
+      OLLAMA_CONTEXT_LENGTH: "16384"
+      OLLAMA_MAX_LOADED_MODELS: "1"
     volumes:
       - /home/joshu/.ollama:/root/.ollama
     ports:
