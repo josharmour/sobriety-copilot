@@ -155,6 +155,9 @@ def format_state_note(state: UserState) -> str:
     if not parts:
         return ""
     return (
-        "User context (private; reference if relevant, do not recite "
-        "verbatim): " + " · ".join(parts)
+        "User context (private, from their profile): " + " · ".join(parts) + ". "
+        "Only bring any of this up if the person's message is directly about "
+        "their own time in recovery, a milestone, or where they are in the "
+        "steps. Otherwise ignore it — do not mention their sobriety date, day "
+        "count, or step unprompted, and never recite it verbatim."
     )

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sobriety_copilot_mobile/config/app_config.dart';
 import 'package:sobriety_copilot_mobile/data/models/chat_models.dart';
+import 'package:sobriety_copilot_mobile/features/milestones/day_count_intent.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 
@@ -93,13 +94,11 @@ class ChatNotifier extends Notifier<ChatState> {
     }
 
     // Local-only tracker context: lets the assistant speak to "day 92"
-    // without the server ever storing the date. Only pass it when relevant.
+    // without the server ever storing the date. Only pass it when the message
+    // is genuinely about the person's own time in recovery (see
+    // queryWantsDayCount) — otherwise the model recites the count every turn.
     final sobriety = ref.read(sobrietyProvider);
-    final wantsDayCount = RegExp(
-      r'\b(day|days|sober|sobriety|clean|milestone|birthday|anniversary|how\s+long|how\s+am\s+i\s+doing)\b',
-      caseSensitive: false,
-    ).hasMatch(trimmed);
-    final clientContext = (sobriety.isTracking && wantsDayCount)
+    final clientContext = (sobriety.isTracking && queryWantsDayCount(trimmed))
         ? 'They are ${sobriety.daysSober} days sober today.'
         : null;
 

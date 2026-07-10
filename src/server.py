@@ -1440,7 +1440,10 @@ def chat(payload: ChatRequest):
     client_note = (payload.client_context or "").strip()
     if client_note:
         client_note = client_note.replace("\n", " ")[:300]
-        note_line = f"About this user (shared from their device for this reply only): {client_note}"
+        note_line = (
+            "Personal context from their device for this reply only "
+            f"(mention only if it fits what they're asking): {client_note}"
+        )
         sys_msg = f"{sys_msg}\n\n{note_line}" if sys_msg else note_line
     want_thinking = bool(payload.show_thinking)
     want_diffusion = bool(payload.diffusion_view)

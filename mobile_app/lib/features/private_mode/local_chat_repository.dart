@@ -9,6 +9,7 @@ import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:sobriety_copilot_mobile/data/models/chat_models.dart';
 import 'package:sobriety_copilot_mobile/data/repositories/chat_repository_interface.dart';
 import 'package:sobriety_copilot_mobile/data/repositories/library_repository.dart';
+import 'package:sobriety_copilot_mobile/features/milestones/day_count_intent.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/crisis_interceptor.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/embedding_manager.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/local_prompts.dart';
@@ -397,12 +398,10 @@ class LocalChatRepository implements ChatRepository {
         );
       }
       // The small model mentions anything it's given — only pass the sober
-      // day count when the question is actually about sobriety time.
-      final wantsDayCount = RegExp(
-        r'\b(day|days|sober|sobriety|clean|milestone|birthday|anniversary|how\s+long|how\s+am\s+i\s+doing)\b',
-        caseSensitive: false,
-      ).hasMatch(message);
-      final scopedClientContext = wantsDayCount ? clientContext : null;
+      // day count when the question is actually about the person's own
+      // recovery time (shared helper; see queryWantsDayCount).
+      final scopedClientContext =
+          queryWantsDayCount(message) ? clientContext : null;
       final userMessage = context.isNotEmpty
           ? localUserMessage(
               context: context,
