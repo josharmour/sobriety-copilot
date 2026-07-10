@@ -12,6 +12,9 @@ x-app-env: &app-env
   EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-ollama}"
   EMBEDDING_MODEL: "${EMBEDDING_MODEL:-nomic-embed-text}"
   EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-http://host.docker.internal:11434/v1}"
+  # "minilm" (nomic-style prefixes, all-minilm index) or "gemma" (fine-tuned
+  # EmbeddingGemma training-format prefixes). Must match the active collection.
+  EMBEDDING_PREFIX_STYLE: "${EMBEDDING_PREFIX_STYLE:-minilm}"
   SENTENCE_TRANSFORMER_MODEL: "${SENTENCE_TRANSFORMER_MODEL:-/app/models/fine-tuned-embeddings}"
   # The embed microservice computes embeddings from this model path on its own
   # container; this mount is for app-side fallback only.
