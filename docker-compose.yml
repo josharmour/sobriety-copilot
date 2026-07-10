@@ -58,6 +58,40 @@ x-app-env: &app-env
   NUMEXPR_NUM_THREADS: "1"
 
 services:
+  # Production generator: multimodal gemma4:12b on the R9700 (gfx1201) via ROCm.
+  # Part of this stack so `docker compose up` brings the model up with the app —
+  # a single "bump the stack" recovers the whole chat path incl. inference.
+  # Also serves the box's other gemma consumers (Open WebUI, the mtgacoach
+  # litellm fallback tier) via the published host port. Multimodal (vision/audio)
+  # must run on ollama — the llama-server mmproj path crashes on gfx1201.
+  ollama:
+    image: ollama/ollama:rocm
+    container_name: sobriety-copilot-ollama
+    restart: always
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - "44"    # video
+      - "990"   # render
+    environment:
+      HSA_OVERRIDE_GFX_VERSION: "12.0.0"
+      GPU_MAX_HW_QUEUES: "1"
+      OLLAMA_FLASH_ATTENTION: "1"
+      OLLAMA_KV_CACHE_TYPE: "q8_0"
+      OLLAMA_KEEP_ALIVE: "-1"
+      OLLAMA_HOST: "0.0.0.0:11434"
+    volumes:
+      - /home/joshu/.ollama:/root/.ollama
+    ports:
+      - "11434:11434"   # host port for Open WebUI + litellm (they use 10.0.0.100:11434)
+    healthcheck:
+      test: ["CMD-SHELL", "ollama ps >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 5
+
   app:
     build: .
     image: sobriety-copilot-app
@@ -76,6 +110,8 @@ services:
       redis:
         condition: service_healthy
       chroma:
+        condition: service_started
+      ollama:
         condition: service_started
     expose:
       - "5000"
