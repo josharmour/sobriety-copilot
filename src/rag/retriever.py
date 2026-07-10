@@ -53,6 +53,16 @@ SCALE_DIVERSITY_MIN_RATIO = float(os.environ.get("RAG_SCALE_DIVERSITY_MIN_RATIO"
 MAX_RESULTS_PER_SOURCE = int(os.environ.get("RAG_MAX_PER_SOURCE", "2"))
 # How long the cached ChromaDB collection count is trusted before re-fetching.
 RAG_COUNT_TTL_S = float(os.environ.get("RAG_COUNT_TTL_S", "60"))
+# Bumped whenever the on-disk BM25 cache layout changes so stale pickles rebuild.
+_POSTINGS_FORMAT = 2
+# A query term appearing in more than this many chunks is "common": it carries
+# little discriminative weight and matching all its postings costs seconds on a
+# 178k-chunk corpus. Common terms are scored only over the already-found
+# candidate pool (semantic hits + rare-term hits) instead of their full posting
+# list — same score for every chunk that survives to ranking, a fraction of the
+# cost. Rare terms below this threshold still full-scan so they can *discover*
+# chunks the semantic search missed.
+BM25_COMMON_DF = int(os.environ.get("RAG_BM25_COMMON_DF", "4000"))
 SCALE_BOOST = {
     "small": 1.0,
     "medium": 0.97,
@@ -214,7 +224,10 @@ class RAGRetriever:
             metadata={"hnsw:space": "cosine"},
         )
         self._chunks_by_id: dict[str, CachedChunk] = {}
-        self._postings: dict[str, list[tuple[str, int]]] = {}
+        # token -> {chunk_id: term_frequency}. A dict (not a list of tuples) so a
+        # high-frequency term can be scored over a bounded candidate set with
+        # O(1) membership lookups instead of a full posting-list scan.
+        self._postings: dict[str, dict[str, int]] = {}
         self._doc_lengths: dict[str, int] = {}
         self._avg_doc_length = 0.0
         self._document_count = 0
@@ -270,9 +283,12 @@ class RAGRetriever:
             if os.path.exists(cache_file):
                 with open(cache_file, "rb") as f:
                     cache_data = pickle.load(f)
-                if cache_data.get("document_count") == self._document_count:
+                if (
+                    cache_data.get("document_count") == self._document_count
+                    and cache_data.get("postings_format") == _POSTINGS_FORMAT
+                ):
                     self._chunks_by_id = cache_data["chunks_by_id"]
-                    self._postings = defaultdict(list, cache_data["postings"])
+                    self._postings = defaultdict(dict, cache_data["postings"])
                     self._doc_lengths = cache_data["doc_lengths"]
                     self._enum_penalty = cache_data.get("enum_penalty", {})
                     self._avg_doc_length = cache_data["avg_doc_length"]
@@ -281,6 +297,7 @@ class RAGRetriever:
         except Exception as e:
             print(f"[BM25-CACHE-ERR] Failed to load cache from {cache_file}: {e}", flush=True)
 
+        self._postings = defaultdict(dict)
         total_tokens = 0
         for offset in range(0, self._document_count, CACHE_BATCH_SIZE):
             batch = self.collection.get(
@@ -326,7 +343,7 @@ class RAGRetriever:
                 self._doc_lengths[chunk_id] = len(tokens)
                 total_tokens += len(tokens)
                 for token, count in token_counts.items():
-                    self._postings[token].append((chunk_id, count))
+                    self._postings[token][chunk_id] = count
 
         if self._chunks_by_id:
             self._avg_doc_length = total_tokens / len(self._chunks_by_id)
@@ -335,6 +352,7 @@ class RAGRetriever:
                 os.makedirs(os.path.dirname(cache_file), exist_ok=True)
                 cache_data = {
                     "document_count": self._document_count,
+                    "postings_format": _POSTINGS_FORMAT,
                     "chunks_by_id": self._chunks_by_id,
                     "postings": dict(self._postings),
                     "doc_lengths": self._doc_lengths,
@@ -356,6 +374,7 @@ class RAGRetriever:
         self,
         query: str,
         categories: list[str] | None,
+        candidate_ids: set[str] | None = None,
     ) -> dict[str, float]:
         if not self._chunks_by_id:
             return {}
@@ -372,23 +391,46 @@ class RAGRetriever:
         b = 0.75
         category_filter = set(categories or [])
 
+        def _bm25(token: str, chunk_id: str, term_frequency: int, idf: float) -> None:
+            chunk = self._chunks_by_id.get(chunk_id)
+            if chunk is None:
+                return
+            if category_filter and chunk.category not in category_filter:
+                return
+            document_length = max(self._doc_lengths.get(chunk_id, 0), 1)
+            denominator = term_frequency + k1 * (
+                1 - b + b * (document_length / max(self._avg_doc_length, 1.0))
+            )
+            scores[chunk_id] += idf * ((term_frequency * (k1 + 1)) / denominator)
+
+        # Split terms: rare terms full-scan (they discover chunks); common terms
+        # are deferred and scored only over the candidate pool below.
+        common_terms: list[tuple[str, dict[str, int], float]] = []
         for token in query_terms:
             postings = self._postings.get(token)
             if not postings:
                 continue
             document_frequency = len(postings)
             idf = math.log(1 + (self._document_count - document_frequency + 0.5) / (document_frequency + 0.5))
-            for chunk_id, term_frequency in postings:
-                chunk = self._chunks_by_id.get(chunk_id)
-                if chunk is None:
-                    continue
-                if category_filter and chunk.category not in category_filter:
-                    continue
-                document_length = max(self._doc_lengths.get(chunk_id, 0), 1)
-                denominator = term_frequency + k1 * (
-                    1 - b + b * (document_length / max(self._avg_doc_length, 1.0))
-                )
-                scores[chunk_id] += idf * ((term_frequency * (k1 + 1)) / denominator)
+            if document_frequency > BM25_COMMON_DF:
+                common_terms.append((token, postings, idf))
+                continue
+            for chunk_id, term_frequency in postings.items():
+                _bm25(token, chunk_id, term_frequency, idf)
+
+        # Common terms: score only chunks already in play — the semantic
+        # candidates plus whatever the rare terms discovered. A term in >2% of
+        # the corpus can't meaningfully *find* a relevant chunk; it only refines
+        # ranking of chunks we already have. Bounded to |candidates|, not |df|.
+        if common_terms:
+            universe = set(scores)
+            if candidate_ids:
+                universe |= candidate_ids
+            for token, postings, idf in common_terms:
+                for chunk_id in universe:
+                    term_frequency = postings.get(chunk_id)
+                    if term_frequency:
+                        _bm25(token, chunk_id, term_frequency, idf)
 
         return dict(scores)
 
@@ -540,7 +582,7 @@ class RAGRetriever:
         if missing_ids:
             self.refresh_cache()
 
-        keyword_scores = self._keyword_scores(query, categories)
+        keyword_scores = self._keyword_scores(query, categories, set(semantic_scores))
         max_semantic = max(semantic_scores.values(), default=1.0)
         max_keyword = max(keyword_scores.values(), default=1.0)
 
