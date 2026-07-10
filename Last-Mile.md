@@ -24,24 +24,26 @@ into users' hands.
   showed retrieval firing many times per window — verify it's not doing
   redundant retrievals / multi-query fan-out per request). **Target: <2s
   TTFT.** Highest-leverage item — the model is already instant.
-- [ ] **Local (on-device) TTFT.** Base Gemma-4-E2B prefilling a large RAG
-  prompt on a phone is inherently slow. Levers: fewer injected passages
-  (3 not 8), shorter system prompt, cap context length, stream the thinking
-  panel so *something* appears immediately.
-- [ ] **Perceived-speed polish.** Stream `sources` first (already happens) +
-  a typing indicator; make sure the SSE isn't buffered by nginx/Cloudflare.
+- [x] **Local (on-device) TTFT.** (LM-LTTFT, b0d2889) 3 passages, tighter
+  prompts (~200 chars saved each), post-truncation context cap 2100, typing
+  indicator + thinking panel verified streaming. On-device before/after
+  numbers still owed (no device attached during the lane).
+- [~] **Perceived-speed polish.** (LM-SSE, cefeb53) nginx gzip guards,
+  priming comment, timing events, SSE test suite. **Remaining: Cloudflare
+  dashboard → Speed → Optimization → Response Buffering → OFF (user action;
+  N/A if the tunnel is unproxied).**
 
 ## L1 — Reliable (release-blocking)
 
-- [ ] **Fix the E2B model download.** Diagnosed 2026-07-09: the URL is fine
-  (returns the correct 2.4GB public file). The failure is app-side handling
-  of the HF **Xet CDN redirect + `Range` resume + 2.4GB**. Prime suspect: the
-  redirect lands on a **signed URL with an `Expires`/`Signature`**; a resume
-  after a dropped download hits an *expired* signed URL. The recent resume
-  hotfix patched the wrong layer. Needs the on-device error to confirm. Fix
-  options: re-resolve the redirect fresh on each (re)start, verify 206 vs 200
-  handling, add integrity check + clear retry UX. **Blocks Private Mode for
-  every user until fixed.**
+- [x] **Fix the E2B model download.** (LM-E2B2, c872301) Root causes: Dart
+  `http` drops `Range` on the cross-origin redirect (resume never worked) +
+  `.part` deleted on every error. Fixed: fresh signed-URL resolution per
+  attempt (post-redirect URL via `BaseResponseWithUrl`), direct-to-CDN GETs,
+  bounded 403/416 re-resolve, oversized-partial discard, sideload path fix.
+  16 tests against a real redirecting HttpServer. **Remaining: one on-device
+  flaky-network verification when the Pixel is attached.** Note:
+  `embedding_manager.dart` (~190MB download) still has the old
+  `.part`-deleted-on-error pattern — same fix applies if it ever bites.
 
 ## L2 — Everywhere (deploy the fine-tuned intelligence)
 
@@ -50,20 +52,20 @@ into users' hands.
   window to run the ~hours-long export (see `finetune/deploy/f2_report.md`:
   one-line `get_max_length` patch, `--quantization_recipe None` for a first
   pass). Then bundle → ship in a release.
-- [ ] **Cloud retriever re-index (#3).** Adopt the fine-tuned EmbeddingGemma
-  server-side. Microservice is built + parity-verified (`scripts/embed_server.py`);
-  plan is turnkey (`finetune/deploy/cloud_reindex_plan.md`): run service →
-  shadow collection `recovery_literature_gemma_v1` (768-dim) → verify →
-  cutover.
+- [x] **Cloud retriever re-index (#3).** DONE + CUT OVER (2026-07-09). Embed
+  service runs as a container on plex (`embed:8190`, 768-dim, CPU); shadow
+  collection `recovery_literature_gemma_v1` (178,110 chunks) built and now
+  ACTIVE (Redis `sobriety:index:active_collection`); `EMBEDDING_PREFIX_STYLE=gemma`.
+  Verified live: canonical AA sources, 52ms–1.6s. Rollback = reset the Redis
+  key + revert `.env`.
 
 ## L2 — Better (quality ceiling)
 
-- [ ] **Lift retrieval recall.** recall@8 = 0.44 is the hard ceiling on
-  citation accuracy — the generator can only cite what's retrieved. Levers:
-  better chunking, larger top-k into the generator, re-enable/tune the
-  cross-encoder reranker on the final candidates, hybrid-fusion weighting.
-  This is the biggest remaining *answer-quality* lever, bigger than more
-  generator tuning.
+- [~] **Lift retrieval recall.** Big lever pulled: fine-tuned EmbeddingGemma
+  cut over (dense recall@8 0.117 → 0.355, +0.238 on the live A/B), fixing the
+  weak all-minilm dense that was dragging hybrid below BM25-alone. Remaining
+  levers if more is wanted: reranker on final candidates, hybrid-weight tuning,
+  chunking. Re-baseline recall@8 on the gemma path when convenient.
 
 ## L3 — Reach & size
 
@@ -71,12 +73,42 @@ into users' hands.
   Private Mode surface to iOS.
 - [ ] **APK/AAB ABI splits.** Trim the ~400MB fat bundle for Play (per-ABI
   splits) — faster installs, smaller downloads.
-- [ ] **Server A/B flag for the FT model (was F1).** `LLM_MODEL_FT` +
-  per-request flag so a fine-tuned server model can be A/B'd against dsv4
-  without a redeploy.
+- [x] **Server A/B flag for the FT model (was F1).** (LM-ABFLAG, cefeb53)
+  `LLM_MODEL_FT` env + `model_variant:"ft"` request flag, variant logging,
+  health surface. No-op until the env var is set on the NAS.
 
 ## L3 — Housekeeping (carried over, low priority)
 
-- [ ] Deep-link scheme back into the offline reader (deferred).
-- [ ] Dead-weight audit: unused `permission_handler`, vestigial
-  `sendMessage(audio:)` notes, unused `_SheetHandle`.
+- [x] Deep-link scheme back into the offline reader. (LM-SIZE, 99c9b57)
+- [x] Dead-weight audit: `permission_handler` + `_SheetHandle` removed;
+  `sendMessage(audio:)` KEPT — it is actively used in 5 files, the
+  "vestigial" note was wrong. ABI splits also landed in 99c9b57
+  (271MB arm64 vs 561MB fat APK).
+
+---
+
+## Swarm ledger (2026-07-09 — orchestrator: Fable; workers do NOT edit this file)
+
+Protocol: headless `hermes -z` workers on dsv4-flash (xhigh reasoning), rules at
+`scratch/lastmile-swarm/prompts/rules.txt`, reports at `scratch/lastmile-swarm/reports/`.
+Workers never commit; orchestrator reviews each HANDOFF and commits `LM-<LANE>: ...`.
+
+| Lane | Item(s) | Wave | Status |
+|---|---|---|---|
+| TTFT | Cloud TTFT ~20s stall | 1 | ✅ RESOLVED (LM-TTFT2 ee292bc + plex migration). Instrumentation pinned it: BM25 keyword scoring scaled with common-term match count ("first step"=46k matches=7.3s). Fix bounds common terms to the candidate pool (result-preserving, 5 equivalence tests). Live prod now: "first step" 7.3s→50ms, "serenity acceptance" 8.6s→616ms, sources preserved. Off the 8GB NAS onto plex, embeddings local. |
+| E2B | E2B model download fix | 1 | ❌ rejected in review (blocker: _resolveSignedUrl no-op with http 1.6.0; vacuous mocks) → E2B2 |
+| E2B2 | Rework with findings as spec, real-HttpServer tests | 3 | ✅ committed c872301 — all 5 findings fixed, 16 real-server tests, 24/24 green |
+| LTTFT | On-device TTFT + typing indicator | 1 | ✅ committed b0d2889 (orchestrator fixed raw-vs-rendered cap accounting) |
+| SSE | SSE buffering / nginx / CF | 1 | ✅ committed cefeb53 (nginx footgun refuted by review; test fixes by orchestrator); CF toggle = user action |
+| REINDEX | Cloud retriever shadow re-index | 1 | ❌ attempt 1: embed-on-NAS crash-looped, degraded prod — remediated |
+| REINDEX2 | Re-index, revised: embed on blackwell | 2 | ❌ died mid-run (no final response) but fixed the 422 + got embed service up on blackwell:8190 |
+| REINDEX3 | Resume: parity check → gentle shadow index → verify | 3 | launched |
+| F2/F2RUN | Generator .litertlm export | 1–2 | ✅ float export COMPLETE on 10.0.0.100 (litertlm-export4, ~20GB float32; ABCMeta + get_max_length + OOM + argv bugs fixed en route; +32GB temp swap); quantized dynamic_wi8_afp32 pass RUNNING → deployable ~2.6GB artifact |
+| IOS | iOS Private Mode scoping (plan-only) | 1 | ✅ done — reports/IOS.md; flutter_gemma 0.13.6 already supports iOS; needs a Mac only for build verify |
+| RECALL | Retrieval recall lift (+ BM25 caps on/off) | 2 | ⚠️ done, recommendations rejected: caps save only 4.4ms/query vs measured recall cost ("hybrid rescue" was an estimate); reranker default flip had ZERO recall measurements + CPU latency ignored — reverted |
+| RECALL2 | Measurement-only: hybrid caps on/off, reranker actually run, top_k 8 vs 12 | 3 | launched |
+| ABFLAG | LLM_MODEL_FT A/B flag | 2 | ✅ committed cefeb53 |
+| SIZE | ABI splits + dead-weight + deep-link | 2 | ✅ committed 99c9b57 |
+
+Gated on orchestrator/user: REINDEX cutover (step e), any prod deploy, RTX 6000 GPU window, Cloudflare Response-Buffering toggle.
+Incident 2026-07-09 ~15:15: embed sidecar OOM crash-loop on the NAS drove swap to 100% and prod chat to multi-minute latency; container stopped + restart policy cleared, chat restored. NOTE: unrelated `aimm` container has been burning 105% CPU / 1GB+ RAM in Playwright Chromium since 02:14 — pre-existing background load on the NAS, user decision whether to stop it.

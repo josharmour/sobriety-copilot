@@ -1,0 +1,102 @@
+{
+ "model": "/home/joshu/ft-runs/final-model",
+ "name": "smoke-dpo",
+ "results": [
+  {
+   "id": "eval-crosswork-0000",
+   "kind": "crosswork",
+   "question": "How do \"Twenty-Four Hours a Day\" and \"Drop the Rock\" differ in the obstacles or prerequisites they emphasize for achieving surrender in recovery?",
+   "answer": "The provided passages do not contain information about \"Twenty-Four Hours a Day\" or \"Drop the Rock,\" nor do they discuss the obstacles or prerequisites for surrender in those works. The excerpts are from *Alcoholics Anonymous* (the Big Book) and *Alcoholics Anonymous and Absolute: The Spiritual as Growth or Perfection*, and neither passage addresses the question.",
+   "retrieved": [
+    [
+     "drop-the-rock",
+     "b00320"
+    ],
+    [
+     "not-god",
+     "b00984"
+    ],
+    [
+     "twenty-four-hours-a-day",
+     "b00730"
+    ],
+    [
+     "not-god",
+     "b00976"
+    ]
+   ]
+  },
+  {
+   "id": "eval-practical-0001",
+   "kind": "practical",
+   "question": "How do I remind myself not to rush my recovery when I feel impatient and want to see quick results?",
+   "answer": "The passage from *LIVING SOBER* directly addresses this: \"Many of us have tendencies at times to overdo things, to rush heedlessly along, impatient with anything that slows us down. We find it hard to relax and savor life.\" When impatience arises and you want quick results, that's the tendency to rush. The reminder is to pause and recognize that rushing is exactly what blocks the spiritual process. *THE FIRST EXPERIMENT* adds that \"the tempting expedient is, in haste for abrupt or visible progress, to try some method less spiritual, or to defeat the end by watching for effects instead of keeping the eye on the Cause.\" So the practical step is to stop, look at the cause of the impatience, and trust that the process\u2014not your own effort\u2014will bring change.",
+   "retrieved": [
+    [
+     "touchstones",
+     "b00397"
+    ],
+    [
+     "living-sober",
+     "b00491"
+    ],
+    [
+     "the-greatest-thing-in-the-world-and-other-addresses",
+     "b00399"
+    ],
+    [
+     "the-twelve-steps-and-twelve-traditions-of-overeaters-anonymous",
+     "b00182"
+    ]
+   ]
+  },
+  {
+   "id": "eval-phrase-0002",
+   "kind": "phrase",
+   "question": "I hear you talk about regulating arousal\u2014what does that actually mean when I feel myself getting shut down or overexcited?",
+   "answer": "When you feel shut down or overexcited, that's exactly what the passage from *Childhood and Society* describes as the result of insufficient self-regulation. The author says that arousal levels reflect not only rest or fatigue but also the emotional context\u2014meaning your mood or feelings can push you into either too low or too high a state. Shut down often means underarousal, where you can't get going on a task; overexcited means you can't focus. The solution is self-regulation: the ability to keep your internal environment in a functional and safe range, regardless of what's happening around you. That means learning to notice when you're stuck in either extreme and then taking a small action\u2014like a breath, a stretch, or a pause\u2014to bring yourself back to a balanced place.",
+   "retrieved": [
+    [
+     "daring-greatly",
+     "b01267"
+    ],
+    [
+     "scattered-minds",
+     "b00524"
+    ],
+    [
+     "make-miracles-in-forty-days",
+     "b00534"
+    ],
+    [
+     "scattered-minds",
+     "b00403"
+    ]
+   ]
+  },
+  {
+   "id": "eval-personal-0003",
+   "kind": "personal",
+   "question": "I'm scared to go to events where alcohol is served because I don't trust myself, but I see others thriving there\u2014how do I get past that fear?",
+   "answer": "The passage from *Doctor Bob\u2019s Nightmare* describes a man who was \u201cself conscious and ill at ease most of the time,\u201d yet he surrounded himself with people who seemed to have \u201cpoise, health, and happiness\u201d and who \u201cspoke with great freedom from embarrassment.\u201d He sensed they had something he lacked and thought he could profit from it. That\u2019s the key: the fear you feel is rooted in your own self-consciousness and distrust, not in the reality of the event. The same man didn\u2019t stop drinking because he saw others doing it well\u2014he studied it, talked to people, and kept coming back.\n\nTo get past your fear, try what the passage suggests: go to the event anyway, even if you\u2019re trembling. Let yourself be the newcomer who doesn\u2019t know the rules. Listen for the \u201cspiritual nature\u201d the doctor mentions\u2014the sense of connection, freedom, or belonging that others seem to have. You don\u2019t have to drink; you just have to be present and willing to learn. The fear will lessen as you see that the people you\u2019re afraid of are not the ones who made you feel like an outsider\u2014they\u2019re the ones who can welcome you.",
+   "retrieved": [
+    [
+     "alcoholics-anonymous",
+     "b01515"
+    ],
+    [
+     "alcoholics-anonymous",
+     "b02798"
+    ],
+    [
+     "writing-the-big-book",
+     "b05449"
+    ],
+    [
+     "alcoholics-anonymous",
+     "b01361"
+    ]
+   ]
+  }
+ ]
+}

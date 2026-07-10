@@ -44,3 +44,6 @@ finetune/logs/
 finetune/**/*checkpoint*.json
 finetune/retriever/metrics.json
 packs/embedder/
+/home/joshu/ft-runs/
+# Fine-tuned model weights (619MB) live outside git — see the ft-runs convention.
+/models/
