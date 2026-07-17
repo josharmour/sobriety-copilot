@@ -1,6 +1,8 @@
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
+import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
+import 'package:flutter_gemma_embeddings/flutter_gemma_embeddings.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -42,7 +44,10 @@ Future<void> main() async {
   initPlatform();
   if (privateModeSupported) {
     // On-device LLM plumbing (Private Mode). Cheap when no model is set up.
-    await FlutterGemma.initialize();
+    await FlutterGemma.initialize(
+      inferenceEngines: const [LiteRtLmEngine()],
+      embeddingBackends: const [LiteRtEmbeddingBackend()],
+    );
   }
   final prefs = await SharedPreferences.getInstance();
   runApp(

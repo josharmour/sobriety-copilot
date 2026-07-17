@@ -24,11 +24,9 @@ const int kPrivateModelBytes = 2588147712; // exact size, used to verify
 // is NOT supported: its tf_lite_mtp_aux component hard-aborts the LiteRT
 // runtime bundled with flutter_gemma 0.13.6. Revisit on a newer runtime.
 
-/// Private Mode is Android-only for now: the plugin's mobile engines are
-/// battle-tested there; desktop runs a JVM sidecar we haven't validated and
-/// web can't hold a 2.6 GB model.
-bool get privateModeSupported =>
-    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+/// Private Mode natively supports Android, iOS, and Desktop via LiteRT-LM.
+/// Web is disabled due to the 2.6 GB model size.
+bool get privateModeSupported => !kIsWeb;
 
 enum PrivateModelPhase { notInstalled, downloading, installed, error }
 
