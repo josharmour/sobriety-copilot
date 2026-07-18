@@ -27,7 +27,4 @@ abstract class ChatRepository {
     String? clientContext,
   });
 
-  /// Voice-to-text: POSTs a base64 audio clip to `/api/transcribe` (gemma) and
-  /// returns the transcription. Returns '' on failure.
-  Future<String> transcribe({required String audio, String? format});
 }

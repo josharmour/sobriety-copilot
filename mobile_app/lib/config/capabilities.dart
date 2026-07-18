@@ -11,5 +11,10 @@ bool get _isMobile =>
 /// mobile-only plugins.
 bool get supportsCameraAndOcr => _isMobile;
 
-/// Mic dictation (record plugin + dart:io temp files → /api/transcribe).
+/// Mic dictation (record plugin + on-device sherpa-onnx transcription).
 bool get supportsMicInput => _isMobile;
+
+/// Home-screen widget (home_widget) — Android only; there is no iOS widget
+/// extension target, so widget wording must stay off iOS.
+bool get supportsHomeWidget =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;

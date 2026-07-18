@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:sobriety_copilot_mobile/config/capabilities.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 
@@ -269,9 +270,11 @@ class _TrackerEditorSheetState extends ConsumerState<_TrackerEditorSheet> {
               contentPadding: EdgeInsets.zero,
               value: state.discreet,
               title: const Text('Discreet display'),
-              subtitle: const Text(
-                'Show "Day 92" with no recovery wording — here and on the '
-                'home-screen widget.',
+              subtitle: Text(
+                supportsHomeWidget
+                    ? 'Show "Day 92" with no recovery wording — here and on '
+                        'the home-screen widget.'
+                    : 'Show "Day 92" with no recovery wording.',
               ),
               onChanged: (v) =>
                   ref.read(sobrietyProvider.notifier).setDiscreet(v),

@@ -71,7 +71,8 @@ class HttpChatRepository implements ChatRepository {
     try {
       response = await client.send(request);
     } catch (_) {
-      yield const ErrorEvent('Connection error. Is the server running?');
+      yield const ErrorEvent(
+          "Couldn't reach Sobriety Copilot. Check your connection and try again.");
       return;
     }
 
@@ -121,26 +122,8 @@ class HttpChatRepository implements ChatRepository {
         }
       }
     } catch (_) {
-      yield const ErrorEvent('Connection error. Is the server running?');
-    }
-  }
-
-  @override
-  Future<String> transcribe({required String audio, String? format}) async {
-    final root = baseUrl().replaceAll(RegExp(r'/+$'), '');
-    final uri = Uri.parse('$root/api/transcribe');
-    try {
-      final resp = await client.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'audio': audio, 'format': format}),
-      );
-      if (resp.statusCode < 200 || resp.statusCode >= 300) return '';
-      final obj = json.decode(resp.body);
-      if (obj is Map<String, dynamic>) return (obj['text'] ?? '').toString().trim();
-      return '';
-    } catch (_) {
-      return '';
+      yield const ErrorEvent(
+          "Couldn't reach Sobriety Copilot. Check your connection and try again.");
     }
   }
 

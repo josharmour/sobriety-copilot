@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:sobriety_copilot_mobile/config/app_config.dart';
+import 'package:sobriety_copilot_mobile/config/capabilities.dart';
 import 'package:sobriety_copilot_mobile/data/models/meeting_models.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/private_mode_section.dart';
@@ -76,6 +77,9 @@ class SettingsSheet extends ConsumerWidget {
 
                     const PrivateModeSection(),
 
+                    const _CitationsPackTile(),
+                    const SizedBox(height: AppSpacing.xl),
+
                     const SectionHeader('Response tone'),
                     const SizedBox(height: AppSpacing.xs),
                     ...kTones.map(
@@ -136,7 +140,10 @@ class SettingsSheet extends ConsumerWidget {
                         subtitle: Text(
                           tracker.isTracking
                               ? 'Tap to edit · stored only on this device'
-                              : 'Day count, milestones, and a home-screen widget',
+                              : supportsHomeWidget
+                                  ? 'Day count, milestones, and a home-screen '
+                                      'widget'
+                                  : 'Day count and milestones',
                         ),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => showTrackerEditor(context, ref),
@@ -565,6 +572,127 @@ class _CategoryActions extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Inline manager for the offline citations pack. Deliberately not a
+/// browsable surface: installing it just enables cited sources in answers
+/// when the device is offline. Citations are experienced in regular chat.
+class _CitationsPackTile extends ConsumerStatefulWidget {
+  const _CitationsPackTile();
+
+  @override
+  ConsumerState<_CitationsPackTile> createState() => _CitationsPackTileState();
+}
+
+class _CitationsPackTileState extends ConsumerState<_CitationsPackTile> {
+  bool _checking = true;
+  bool _installed = false;
+  bool _downloading = false;
+  double _progress = 0;
+  int? _serverVersion;
+  String? _serverSha256;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final repo = ref.read(libraryRepositoryProvider);
+    final installed = await repo.isPackInstalled;
+    if (mounted) setState(() => _installed = installed);
+    try {
+      final info = await repo.checkLatestPack();
+      if (info != null && mounted) {
+        setState(() {
+          _serverVersion = info['pack_version'] as int?;
+          _serverSha256 = info['sha256']?.toString();
+        });
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _checking = false);
+  }
+
+  Future<void> _download() async {
+    if (_serverVersion == null) return;
+    setState(() {
+      _downloading = true;
+      _progress = 0;
+    });
+    try {
+      await ref.read(libraryRepositoryProvider).downloadAndInstallPack(
+            _serverVersion!,
+            _serverSha256 ?? '',
+            onProgress: (p) {
+              if (mounted) setState(() => _progress = p);
+            },
+          );
+      if (mounted) {
+        setState(() {
+          _installed = true;
+          _downloading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _downloading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Download failed — check your connection.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_downloading) {
+      return ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2.5),
+        ),
+        title: Text(_progress >= 1.0
+            ? 'Installing citations pack…'
+            : 'Downloading citations pack… '
+                '${(_progress * 100).toStringAsFixed(0)}%'),
+        subtitle: LinearProgressIndicator(
+            value: _progress > 0 && _progress < 1 ? _progress : null),
+      );
+    }
+    if (_installed) {
+      final updateAvailable = _serverVersion != null &&
+          _serverVersion! > ref.read(libraryRepositoryProvider).localPackVersion;
+      return ListTile(
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        leading: const Icon(Icons.library_books, color: AppColors.accent),
+        title: const Text('Offline citations enabled'),
+        subtitle:
+            const Text('Answers can cite indexed sources with no connection'),
+        trailing: updateAvailable
+            ? TextButton(onPressed: _download, child: const Text('Update'))
+            : null,
+      );
+    }
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.library_books_outlined),
+      title: const Text('Offline citations pack'),
+      subtitle: const Text('~44 MB · lets answers cite sources when offline'),
+      trailing: _checking
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2))
+          : TextButton(
+              onPressed: _serverVersion == null ? null : _download,
+              child: const Text('Download')),
     );
   }
 }

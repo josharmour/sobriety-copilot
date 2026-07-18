@@ -19,10 +19,12 @@ class AboutSheet extends StatelessWidget {
       'A private, judgment-free companion grounded in recovery literature.';
 
   Future<void> _launch(String url) async {
+    // No canLaunchUrl gate — on iOS it can report false without
+    // LSApplicationQueriesSchemes and silently swallow the tap.
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
+    try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    } catch (_) {}
   }
 
   @override
@@ -124,12 +126,21 @@ class AboutSheet extends StatelessWidget {
               icon: Icons.lock_outline,
               color: AppColors.accent,
               child: Text(
-                'We treat what you share as sensitive. Your conversations and '
-                'saved passages stay on this device. No account is required, '
-                'and nothing is shared with anyone but the answer service used '
-                'to respond to your questions.',
+                'We treat what you share as sensitive. Saved passages and '
+                'your recovery tracker stay on this device. Questions you ask '
+                'are answered by our own private answer service — never '
+                'third-party AI providers — and are not used for advertising '
+                'or tied to an account. No account is required.',
                 style: theme.textTheme.bodyMedium,
               ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.policy_outlined),
+              title: const Text('Privacy Policy'),
+              trailing: const Icon(Icons.open_in_new, size: 18),
+              onTap: () => _launch('https://sobrietycopilot.com/privacy.html'),
             ),
             const SizedBox(height: AppSpacing.xl),
 

@@ -23,7 +23,8 @@ class ServerRepository {
     try {
       res = await client.get(uri).timeout(const Duration(seconds: 10));
     } catch (_) {
-      throw Exception('Connection error. Is the server running?');
+      throw Exception(
+          "Couldn't reach Sobriety Copilot. Check your connection and try again.");
     }
 
     final body = res.body;

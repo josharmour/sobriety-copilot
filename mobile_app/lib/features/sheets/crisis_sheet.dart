@@ -13,8 +13,14 @@ class CrisisSheet extends StatelessWidget {
   static const _aaPhone = '12126471680';
 
   Future<void> _call(BuildContext context, String phone) async {
+    // No canLaunchUrl gate: on iOS it reports false for tel: unless the
+    // scheme is declared in LSApplicationQueriesSchemes, silently breaking
+    // the call button. launchUrl itself is the reliable check.
     final uri = Uri(scheme: 'tel', path: phone);
-    final ok = await canLaunchUrl(uri) && await launchUrl(uri);
+    var ok = false;
+    try {
+      ok = await launchUrl(uri);
+    } catch (_) {}
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not start a call to $phone')),

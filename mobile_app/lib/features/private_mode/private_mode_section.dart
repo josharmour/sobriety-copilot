@@ -92,7 +92,7 @@ class PrivateModeSection extends ConsumerWidget {
           child: Text(
             'Answer with a model that runs entirely on this phone — '
             'questions and answers never leave the device. Uses the offline '
-            'Recovery Library for citations.',
+            'citations pack for sources.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -169,9 +169,8 @@ class PrivateModeSection extends ConsumerWidget {
                         const SizedBox(width: AppSpacing.xs),
                         Expanded(
                           child: Text(
-                            'Install the offline Recovery Library (menu → '
-                            'Recovery library) so private answers can cite '
-                            'the literature.',
+                            'Install the offline citations pack (just below) '
+                            'so private answers can cite the literature.',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),

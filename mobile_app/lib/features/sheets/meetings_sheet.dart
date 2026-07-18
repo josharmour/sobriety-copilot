@@ -244,6 +244,18 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
           permission == LocationPermission.deniedForever) {
         _setLocationLabel('Location denied — type a ZIP code above',
             placeholder: true);
+        if (permission == LocationPermission.deniedForever && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  const Text('Location is turned off for Sobriety Copilot.'),
+              action: SnackBarAction(
+                label: 'Open Settings',
+                onPressed: () => Geolocator.openAppSettings(),
+              ),
+            ),
+          );
+        }
         return;
       }
       final pos = await Geolocator.getCurrentPosition(

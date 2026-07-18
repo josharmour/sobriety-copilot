@@ -238,19 +238,38 @@ class LocalChatRepository implements ChatRepository {
   /// Hybrid retrieval: BM25 (keyword) fused with EmbeddingGemma vector
   /// (semantic) via reciprocal rank fusion. Either leg alone still works —
   /// vector search is skipped when the embedder/vectors aren't installed.
-  Future<List<_RetrievedBlock>> _retrieve(String message) async {
+  Future<List<_RetrievedBlock>> _retrieve(String message,
+      {List<String>? categories}) async {
     if (!await library.isPackInstalled) return const [];
+
+    // Respect the literature-category checkmarks (null = all enabled), the
+    // same contract the server applies to /api/chat: passages may only come
+    // from enabled categories.
+    Set<String>? allowedDocIds;
+    if (categories != null) {
+      final enabled = categories.toSet();
+      allowedDocIds = {
+        for (final b in await library.getBooks())
+          if (enabled.contains(b.category)) b.docId,
+      };
+    }
+    final allowedIds = allowedDocIds;
+    bool allowed(String docId) =>
+        allowedIds == null || allowedIds.contains(docId);
 
     // BM25 leg (with the single-term fallback that already ships).
     final ftsQuery = _ftsQuery(message);
     var bm25 = ftsQuery.isEmpty
         ? const <OfflineSearchResult>[]
-        : await library.search(ftsQuery);
+        : (await library.search(ftsQuery))
+            .where((h) => allowed(h.docId))
+            .toList();
     if (bm25.isEmpty && ftsQuery.isNotEmpty) {
       final pooled = <OfflineSearchResult>[];
       final seen = <String>{};
       for (final w in _contentWords(message).take(3)) {
         for (final h in await library.search('"$w"')) {
+          if (!allowed(h.docId)) continue;
           if (seen.add('${h.docId}/${h.blockId}')) pooled.add(h);
         }
         if (pooled.length >= 20) break;
@@ -263,7 +282,9 @@ class LocalChatRepository implements ChatRepository {
     if (await _ensureSemantic()) {
       final q = await _embedQuery(message);
       if (q != null) {
-        vec = await _vectorIndex!.search(q, topK: 20);
+        vec = (await _vectorIndex!.search(q, topK: 20))
+            .where((h) => allowed(h.docId))
+            .toList();
       }
     }
     if (kDebugMode) {
@@ -346,7 +367,7 @@ class LocalChatRepository implements ChatRepository {
       //    vectors, fused). No network anywhere in this path.
       var sources = const <Source>[];
       var context = '';
-      final hits = await _retrieve(message);
+      final hits = await _retrieve(message, categories: categories);
       if (hits.isNotEmpty) {
         final books = await library.getBooks();
         final titles = {for (final b in books) b.docId: b.title};
@@ -495,8 +516,4 @@ class LocalChatRepository implements ChatRepository {
     }
   }
 
-  /// Dictation is a server feature; unavailable in Private Mode.
-  @override
-  Future<String> transcribe({required String audio, String? format}) async =>
-      '';
 }

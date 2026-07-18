@@ -9,11 +9,8 @@ PODS:
   - connectivity_plus (0.0.1):
     - Flutter
   - Flutter (1.0.0)
-  - flutter_gemma (0.13.4):
+  - flutter_gemma (0.16.3):
     - Flutter
-    - MediaPipeTasksGenAI (= 0.10.33)
-    - MediaPipeTasksGenAIC (= 0.10.33)
-    - TensorFlowLiteC (= 0.0.1-nightly.20250619)
   - flutter_local_notifications (0.0.1):
     - Flutter
   - flutter_timezone (0.0.1):
@@ -57,11 +54,8 @@ PODS:
     - Flutter
   - image_picker_ios (0.0.1):
     - Flutter
-  - large_file_handler (0.0.1):
+  - large_file_handler (0.4.0):
     - Flutter
-  - MediaPipeTasksGenAI (0.10.33):
-    - MediaPipeTasksGenAIC (= 0.10.33)
-  - MediaPipeTasksGenAIC (0.10.33)
   - MLImage (1.0.0-beta6)
   - MLKitCommon (12.0.0):
     - GoogleDataTransport (~> 10.0)
@@ -101,9 +95,6 @@ PODS:
   - sqflite_darwin (0.0.4):
     - Flutter
     - FlutterMacOS
-  - TensorFlowLiteC (0.0.1-nightly.20250619):
-    - TensorFlowLiteC/Core (= 0.0.1-nightly.20250619)
-  - TensorFlowLiteC/Core (0.0.1-nightly.20250619)
   - url_launcher_ios (0.0.1):
     - Flutter
 
@@ -137,8 +128,6 @@ SPEC REPOS:
     - GoogleToolboxForMac
     - GoogleUtilities
     - GTMSessionFetcher
-    - MediaPipeTasksGenAI
-    - MediaPipeTasksGenAIC
     - MLImage
     - MLKitCommon
     - MLKitTextRecognition
@@ -146,7 +135,6 @@ SPEC REPOS:
     - MLKitVision
     - nanopb
     - PromisesObjC
-    - TensorFlowLiteC
 
 EXTERNAL SOURCES:
   app_links:
@@ -198,7 +186,7 @@ SPEC CHECKSUMS:
   background_downloader: 50e91d979067b82081aba359d7d916b3ba5fadad
   connectivity_plus: cb623214f4e1f6ef8fe7403d580fdad517d2f7dd
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
-  flutter_gemma: ec2d68fadc117d339e39aa255d490c3a426e8af9
+  flutter_gemma: 31b3b10fd402a40e19191fe38de113421058d818
   flutter_local_notifications: 643a3eda1ce1c0599413ca31672536d423dee214
   flutter_timezone: 7c838e17ffd4645d261e87037e5bebf6d38fe544
   flutter_tts: 35ac3c7d42412733e795ea96ad2d7e05d0a75113
@@ -212,9 +200,7 @@ SPEC CHECKSUMS:
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
   home_widget: 54b4f6b36ed8d64cfee594a476225c35c3e45091
   image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
-  large_file_handler: b37481e9b4972562ffcdc8f75700f47cd592bcec
-  MediaPipeTasksGenAI: 8eed8e6d03fe26d30c4205cb5295ec7b394432ad
-  MediaPipeTasksGenAIC: cb098ecea44e248efe8fe7e2f62b4cb0df781802
+  large_file_handler: 57f42dcc94834e53c3220529deb7de2181419e05
   MLImage: 0ad1c5f50edd027672d8b26b0fee78a8b4a0fc56
   MLKitCommon: 07c2c33ae5640e5380beaaa6e4b9c249a205542d
   MLKitTextRecognition: 3b41f3ff084a79afb214408d25d2068d77ab322c
@@ -227,9 +213,8 @@ SPEC CHECKSUMS:
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   sherpa_onnx_ios: e8ce46d79d231ebdf2edd7b97891f5a601dd3565
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
-  TensorFlowLiteC: 215ef57653dd0fa09a474e7d94d79ae64a870b28
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
 
-PODFILE CHECKSUM: e7d40f630bfe734fa8113310f8d97acf0c942f74
+PODFILE CHECKSUM: 7cfefa1e0d606eedd49b24a5d11931505b1cc107
 
 COCOAPODS: 1.17.0

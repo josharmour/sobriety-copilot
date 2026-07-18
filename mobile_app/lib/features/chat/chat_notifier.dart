@@ -178,7 +178,8 @@ class ChatNotifier extends Notifier<ChatState> {
           assistantId,
           (m) => m.copyWith(
             text: m.text.isEmpty
-                ? 'Connection error. Is the server running?'
+                ? "Couldn't reach Sobriety Copilot. Check your connection "
+                    'and try again.'
                 : m.text,
             isError: true,
             isStreaming: false,

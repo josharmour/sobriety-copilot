@@ -67,7 +67,15 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Your location is used only to find nearby recovery meetings. It is never stored or shared.</string>
+	<string>Your location is used only to search for recovery meetings near you. It is sent securely to the meeting search service to run that search, and is not saved or linked to you.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Your location is used only to search for recovery meetings near you. It is sent securely to the meeting search service to run that search, and is not saved or linked to you.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>https</string>
+		<string>http</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>The camera is used to scan printed recovery literature into the chat and to attach photos.</string>
 	<key>NSMicrophoneUsageDescription</key>

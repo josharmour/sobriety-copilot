@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,7 +23,6 @@ import 'package:sobriety_copilot_mobile/features/sheets/alt_recovery_sheet.dart'
 import 'package:sobriety_copilot_mobile/features/sheets/crisis_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/sheets/meetings_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/sheets/settings_sheet.dart';
-import 'package:sobriety_copilot_mobile/features/sheets/library_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/library/offline_reader.dart';
 import 'package:sobriety_copilot_mobile/config/capabilities.dart';
 import 'package:sobriety_copilot_mobile/features/asr/asr_manager.dart';
@@ -51,7 +49,6 @@ class ChatScreen extends ConsumerStatefulWidget {
 enum _MenuAction {
   today,
   saved,
-  library,
   meetings,
   crisis,
   altRecovery,
@@ -72,7 +69,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Queued photo attachments as `data:image/...;base64,...` URLs.
   final List<String> _pendingImages = [];
 
-  /// Mic voice input (record → POST /api/transcribe → fill the input box).
+  /// Mic voice input (record → on-device sherpa-onnx ASR → fill the input box).
   final AudioRecorder _recorder = AudioRecorder();
   bool _isRecording = false;
   bool _isTranscribing = false;
@@ -199,9 +196,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _input.text = existing.isEmpty ? text : '$existing $text';
       _input.selection = TextSelection.collapsed(offset: _input.text.length);
       _inputFocus.requestFocus();
-    } catch (e) {
+    } on PlatformException catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not scan text: $e')),
+        SnackBar(
+          content: Text(e.code.contains('access_denied')
+              ? 'Camera access is turned off for Sobriety Copilot. You can '
+                  'enable it in your device Settings.'
+              : 'Could not scan text — please try again.'),
+        ),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+            content: Text('Could not scan text — please try again.')),
       );
     }
   }
@@ -275,9 +282,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
       if (!mounted) return;
       setState(() => _pendingImages.add(dataUrl));
-    } catch (e) {
+    } on PlatformException catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not attach photo: $e')),
+        SnackBar(
+          content: Text(e.code.contains('access_denied')
+              ? 'Camera or photo access is turned off for Sobriety Copilot. '
+                  'You can enable it in your device Settings.'
+              : 'Could not attach photo — please try again.'),
+        ),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+            content: Text('Could not attach photo — please try again.')),
       );
     }
   }
@@ -291,10 +308,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       return;
     }
     final messenger = ScaffoldMessenger.of(context);
+    // Dictation is fully on-device; without the model installed the mic can't
+    // produce text, so point at the download instead of asking for mic access.
+    if (ref.read(asrManagerProvider.notifier).installedDir() == null) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Voice dictation runs entirely on this device. Download the '
+            'dictation model in Settings → Private Mode to use the mic.',
+          ),
+        ),
+      );
+      return;
+    }
     try {
       if (!await _recorder.hasPermission()) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('Microphone permission denied')),
+          const SnackBar(
+            content: Text(
+              'Microphone access is turned off for Sobriety Copilot. You can '
+              'enable it in your device Settings.',
+            ),
+          ),
         );
         return;
       }
@@ -311,8 +346,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
       if (!mounted) return;
       setState(() => _isRecording = true);
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Could not record: $e')));
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+            content: Text('Could not start recording — please try again.')),
+      );
     }
   }
 
@@ -327,19 +365,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (path == null) return;
     setState(() => _isTranscribing = true);
     try {
-      // On-device first (private, offline). Falls back to the server only
-      // when the dictation model isn't installed.
+      // Fully on-device — audio never leaves the phone. The mic button is
+      // gated on the model being installed, so asrDir is normally non-null.
       final asrDir = ref.read(asrManagerProvider.notifier).installedDir();
-      final String text;
-      if (asrDir != null) {
-        text = await transcribeWavFile(wavPath: path, modelDir: asrDir);
-      } else {
-        final bytes = await File(path).readAsBytes();
-        final dataUrl = 'data:audio/wav;base64,${base64Encode(bytes)}';
-        text = await ref
-            .read(chatRepositoryProvider)
-            .transcribe(audio: dataUrl, format: 'wav');
+      if (asrDir == null) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Voice dictation runs entirely on this device. Download the '
+              'dictation model in Settings → Private Mode to use the mic.',
+            ),
+          ),
+        );
+        return;
       }
+      final text = await transcribeWavFile(wavPath: path, modelDir: asrDir);
       if (!mounted) return;
       if (text.isNotEmpty) {
         final existing = _input.text.trim();
@@ -353,9 +393,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           const SnackBar(content: Text("Didn't catch that — try again.")),
         );
       }
-    } catch (e) {
+    } catch (_) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not transcribe: $e')),
+        const SnackBar(
+            content: Text('Could not transcribe that — please try again.')),
       );
     } finally {
       if (mounted) setState(() => _isTranscribing = false);
@@ -418,8 +459,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         await showAppSheet(context, const TodaySheet());
       case _MenuAction.saved:
         await showAppSheet(context, const SavedPassagesSheet());
-      case _MenuAction.library:
-        await showAppSheet(context, const LibrarySheet());
       case _MenuAction.meetings:
         await showAppSheet(context, const MeetingsSheet());
       case _MenuAction.crisis:
@@ -566,14 +605,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 child: ListTile(
                   leading: Icon(Icons.bookmark_outline),
                   title: Text('Saved passages'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.library,
-                child: ListTile(
-                  leading: Icon(Icons.library_books_outlined),
-                  title: Text('Recovery library'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),

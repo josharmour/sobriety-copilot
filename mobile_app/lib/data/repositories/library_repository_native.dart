@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'dart:io';
 import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -91,6 +92,9 @@ class LibraryRepository {
     final url = '${baseUrl()}/api/packs/download/v$version';
     final tempDir = await getTemporaryDirectory();
     final tempFile = File(p.join(tempDir.path, 'download-v$version.scpack'));
+    if (!await tempFile.parent.exists()) {
+      await tempFile.parent.create(recursive: true);
+    }
     if (await tempFile.exists()) {
       await tempFile.delete();
     }
@@ -116,24 +120,26 @@ class LibraryRepository {
     }
     await sink.close();
 
-    // Verify SHA256
-    final bytes = await tempFile.readAsBytes();
+    // Verify SHA256 (streaming)
     final hash = expectedSha256.isEmpty ? '' : expectedSha256.toLowerCase();
     if (expectedSha256.isNotEmpty) {
-      final computedHash = sha256.convert(bytes).toString().toLowerCase();
+      final input = tempFile.openRead();
+      final computedHash = (await sha256.bind(input).first).toString().toLowerCase();
       if (computedHash != hash) {
         await tempFile.delete();
         throw Exception('Pack verification failed: SHA256 mismatch');
       }
     }
 
-    // Extract archive
-    final archive = ZipDecoder().decodeBytes(bytes);
-    
     // Close existing DB connection if any
     await closeDb();
 
     final dbDestPath = await _dbPath;
+    final dbFile = File(dbDestPath);
+    if (!await dbFile.parent.exists()) {
+      await dbFile.parent.create(recursive: true);
+    }
+
     final mDir = await _manifestsDir;
     final vDir = await _vectorsDir;
 
@@ -142,38 +148,47 @@ class LibraryRepository {
     for (final d in [Directory(mDir), Directory(vDir)]) {
       if (await d.exists()) {
         await d.delete(recursive: true);
-        await d.create();
       }
+      await d.create(recursive: true);
     }
 
     int docCount = 0;
 
+    // Extract archive (streaming to disk to prevent OOM on large files)
+    final inputStream = InputFileStream(tempFile.path);
+    final archive = ZipDecoder().decodeStream(inputStream);
+
     for (final file in archive) {
       if (file.isFile) {
-        final data = file.content as List<int>;
         if (file.name == 'pack.json') {
+          final data = file.content as List<int>;
           final meta = jsonDecode(utf8.decode(data)) as Map<String, dynamic>;
           docCount = meta['doc_count'] as int? ?? 0;
-        } else if (file.name == 'manifest-index.json') {
-          final indexFile = File(p.join(mDir, 'manifest-index.json'));
-          await indexFile.writeAsBytes(data);
-        } else if (file.name == 'search.db') {
-          final dbFile = File(dbDestPath);
-          await dbFile.writeAsBytes(data);
-        } else if (file.name.startsWith('manifests/')) {
-          final mFileName = file.name.substring('manifests/'.length);
-          final mFile = File(p.join(mDir, mFileName));
-          await mFile.writeAsBytes(data);
-        } else if (file.name.startsWith('vectors/') ||
-            file.name.startsWith('vectors.')) {
-          // v2+ semantic-retrieval blob (vectors.i8 / .idx / .meta.json).
-          final vName = file.name.contains('/')
-              ? file.name.substring(file.name.indexOf('/') + 1)
-              : file.name;
-          await File(p.join(vDir, vName)).writeAsBytes(data);
+        } else {
+          String outPath;
+          if (file.name == 'manifest-index.json') {
+            outPath = p.join(mDir, 'manifest-index.json');
+          } else if (file.name == 'search.db') {
+            outPath = dbDestPath;
+          } else if (file.name.startsWith('manifests/')) {
+            outPath = p.join(mDir, file.name.substring('manifests/'.length));
+          } else if (file.name.startsWith('vectors/') ||
+              file.name.startsWith('vectors.')) {
+            final vName = file.name.contains('/')
+                ? file.name.substring(file.name.indexOf('/') + 1)
+                : file.name;
+            outPath = p.join(vDir, vName);
+          } else {
+            continue;
+          }
+          final outStream = OutputFileStream(outPath);
+          file.writeContent(outStream);
+          outStream.close();
         }
       }
     }
+    
+    inputStream.close();
 
     // Clean up temp file
     if (await tempFile.exists()) {
