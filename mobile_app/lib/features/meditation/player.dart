@@ -45,13 +45,15 @@ final medTtsProvider = Provider<MedTts>(
 );
 
 /// Live player state. `session == null` means idle; `running == false` means
-/// paused (or idle).
+/// paused (or idle). `completed` is terminal: only [MeditationPlayer.load]
+/// (a fresh session) or [MeditationPlayer.stop] leave it.
 class MeditationPlayerState {
   final MeditationSession? session; // null = idle
   final int cycle; // 0-based
   final int stepIndex; // 0-based
   final int secondsLeft; // seconds remaining in the current step
   final bool running; // false = paused or idle
+  final bool completed; // terminal — start/resume/tick are no-ops
 
   const MeditationPlayerState({
     this.session,
@@ -59,6 +61,7 @@ class MeditationPlayerState {
     this.stepIndex = 0,
     this.secondsLeft = 0,
     this.running = false,
+    this.completed = false,
   });
 
   MeditationPlayerState copyWith({
@@ -67,6 +70,7 @@ class MeditationPlayerState {
     int? stepIndex,
     int? secondsLeft,
     bool? running,
+    bool? completed,
   }) {
     return MeditationPlayerState(
       session: session ?? this.session,
@@ -74,6 +78,7 @@ class MeditationPlayerState {
       stepIndex: stepIndex ?? this.stepIndex,
       secondsLeft: secondsLeft ?? this.secondsLeft,
       running: running ?? this.running,
+      completed: completed ?? this.completed,
     );
   }
 
@@ -146,6 +151,11 @@ class MeditationPlayer extends Notifier<MeditationPlayerState> {
   /// Current step label (or null when idle).
   String? get currentLabel => state.currentLabel;
 
+  /// Whether a session is loaded (running, paused, or completed). Lets the
+  /// sheet's dispose decide if a deferred stop() is needed without modifying
+  /// state from a widget lifecycle.
+  bool get hasActiveSession => state.session != null;
+
   /// Loads a session into a paused ready state (user presses start).
   void load(MeditationSession session) {
     _timer?.cancel();
@@ -160,10 +170,11 @@ class MeditationPlayer extends Notifier<MeditationPlayerState> {
   }
 
   /// Starts (or resumes from a fresh load). Speaks the first cue if enabled.
+  /// No-op once the session has completed — load a fresh session instead.
   void start() {
     final s = state;
     if (s.session == null) return;
-    if (s.running) return;
+    if (s.running || s.completed) return;
     state = s.copyWith(running: true);
     if (sessionsRemaining() > 0) _speakCue(currentLabel);
     _timer?.cancel();
@@ -178,10 +189,11 @@ class MeditationPlayer extends Notifier<MeditationPlayerState> {
     state = s.copyWith(running: false);
   }
 
-  /// Resumes from pause (does not restart the session).
+  /// Resumes from pause (does not restart the session). No-op once completed —
+  /// completion is terminal and must never re-run [_finish] or re-record.
   void resume() {
     final s = state;
-    if (s.session == null || s.running) return;
+    if (s.session == null || s.running || s.completed) return;
     state = s.copyWith(running: true);
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
@@ -199,7 +211,7 @@ class MeditationPlayer extends Notifier<MeditationPlayerState> {
   /// driven directly by tests — never run against real time in tests.
   void tick() {
     final s = state;
-    if (!s.running || s.session == null) return;
+    if (!s.running || s.session == null || s.completed) return;
     final session = s.session!;
     if (session.steps.isEmpty) {
       _finish();
@@ -254,7 +266,7 @@ class MeditationPlayer extends Notifier<MeditationPlayerState> {
   void _finish() {
     _timer?.cancel();
     _timer = null;
-    state = state.copyWith(running: false, secondsLeft: 0);
+    state = state.copyWith(running: false, secondsLeft: 0, completed: true);
     _recordCompletion();
   }
 

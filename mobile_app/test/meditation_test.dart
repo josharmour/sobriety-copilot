@@ -230,6 +230,52 @@ void main() {
     });
   });
 
+  group('MeditationPlayer completion is terminal', () {
+    test('resume/start/tick after completion never restart or re-record',
+        () async {
+      final (_, _, p) = await _makePlayer();
+      p.load(_breath478);
+      p.start();
+      _tickN(p, 4 + 7 + 8); // run to completion
+      expect(p.state.completed, isTrue);
+      expect(p.state.running, isFalse);
+      expect(p.completedCount, 1);
+
+      p.resume();
+      expect(p.state.running, isFalse);
+      p.start();
+      expect(p.state.running, isFalse);
+      p.tick(); // rogue tick must not re-run _finish
+      expect(p.completedCount, 1);
+      expect(p.state.completed, isTrue);
+    });
+
+    test('loading a fresh session clears the completed flag', () async {
+      final (_, _, p) = await _makePlayer();
+      p.load(_breath478);
+      p.start();
+      _tickN(p, 4 + 7 + 8);
+      expect(p.state.completed, isTrue);
+
+      p.load(_breath478);
+      expect(p.state.completed, isFalse);
+      expect(p.state.secondsLeft, 4);
+      p.start();
+      expect(p.state.running, isTrue);
+      p.pause(); // cancel the timer so the test ends clean
+    });
+
+    test('stop() after completion returns to a clean idle state', () async {
+      final (_, _, p) = await _makePlayer();
+      p.load(_breath478);
+      p.start();
+      _tickN(p, 4 + 7 + 8);
+      await p.stop();
+      expect(p.state.session, isNull);
+      expect(p.state.completed, isFalse);
+    });
+  });
+
   group('MeditationPlayer TTS toggle', () {
     test('toggle persists to shared preferences', () async {
       final (container, _, p) = await _makePlayer();

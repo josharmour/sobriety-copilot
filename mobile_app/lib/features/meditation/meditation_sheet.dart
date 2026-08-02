@@ -6,6 +6,8 @@
 /// background via a [WidgetsBindingObserver] and resumes manually by the user.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -35,21 +37,34 @@ class MeditationSheet extends ConsumerStatefulWidget {
 
 class _MeditationSheetState extends ConsumerState<MeditationSheet>
     with WidgetsBindingObserver {
-  MedTts? _tts;
+  MeditationPlayer? _player;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Capture the TTS instance now; `ref` is invalid in dispose().
-    _tts = ref.read(medTtsProvider);
+    // Capture the notifier now; `ref` is invalid in dispose(). The provider is
+    // app-scoped, so the notifier safely outlives this sheet.
+    _player = ref.read(meditationPlayerProvider.notifier);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // Silence any in-progress cue when the sheet closes (rule 3).
-    _tts?.stop();
+    // The sheet is drag/barrier-dismissible: fully stop the player (timer,
+    // TTS, state) so a session never keeps running — or speaking — headless
+    // after the user swipes the sheet away. Riverpod forbids modifying a
+    // provider synchronously inside dispose, so the stop is deferred a frame.
+    final p = _player;
+    try {
+      if (p != null && p.hasActiveSession) {
+        // stop() is async, so its errors (e.g. the container being disposed
+        // in the meantime) surface on the Future — ignore() swallows them.
+        Future(() => p.stop().ignore());
+      }
+    } catch (_) {
+      // Provider container already disposed (app teardown): nothing to stop.
+    }
     super.dispose();
   }
 
@@ -146,7 +161,13 @@ class _SessionTile extends ConsumerWidget {
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(AppSpacing.radius),
-        onTap: () => ref.read(meditationPlayerProvider.notifier).load(session),
+        // Load and start explicitly — the player view never auto-starts, so a
+        // paused or completed session can't be restarted by a mere rebuild.
+        onTap: () {
+          final p = ref.read(meditationPlayerProvider.notifier);
+          p.load(session);
+          p.start();
+        },
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Row(
@@ -172,11 +193,18 @@ class _SessionTile extends ConsumerWidget {
                       const SizedBox(height: AppSpacing.xs),
                       InkWell(
                         onTap: () => _openCrisis(context),
-                        child: Text(
-                          kCrisisNoteText,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                            decoration: TextDecoration.underline,
+                        // Minimum 44px touch target for the crisis link.
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 44),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              kCrisisNoteText,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -214,16 +242,32 @@ class _PlayerViewState extends ConsumerState<_PlayerView>
   @override
   void initState() {
     super.initState();
+    // No auto-start here: the session tile starts the session explicitly, so
+    // a rebuild of this view can never resume a paused or completed session.
     _circle = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
-    )..repeat(reverse: true);
-    // Auto-start on load (the user just tapped a session).
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final p = ref.read(meditationPlayerProvider.notifier);
-      final s = ref.read(meditationPlayerProvider);
-      if (!s.running && s.session != null) p.start();
-    });
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncAnimation();
+  }
+
+  /// Honors the OS reduce-motion setting and the terminal completed state:
+  /// the circle animates only when motion is allowed and the session isn't
+  /// finished; otherwise it holds a calm static size.
+  void _syncAnimation() {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final completed = ref.read(meditationPlayerProvider).completed;
+    if (reduceMotion || completed) {
+      if (_circle.isAnimating) _circle.stop();
+      _circle.value = 0.7;
+    } else if (!_circle.isAnimating) {
+      _circle.repeat(reverse: true);
+    }
   }
 
   @override
@@ -236,9 +280,14 @@ class _PlayerViewState extends ConsumerState<_PlayerView>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final state = ref.watch(meditationPlayerProvider);
+    ref.listen(meditationPlayerProvider.select((s) => s.completed), (_, __) {
+      _syncAnimation();
+    });
     final session = state.session!;
-    final label = state.currentLabel ?? '';
+    final label =
+        state.completed ? 'Session complete' : (state.currentLabel ?? '');
     final secondsLeft = state.secondsLeft;
+    final isSurf = session.id == 'surf_urge';
     final isTtsEnabled = ref
         .read(meditationPlayerProvider.notifier)
         .ttsEnabled;
@@ -273,79 +322,157 @@ class _PlayerViewState extends ConsumerState<_PlayerView>
         ),
         const Divider(height: 1),
         Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Breathing circle with a screen-reader text fallback (rule 9).
-              Semantics(
-                label: '$label, $secondsLeft seconds',
-                liveRegion: true,
-                child: ExcludeSemantics(
-                  child: AnimatedBuilder(
-                    animation: _circle,
-                    builder: (context, _) {
-                      final size = 180.0 + (_circle.value * 120.0);
-                      return Container(
-                        width: size,
-                        height: size,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: theme.colorScheme.primary
-                              .withValues(alpha: 0.18),
-                          border: Border.all(
-                            color: theme.colorScheme.primary,
-                            width: 2,
+          // The inner column's tallest frame (circle at max + texts +
+          // controls) must never overflow: the circle is sized from the
+          // actual constraints and everything scrolls as a last resort
+          // (small phones, large accessibility text).
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final circleBox =
+                  (constraints.maxHeight - 230.0).clamp(120.0, 300.0);
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Breathing circle with a screen-reader text fallback.
+                      // The live region announces only step-label changes —
+                      // never the per-second countdown, which would flood
+                      // TalkBack/VoiceOver for the whole session.
+                      Semantics(
+                        label: label,
+                        liveRegion: true,
+                        child: ExcludeSemantics(
+                          child: SizedBox(
+                            width: circleBox,
+                            height: circleBox,
+                            child: Center(
+                              child: AnimatedBuilder(
+                                animation: _circle,
+                                builder: (context, _) {
+                                  final size =
+                                      circleBox * (0.6 + 0.4 * _circle.value);
+                                  return Container(
+                                    width: size,
+                                    height: size,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: theme.colorScheme.primary
+                                          .withValues(alpha: 0.18),
+                                      border: Border.all(
+                                        color: theme.colorScheme.primary,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      label,
+                                      textAlign: TextAlign.center,
+                                      style:
+                                          theme.textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                           ),
                         ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          label,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      if (state.completed) ...[
+                        Text(
+                          'Nice work — take this calm with you.',
+                          style: theme.textTheme.titleMedium,
                           textAlign: TextAlign.center,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
                         ),
-                      );
-                    },
+                        const SizedBox(height: AppSpacing.lg),
+                        FilledButton(
+                          onPressed: () async {
+                            await ref
+                                .read(meditationPlayerProvider.notifier)
+                                .stop();
+                          },
+                          child: const Text('Done'),
+                        ),
+                        if (isSurf) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          // The craving may outlast the session — keep support
+                          // one tap away at the moment the tool runs out.
+                          TextButton.icon(
+                            icon: const Icon(Icons.support_agent, size: 18),
+                            label: const Text('Still riding it? Get support'),
+                            onPressed: () =>
+                                showAppSheet(context, const CrisisSheet()),
+                          ),
+                        ],
+                      ] else ...[
+                        Text(
+                          '$label · $secondsLeft',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          'Step ${state.stepIndex + 1} of ${session.steps.length} · '
+                          'Cycle ${state.cycle + 1} of ${session.cycles}',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                state.running
+                                    ? Icons.pause_circle_outline
+                                    : Icons.play_circle_outline,
+                                size: 56,
+                              ),
+                              tooltip: state.running ? 'Pause' : 'Resume',
+                              onPressed: () {
+                                final p = ref
+                                    .read(meditationPlayerProvider.notifier);
+                                state.running ? p.pause() : p.resume();
+                              },
+                            ),
+                            const SizedBox(width: AppSpacing.lg),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.stop_circle_outlined,
+                                size: 56,
+                              ),
+                              tooltip: 'Stop',
+                              onPressed: () async {
+                                await ref
+                                    .read(meditationPlayerProvider.notifier)
+                                    .stop();
+                              },
+                            ),
+                          ],
+                        ),
+                        if (isSurf) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          // Urge surfing targets active cravings: keep help one
+                          // tap away from inside the live player too.
+                          TextButton.icon(
+                            icon: const Icon(Icons.support_agent, size: 18),
+                            label: const Text('Need more support right now?'),
+                            onPressed: () {
+                              ref
+                                  .read(meditationPlayerProvider.notifier)
+                                  .pause();
+                              showAppSheet(context, const CrisisSheet());
+                            },
+                          ),
+                        ],
+                      ],
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Text('$label · $secondsLeft', style: theme.textTheme.titleMedium),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Step ${state.stepIndex + 1} of ${session.steps.length} · '
-                'Cycle ${state.cycle + 1} of ${session.cycles}',
-                style: theme.textTheme.bodySmall,
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      state.running
-                          ? Icons.pause_circle_outline
-                          : Icons.play_circle_outline,
-                      size: 56,
-                    ),
-                    tooltip: state.running ? 'Pause' : 'Resume',
-                    onPressed: () {
-                      final p = ref.read(meditationPlayerProvider.notifier);
-                      state.running ? p.pause() : p.resume();
-                    },
-                  ),
-                  const SizedBox(width: AppSpacing.lg),
-                  IconButton(
-                    icon: const Icon(Icons.stop_circle_outlined, size: 56),
-                    tooltip: 'Stop',
-                    onPressed: () async {
-                      await ref.read(meditationPlayerProvider.notifier).stop();
-                    },
-                  ),
-                ],
-              ),
-            ],
+              );
+            },
           ),
         ),
         SwitchListTile(
