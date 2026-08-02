@@ -86,12 +86,8 @@ class _MoodSheetState extends ConsumerState<MoodSheet> {
   Future<void> _save() async {
     final notifier = ref.read(moodProvider.notifier);
     final entry = _buildEntry();
-    final isToday = entry.dateIso == dateIsoOf(DateTime.now());
+    // The FR5 check-in record lives in MoodNotifier.upsert (today-only).
     await notifier.upsert(entry);
-    // TODO(fr5): recordCheckIn() — FR5 (streaks) wires the check-in record.
-    if (isToday) {
-      // FR5 hook: see TODO above.
-    }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Mood saved.')),

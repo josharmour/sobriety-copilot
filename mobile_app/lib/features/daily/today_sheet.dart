@@ -12,6 +12,7 @@ import 'package:sobriety_copilot_mobile/features/daily/mood_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/daily/reminders.dart';
 import 'package:sobriety_copilot_mobile/features/meditation/meditation_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
+import 'package:sobriety_copilot_mobile/features/milestones/streak_card.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/widgets.dart';
@@ -34,7 +35,6 @@ class TodaySheet extends ConsumerWidget {
     final inventory = ref.watch(inventoryProvider);
     final mood = ref.watch(moodProvider);
     final discreet = ref.watch(sobrietyProvider).discreet;
-    final streak = ref.read(inventoryProvider.notifier).streak;
     final now = DateTime.now();
     final doneToday = inventory.containsKey(dateIsoOf(now));
     MoodEntry? moodToday;
@@ -97,6 +97,8 @@ class TodaySheet extends ConsumerWidget {
                     AppSpacing.xxl,
                   ),
                   children: [
+                    const StreakCard(),
+                    const SizedBox(height: AppSpacing.md),
                     readings.when(
                       loading: () => const Padding(
                         padding: EdgeInsets.all(AppSpacing.xl),
@@ -186,9 +188,11 @@ class TodaySheet extends ConsumerWidget {
                               ? 'Evening review — done'
                               : 'Evening review',
                         ),
+                        // The unified FR5 check-in streak card (top of this
+                        // sheet) is the single streak display now.
                         subtitle: Text(
-                          streak > 0
-                              ? '$streak-day streak · tap to view or edit'
+                          doneToday
+                              ? 'Tap to view or edit'
                               : 'A few honest minutes before bed',
                         ),
                         trailing: const Icon(Icons.chevron_right),

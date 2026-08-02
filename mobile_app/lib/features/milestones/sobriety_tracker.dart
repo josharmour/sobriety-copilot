@@ -287,7 +287,9 @@ class SobrietyNotifier extends Notifier<SobrietyState> {
       sobrietyDate: now,
       relapses: [...state.relapses, event],
     );
-    // TODO(fr5): reset check-in streak
+    // A relapse restarts the check-in streak (best + history are kept, and a
+    // same-day check-in can immediately start the new run).
+    await ref.read(streakProvider.notifier).reset();
     await _persist();
   }
 

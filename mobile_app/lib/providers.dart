@@ -16,6 +16,7 @@ import 'package:sobriety_copilot_mobile/features/chat/conversations.dart';
 import 'package:sobriety_copilot_mobile/features/chat/saved_passages.dart';
 import 'package:sobriety_copilot_mobile/features/daily/mood_log.dart';
 import 'package:sobriety_copilot_mobile/features/meditation/player.dart';
+import 'package:sobriety_copilot_mobile/features/milestones/streak.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/local_chat_repository.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/model_manager.dart';
 import 'package:sobriety_copilot_mobile/features/tts/tts_service.dart';
@@ -170,4 +171,9 @@ final appTtsProvider = Provider<AppTts>((ref) {
 final meditationPlayerProvider =
     NotifierProvider<MeditationPlayer, MeditationPlayerState>(
   MeditationPlayer.new,
+);
+
+/// FR5 — daily check-in streak (the single user-facing streak; local-only).
+final streakProvider = NotifierProvider<StreakNotifier, StreakState>(
+  StreakNotifier.new,
 );
