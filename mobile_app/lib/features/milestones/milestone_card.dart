@@ -15,11 +15,31 @@ class MilestoneCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(sobrietyProvider);
     final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+
+    final textColor = isLight ? theme.colorScheme.onSurface : Colors.white;
+    final subtextColor = isLight ? theme.colorScheme.onSurfaceVariant : Colors.white70;
+    final mutedIconColor = isLight ? theme.colorScheme.onSurfaceVariant : Colors.white38;
 
     final decoration = BoxDecoration(
-      color: Colors.black.withAlpha(120),
+      color: isLight
+          ? theme.colorScheme.surface
+          : Colors.black.withAlpha(120),
       borderRadius: BorderRadius.circular(AppSpacing.radius),
-      border: Border.all(color: Colors.white24),
+      border: Border.all(
+        color: isLight
+            ? theme.colorScheme.outlineVariant
+            : Colors.white24,
+      ),
+      boxShadow: isLight
+          ? [
+              BoxShadow(
+                color: Colors.black.withAlpha(12),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ]
+          : null,
     );
 
     if (!state.isTracking) {
@@ -36,13 +56,13 @@ class MilestoneCard extends ConsumerWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.emoji_events_outlined,
-                      color: Colors.white70, size: 20),
+                  Icon(Icons.emoji_events_outlined,
+                      color: subtextColor, size: 20),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
                     'Track your sober time',
                     style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: Colors.white70),
+                        ?.copyWith(color: subtextColor),
                   ),
                 ],
               ),
@@ -77,20 +97,20 @@ class MilestoneCard extends ConsumerWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: (last ?? next).color,
-                    border: Border.all(color: Colors.white38),
+                    border: Border.all(color: mutedIconColor),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Text(
                   'Day $days',
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.white70,
+                    color: subtextColor,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
-                const Icon(Icons.edit_outlined,
-                    color: Colors.white38, size: 14),
+                Icon(Icons.edit_outlined,
+                    color: mutedIconColor, size: 14),
               ],
             ),
           ),
@@ -125,7 +145,7 @@ class MilestoneCard extends ConsumerWidget {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: (last ?? next).color,
-                        border: Border.all(color: Colors.white38),
+                        border: Border.all(color: mutedIconColor),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
@@ -133,20 +153,20 @@ class MilestoneCard extends ConsumerWidget {
                       child: Text(
                         headline,
                         style: theme.textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
+                          color: textColor,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
-                    const Icon(Icons.edit_outlined,
-                        color: Colors.white38, size: 16),
+                    Icon(Icons.edit_outlined,
+                        color: mutedIconColor, size: 16),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   subtitle,
                   style: theme.textTheme.bodySmall
-                      ?.copyWith(color: Colors.white70),
+                      ?.copyWith(color: subtextColor),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 ClipRRect(
@@ -154,7 +174,7 @@ class MilestoneCard extends ConsumerWidget {
                   child: LinearProgressIndicator(
                     value: state.milestoneProgress,
                     minHeight: 5,
-                    backgroundColor: Colors.white24,
+                    backgroundColor: isLight ? theme.colorScheme.outlineVariant : Colors.white24,
                     color: AppColors.accent,
                   ),
                 ),

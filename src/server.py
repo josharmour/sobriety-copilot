@@ -1699,6 +1699,13 @@ def suggest(
     return _build_suggestions(query, results)
 
 
+@app.get("/api/graph")
+def graph(q: str = Query(default="The Twelve Steps")):
+    from src.rag.graph import build_knowledge_graph
+    retriever_instance = _safe_get_retriever()
+    return build_knowledge_graph(q, retriever=retriever_instance)
+
+
 _geocode_cache: dict[str, dict[str, Any] | None] = {}
 
 

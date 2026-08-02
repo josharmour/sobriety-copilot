@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.3 (build 6) — 2026-07-27 — Production Release
+
+### What's New in Version 1.1.3
+- **🕸️ Interactive RAG Knowledge Graph**: Visually explore connections between recovery literature passages, 12-step principles, and study topics in a smooth, pinch-to-zoom 2D node map.
+- **📚 Clean Literature Titles**: Literature source badges now display clean, official titles (such as "Alcoholics Anonymous", "Daily Reflections", "As Bill Sees It", "Joe & Charlie").
+- **⚡ Immediate Direct Responses**: AI assistant answers start directly with literature explanations and insights on line 1, eliminating conversational preambles and filler.
+- **🎨 Vibrant Dark & Light Themes**: Enhanced contrast, refined typography, and smooth micro-animations.
+- **⭐ Home Group Reminders**: Set your Home Group meeting and get pre-meeting reminders.
+
 ## 1.1.1 (build 3) — 2026-07-09 — internal testing
 
 First feature release since 1.0.0. Adds Private Mode (fully on-device chat),

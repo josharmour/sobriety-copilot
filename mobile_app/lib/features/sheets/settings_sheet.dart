@@ -80,6 +80,40 @@ class SettingsSheet extends ConsumerWidget {
                     const _CitationsPackTile(),
                     const SizedBox(height: AppSpacing.xl),
 
+                    const SectionHeader('Appearance & Theme'),
+                    const SizedBox(height: AppSpacing.xs),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            avatar: const Icon(Icons.dark_mode_outlined, size: 16),
+                            label: const Text('Dark'),
+                            selected: config.themeMode == ThemeMode.dark,
+                            onSelected: (_) => notifier.setThemeMode(ThemeMode.dark),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: ChoiceChip(
+                            avatar: const Icon(Icons.light_mode_outlined, size: 16),
+                            label: const Text('Light'),
+                            selected: config.themeMode == ThemeMode.light,
+                            onSelected: (_) => notifier.setThemeMode(ThemeMode.light),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: ChoiceChip(
+                            avatar: const Icon(Icons.brightness_auto_outlined, size: 16),
+                            label: const Text('System'),
+                            selected: config.themeMode == ThemeMode.system,
+                            onSelected: (_) => notifier.setThemeMode(ThemeMode.system),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+
                     const SectionHeader('Response tone'),
                     const SizedBox(height: AppSpacing.xs),
                     ...kTones.map(
@@ -160,16 +194,6 @@ class SettingsSheet extends ConsumerWidget {
                         'Display the model\'s reasoning steps for each answer.',
                       ),
                       onChanged: (v) => notifier.setShowThinking(v),
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: config.studySuggestions,
-                      title: const Text('Continue-your-study suggestions'),
-                      subtitle: const Text(
-                        'Suggest study topics from your recent questions. '
-                        'Computed on this device only — nothing is uploaded.',
-                      ),
-                      onChanged: (v) => notifier.setStudySuggestions(v),
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,

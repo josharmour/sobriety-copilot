@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sobriety_copilot_mobile/features/tts/neural_voices.dart';
@@ -80,6 +81,7 @@ class AppConfig {
   final bool privateMode; // default false
   final String voiceId; // kSystemVoiceId or a NeuralVoice id
   final String userId; // stable per-install id (uuid-ish), never empty
+  final ThemeMode themeMode; // ThemeMode.dark, ThemeMode.light, or ThemeMode.system
 
   const AppConfig({
     required this.baseUrl,
@@ -91,6 +93,7 @@ class AppConfig {
     this.privateMode = false,
     required this.voiceId,
     required this.userId,
+    this.themeMode = ThemeMode.dark,
   });
 
   /// Defaults with all categories enabled and a freshly-generated userId.
@@ -106,6 +109,7 @@ class AppConfig {
       privateMode: false,
       voiceId: kSystemVoiceId,
       userId: id,
+      themeMode: ThemeMode.dark,
     );
   }
 
@@ -119,6 +123,7 @@ class AppConfig {
     bool? privateMode,
     String? voiceId,
     String? userId,
+    ThemeMode? themeMode,
   }) {
     return AppConfig(
       baseUrl: baseUrl ?? this.baseUrl,
@@ -130,6 +135,7 @@ class AppConfig {
       privateMode: privateMode ?? this.privateMode,
       voiceId: voiceId ?? this.voiceId,
       userId: userId ?? this.userId,
+      themeMode: themeMode ?? this.themeMode,
     );
   }
 
@@ -142,9 +148,6 @@ class AppConfig {
           .where(kAllCategories.contains)
           .toSet();
       if (cats.isEmpty) {
-        // An empty stored set is ambiguous; only fall back to "all" when the
-        // key was entirely missing. Here the list was explicitly empty, so we
-        // keep it empty to honor the user's choice.
         cats = <String>{};
       }
     } else {
@@ -158,6 +161,14 @@ class AppConfig {
     final rawId = (json['userId'] as String?) ?? '';
     final userId = rawId.isNotEmpty ? rawId : _generateUserId();
 
+    final rawTheme = json['themeMode'] as String?;
+    ThemeMode themeMode = ThemeMode.dark;
+    if (rawTheme == 'light') {
+      themeMode = ThemeMode.light;
+    } else if (rawTheme == 'system') {
+      themeMode = ThemeMode.system;
+    }
+
     return AppConfig(
       baseUrl: _normalizeBaseUrl(
         (json['baseUrl'] as String?) ?? kDefaultBaseUrl,
@@ -170,6 +181,7 @@ class AppConfig {
       privateMode: json['privateMode'] as bool? ?? false,
       voiceId: (json['voiceId'] as String?) ?? kSystemVoiceId,
       userId: userId,
+      themeMode: themeMode,
     );
   }
 
@@ -184,6 +196,7 @@ class AppConfig {
       'privateMode': privateMode,
       'voiceId': voiceId,
       'userId': userId,
+      'themeMode': themeMode.name,
     };
   }
 
@@ -290,6 +303,11 @@ class AppConfigNotifier extends Notifier<AppConfig> {
 
   Future<void> setVoiceId(String value) async {
     state = state.copyWith(voiceId: value);
+    await _persist();
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    state = state.copyWith(themeMode: mode);
     await _persist();
   }
 

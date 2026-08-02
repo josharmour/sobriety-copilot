@@ -370,7 +370,14 @@ class _ThinkingPanelState extends State<ThinkingPanel> {
 }
 
 /// Bottom-sheet helper used by the app bar menu.
-Future<T?> showAppSheet<T>(BuildContext context, Widget child) {
+///
+/// [initialSize] is the fraction of the screen the sheet opens at (it stays
+/// user-draggable between 0.4 and 0.95 regardless).
+Future<T?> showAppSheet<T>(
+  BuildContext context,
+  Widget child, {
+  double initialSize = 0.7,
+}) {
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
@@ -384,7 +391,7 @@ Future<T?> showAppSheet<T>(BuildContext context, Widget child) {
     builder: (context) {
       return DraggableScrollableSheet(
         expand: false,
-        initialChildSize: 0.7,
+        initialChildSize: initialSize.clamp(0.4, 0.95),
         minChildSize: 0.4,
         maxChildSize: 0.95,
         builder: (context, scrollController) {

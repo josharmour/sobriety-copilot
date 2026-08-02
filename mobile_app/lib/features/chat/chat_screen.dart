@@ -30,6 +30,7 @@ import 'package:sobriety_copilot_mobile/features/asr/asr_service.dart';
 import 'package:sobriety_copilot_mobile/features/daily/study_themes.dart';
 import 'package:sobriety_copilot_mobile/features/daily/today_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
+import 'package:sobriety_copilot_mobile/features/graph/rag_graph_view.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/widgets.dart';
@@ -49,6 +50,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 enum _MenuAction {
   today,
   saved,
+  graph,
   meetings,
   crisis,
   altRecovery,
@@ -459,8 +461,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         await showAppSheet(context, const TodaySheet());
       case _MenuAction.saved:
         await showAppSheet(context, const SavedPassagesSheet());
+      case _MenuAction.graph:
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => RagGraphScreen(
+              initialQuery: 'Step 9',
+              onSelectPrompt: (prompt) => _send(prompt),
+            ),
+          ),
+        );
       case _MenuAction.meetings:
-        await showAppSheet(context, const MeetingsSheet());
+        // Map + results want the full screen.
+        await showAppSheet(context, const MeetingsSheet(), initialSize: 0.95);
       case _MenuAction.crisis:
         await showAppSheet(context, const CrisisSheet());
       case _MenuAction.altRecovery:
@@ -584,6 +596,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ),
         actions: [
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            decoration: BoxDecoration(
+              color: AppColors.accent.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(AppSpacing.radius),
+              border: Border.all(color: AppColors.accent, width: 1.2),
+            ),
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              icon: const Icon(Icons.bubble_chart, color: AppColors.accent, size: 20),
+              tooltip: 'Knowledge Graph',
+              onPressed: () => _openMenu(_MenuAction.graph),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.add_comment_outlined),
             tooltip: 'New conversation',
@@ -605,6 +632,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 child: ListTile(
                   leading: Icon(Icons.bookmark_outline),
                   title: Text('Saved passages'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: _MenuAction.graph,
+                child: ListTile(
+                  leading: Icon(Icons.hub_outlined),
+                  title: Text('Knowledge Graph'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -962,29 +997,56 @@ class _StarterViewState extends ConsumerState<_StarterView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
     final prompts = _prompts;
     final reflection = reflectionForToday();
+
+    final bgDecoration = isLight
+        ? BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                theme.colorScheme.surface,
+                theme.colorScheme.surfaceContainerHighest.withAlpha(180),
+              ],
+            ),
+          )
+        : const BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage('assets/icon/app_icon.jpg'),
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+            ),
+          );
+
+    final overlayDecoration = isLight
+        ? const BoxDecoration(color: Colors.transparent)
+        : BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withAlpha(20),
+                Colors.black.withAlpha(160),
+                Colors.black.withAlpha(240),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+          );
+
+    final titleColor = isLight ? theme.colorScheme.onSurface : Colors.white;
+    final cardBg = isLight ? theme.colorScheme.surface : Colors.black.withAlpha(120);
+    final cardBorder = isLight ? theme.colorScheme.outlineVariant : Colors.white24;
+    final reflectionTextColor = isLight ? theme.colorScheme.onSurface : Colors.white;
+    final btnFgColor = isLight ? theme.colorScheme.onSurface : Colors.white;
+    final btnBorderColor = isLight ? theme.colorScheme.outlineVariant : Colors.white54;
+    final btnBgColor = isLight ? theme.colorScheme.surface : Colors.black.withAlpha(120);
+
     return Container(
-      decoration: const BoxDecoration(
-        image: DecorationImage(
-          image: AssetImage('assets/icon/app_icon.jpg'),
-          fit: BoxFit.cover,
-          alignment: Alignment.center,
-        ),
-      ),
+      decoration: bgDecoration,
       child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.black.withAlpha(20),
-              Colors.black.withAlpha(160),
-              Colors.black.withAlpha(240),
-            ],
-            stops: const [0.0, 0.5, 1.0],
-          ),
-        ),
+        decoration: overlayDecoration,
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
@@ -1001,15 +1063,17 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                       'Start a Conversation',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.headlineMedium?.copyWith(
-                        color: Colors.white,
+                        color: titleColor,
                         fontWeight: FontWeight.bold,
-                        shadows: [
-                          const Shadow(
-                            color: Colors.black87,
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
+                        shadows: isLight
+                            ? null
+                            : [
+                                const Shadow(
+                                  color: Colors.black87,
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -1019,16 +1083,25 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                         child: Container(
                           padding: const EdgeInsets.all(AppSpacing.lg),
                           decoration: BoxDecoration(
-                            color: Colors.black.withAlpha(120),
+                            color: cardBg,
                             borderRadius: BorderRadius.circular(AppSpacing.radius),
-                            border: Border.all(color: Colors.white24),
+                            border: Border.all(color: cardBorder),
+                            boxShadow: isLight
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withAlpha(12),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : null,
                           ),
                           child: Text(
                             reflection,
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               fontStyle: FontStyle.italic,
-                              color: Colors.white,
+                              color: reflectionTextColor,
                             ),
                           ),
                         ),
@@ -1037,58 +1110,6 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                     const SizedBox(height: AppSpacing.md),
                     const MilestoneCard(),
                     const SizedBox(height: AppSpacing.xl),
-                    if (widget.studySuggestions.isNotEmpty) ...[
-                      Center(
-                        child: Text(
-                          'Continue your study',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.white70,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      ...widget.studySuggestions.map(
-                        (s) => Padding(
-                          padding:
-                              const EdgeInsets.only(bottom: AppSpacing.sm),
-                          child: Center(
-                            child: ConstrainedBox(
-                              constraints:
-                                  const BoxConstraints(maxWidth: 600),
-                              child: SizedBox(
-                                width: double.infinity,
-                                child: OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    alignment: Alignment.centerLeft,
-                                    foregroundColor: Colors.white,
-                                    side: const BorderSide(
-                                        color: AppColors.accent),
-                                    backgroundColor:
-                                        Colors.black.withAlpha(120),
-                                    padding:
-                                        const EdgeInsets.all(AppSpacing.lg),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(
-                                          AppSpacing.radius),
-                                    ),
-                                  ),
-                                  icon: const Icon(Icons.auto_stories,
-                                      size: 16, color: AppColors.accent),
-                                  label: Text(
-                                    '${s.themeLabel}: ${s.prompt}',
-                                    textAlign: TextAlign.left,
-                                  ),
-                                  onPressed: () => widget.onPick(s.prompt),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                    ],
                     ...prompts.map(
                       (p) => Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -1100,13 +1121,14 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                               child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(
                                   alignment: Alignment.centerLeft,
-                                  foregroundColor: Colors.white,
-                                  side: const BorderSide(color: Colors.white54),
-                                  backgroundColor: Colors.black.withAlpha(120),
+                                  foregroundColor: btnFgColor,
+                                  side: BorderSide(color: btnBorderColor),
+                                  backgroundColor: btnBgColor,
                                   padding: const EdgeInsets.all(AppSpacing.lg),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(AppSpacing.radius),
                                   ),
+                                  elevation: isLight ? 1 : 0,
                                 ),
                                 onPressed: () => widget.onPick(p),
                                 child: Text(p, textAlign: TextAlign.left),

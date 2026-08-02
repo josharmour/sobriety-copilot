@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:sobriety_copilot_mobile/data/models/meeting_models.dart';
@@ -12,12 +16,18 @@ import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 
 /// Find-a-meeting bottom sheet.
 ///
-/// Mirrors the web app's meeting sheet (`static/index.html`):
-/// location input -> `/api/geocode`, "use my location" -> `geolocator`, then
+/// Location input -> `/api/geocode`, "use my location" -> `geolocator`, then
 /// `/api/meetings`. Fellowship + attendance filters trigger a server re-fetch
 /// (they change the payload); day-range and time-of-day filters are applied
 /// client-side. Results are de-duped per occurrence, or grouped by meeting for
 /// the "This week" / "Any day" views.
+///
+/// Layout: only the location row (search field, "use my location", filter
+/// toggle) is visible by default — the filter chip rows live in a collapsible
+/// panel behind the tune button so the map + result cards get the vast
+/// majority of the sheet. The map (OSM tiles via `flutter_map`, the port of
+/// the old PWA's Leaflet map) plots in-person results as fellowship-colored
+/// pins; tapping a pin shows a summary card overlaid on the map.
 class MeetingsSheet extends ConsumerStatefulWidget {
   const MeetingsSheet({super.key});
 
@@ -58,6 +68,15 @@ class _MeetingGroup {
   const _MeetingGroup(this.rep, this.occurrences);
 }
 
+/// One map pin: every displayed meeting at (roughly) the same coordinates.
+class _MapPin {
+  final String key;
+  final List<Meeting> meetings;
+  const _MapPin(this.key, this.meetings);
+
+  LatLng get point => LatLng(meetings.first.lat, meetings.first.lng);
+}
+
 class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
   final TextEditingController _locationController = TextEditingController();
 
@@ -70,12 +89,21 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
   // Mode: geographic search vs the location-agnostic online directory.
   String _mode = 'nearby'; // nearby | online
 
-  // Filters.
+  // Filters. Collapsed behind the tune button by default so the map and
+  // result cards get the screen.
+  bool _filtersExpanded = false;
   String _fellowship = 'all'; // all | aa | na | recovery dharma | cma
   String _attendance = 'inperson'; // inperson | online | all
-  String _range = 'today'; // today | tonight | tomorrow | week | any
+  String _range = 'upcoming'; // upcoming | today | tonight | tomorrow | week | any
   String _timeOfDay = 'any'; // any | morning | afternoon | evening | late
   int _radiusMi = 30; // persisted across sessions
+
+  // Map selection: key of the highlighted pin (see [_MapPin.key]). Kept in
+  // sync with the carousel — swiping selects, tapping a pin swipes.
+  String? _selectedPinKey;
+  final PageController _pageController =
+      PageController(viewportFraction: 0.92);
+  int _carouselIndex = 0;
 
   static const String _radiusPrefsKey = 'meeting_radius_mi';
   static const String _zoomAckPrefsKey = 'zoom_anonymity_ack_v1';
@@ -99,7 +127,15 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
   @override
   void dispose() {
     _locationController.dispose();
+    _pageController.dispose();
     super.dispose();
+  }
+
+  /// Rewind the carousel + pin highlight after the result set changes.
+  void _resetCarousel() {
+    _carouselIndex = 0;
+    _selectedPinKey = null;
+    if (_pageController.hasClients) _pageController.jumpToPage(0);
   }
 
   // ---------------------------------------------------------------------------
@@ -142,8 +178,39 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
     return meetings.where((m) => _timeOfDayBucket(m.time) == tod).toList();
   }
 
+  /// Minutes from now until this meeting's next occurrence (0..7 days),
+  /// or null when the schedule is unknown.
+  int? _minutesUntilNext(Meeting m, DateTime now) {
+    final t = _timeAsMinutes(m.time);
+    if (m.day == null || m.day! < 0 || m.day! > 6 || t < 0) return null;
+    final today = now.weekday % 7;
+    final nowMin = now.hour * 60 + now.minute;
+    var total = ((m.day! - today + 7) % 7) * 1440 + (t - nowMin);
+    if (total < 0) total += 7 * 1440;
+    return total;
+  }
+
+  /// 'Today' / 'Tomorrow' / weekday name, relative to now. A meeting whose
+  /// time already passed today is next week's — label it "Next Sunday" so it
+  /// doesn't read as today's.
+  String _relativeDayLabel(Meeting m) {
+    if (m.day == null || m.day! < 0 || m.day! > 6) return m.dayName ?? '';
+    final now = DateTime.now();
+    final today = now.weekday % 7;
+    final nowMin = now.hour * 60 + now.minute;
+    if (m.day == today) {
+      return _timeAsMinutes(m.time) >= nowMin
+          ? 'Today'
+          : 'Next ${_dayNames[m.day!]}';
+    }
+    if (m.day == (today + 1) % 7) return 'Tomorrow';
+    return _dayNames[m.day!];
+  }
+
   List<Meeting> _filterByRange(List<Meeting> meetings, String range) {
-    if (range == 'any' || range == 'week') return meetings;
+    if (range == 'any' || range == 'week' || range == 'upcoming') {
+      return meetings;
+    }
     final now = DateTime.now();
     final today = now.weekday % 7; // Dart Mon=1..Sun=7 -> JS Sun=0..Sat=6
     final tomorrow = (today + 1) % 7;
@@ -295,7 +362,10 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
           )
           .timeout(const Duration(seconds: 25));
       if (!mounted) return;
-      setState(() => _lastResults = result);
+      setState(() {
+        _lastResults = result;
+        _resetCarousel();
+      });
     } on TimeoutException {
       if (!mounted) return;
       setState(() => _error = 'The meeting service timed out. Please retry.');
@@ -495,42 +565,37 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
         ),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.9,
+            maxHeight: MediaQuery.of(context).size.height * 0.95,
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.xl,
-                  AppSpacing.lg,
+                  AppSpacing.md,
                   AppSpacing.xl,
                   AppSpacing.sm,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-
-                    Text(
-                      'Find a meeting',
-                      style: theme.textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'In-person, online, and across many fellowships.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.textTheme.bodySmall?.color
-                            ?.withValues(alpha: 0.7),
+                    Expanded(
+                      child: Text(
+                        'Find a meeting',
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
+                    const SizedBox(width: AppSpacing.sm),
+                    _buildModeSwitch(theme),
                   ],
                 ),
               ),
-              _buildModeSwitch(theme),
               _buildSearchControls(theme),
               const Divider(height: 1),
-              Flexible(
+              Expanded(
                 child: _mode == 'online'
                     ? (_loading
                         ? _buildLoading(theme)
@@ -553,134 +618,182 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
   }
 
   Widget _buildModeSwitch(ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
-        0,
-        AppSpacing.xl,
-        AppSpacing.md,
-      ),
-      child: SegmentedButton<String>(
-        segments: const [
-          ButtonSegment(
-            value: 'nearby',
-            label: Text('Nearby'),
-            icon: Icon(Icons.place_outlined, size: 16),
-          ),
-          ButtonSegment(
-            value: 'online',
-            label: Text('Online now'),
-            icon: Icon(Icons.videocam_outlined, size: 16),
-          ),
-        ],
-        selected: {_mode},
-        showSelectedIcon: false,
-        style: const ButtonStyle(
-          visualDensity: VisualDensity.compact,
+    return SegmentedButton<String>(
+      segments: const [
+        ButtonSegment(value: 'nearby', label: Text('Nearby')),
+        ButtonSegment(value: 'online', label: Text('Online now')),
+      ],
+      selected: {_mode},
+      showSelectedIcon: false,
+      style: const ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
+        padding: WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: AppSpacing.md),
         ),
-        onSelectionChanged: (sel) {
-          final next = sel.first;
-          if (next == _mode) return;
-          setState(() => _mode = next);
-          if (next == 'online' && _onlineResults == null && !_loading) {
-            _fetchOnline();
-          }
-        },
       ),
+      onSelectionChanged: (sel) {
+        final next = sel.first;
+        if (next == _mode) return;
+        setState(() => _mode = next);
+        if (next == 'online' && _onlineResults == null && !_loading) {
+          _fetchOnline();
+        }
+      },
     );
+  }
+
+  /// Filters whose value differs from the default — shown as a badge on the
+  /// tune button so collapsed filters are still discoverable.
+  int get _activeFilterCount {
+    var n = 0;
+    if (_fellowship != 'all') n++;
+    if (_attendance != 'inperson') n++;
+    if (_range != 'upcoming') n++;
+    if (_timeOfDay != 'any') n++;
+    if (_radiusMi != 30) n++;
+    return n;
   }
 
   Widget _buildSearchControls(ThemeData theme) {
     final online = _mode == 'online';
+    if (online) {
+      // Online mode has a single fellowship filter — keep it inline.
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          0,
+          AppSpacing.xl,
+          AppSpacing.md,
+        ),
+        child: _filterRow(
+          options: const {'all': 'AA & NA', 'aa': 'AA', 'na': 'NA'},
+          selected: (_fellowship != 'aa' && _fellowship != 'na')
+              ? 'all'
+              : _fellowship,
+          onSelected: (v) {
+            setState(() => _fellowship = v);
+            _fetchOnline();
+          },
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xl,
         0,
         AppSpacing.xl,
-        AppSpacing.md,
+        AppSpacing.sm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!online) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _locationController,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (v) {
-                      final q = v.trim();
-                      if (q.isNotEmpty) _setLocationFromQuery(q);
-                    },
-                    decoration: const InputDecoration(
-                      hintText: 'ZIP code or city',
-                      prefixIcon: Icon(Icons.search),
-                      isDense: true,
-                    ),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _locationController,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (v) {
+                    final q = v.trim();
+                    if (q.isNotEmpty) _setLocationFromQuery(q);
+                  },
+                  decoration: const InputDecoration(
+                    hintText: 'ZIP code or city',
+                    prefixIcon: Icon(Icons.search),
+                    isDense: true,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                IconButton.filledTonal(
-                  onPressed: _locating ? null : _setLocationFromGeolocation,
-                  tooltip: 'Use my location',
-                  icon: _locating
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.my_location),
-                ),
-              ],
-            ),
-            if (_locationLabel.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Opacity(
-                opacity: _locationIsPlaceholder ? 0.7 : 1,
-                child: Row(
-                  children: [
-                    const Icon(Icons.place_outlined,
-                        size: 14, color: AppColors.accent),
-                    const SizedBox(width: AppSpacing.xs),
-                    Expanded(
-                      child: Text(
-                        _locationLabel,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ),
-                  ],
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              IconButton.filledTonal(
+                onPressed: _locating ? null : _setLocationFromGeolocation,
+                tooltip: 'Use my location',
+                icon: _locating
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Badge.count(
+                count: _activeFilterCount,
+                isLabelVisible: _activeFilterCount > 0,
+                child: IconButton.filledTonal(
+                  isSelected: _filtersExpanded,
+                  tooltip: _filtersExpanded ? 'Hide filters' : 'Filters',
+                  onPressed: () =>
+                      setState(() => _filtersExpanded = !_filtersExpanded),
+                  icon: const Icon(Icons.tune),
                 ),
               ),
             ],
-            const SizedBox(height: AppSpacing.md),
-          ],
-          _filterRow(
-            options: online
-                ? const {'all': 'AA & NA', 'aa': 'AA', 'na': 'NA'}
-                : const {
-                    'all': 'All',
-                    'aa': 'AA',
-                    'na': 'NA',
-                    'recovery dharma': 'Dharma',
-                    'cma': 'CMA',
-                  },
-            selected: (online &&
-                    _fellowship != 'aa' &&
-                    _fellowship != 'na')
-                ? 'all'
-                : _fellowship,
-            onSelected: (v) {
-              setState(() => _fellowship = v);
-              if (online) {
-                _fetchOnline();
-              } else {
-                _fetchAndRender();
-              }
-            },
           ),
-          if (!online) ...[
+          if (_locationLabel.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
+            Opacity(
+              opacity: _locationIsPlaceholder ? 0.7 : 1,
+              child: Row(
+                children: [
+                  const Icon(Icons.place_outlined,
+                      size: 14, color: AppColors.accent),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      _locationLabel,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (_filtersExpanded)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: _filterPanel(theme),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterPanel(ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest
+            .withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _labeledFilter(
+            theme,
+            'Fellowship',
+            _filterRow(
+              options: const {
+                'all': 'All',
+                'aa': 'AA',
+                'na': 'NA',
+                'recovery dharma': 'Dharma',
+                'cma': 'CMA',
+              },
+              selected: _fellowship,
+              onSelected: (v) {
+                setState(() => _fellowship = v);
+                _fetchAndRender();
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _labeledFilter(
+            theme,
+            'Type',
             _filterRow(
               options: const {
                 'inperson': 'In-person',
@@ -693,9 +806,14 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
                 _fetchAndRender();
               },
             ),
-            const SizedBox(height: AppSpacing.sm),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _labeledFilter(
+            theme,
+            'Day',
             _filterRow(
               options: const {
+                'upcoming': 'Upcoming',
                 'today': 'Today',
                 'tonight': 'Tonight',
                 'tomorrow': 'Tomorrow',
@@ -703,9 +821,16 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
                 'any': 'Any day',
               },
               selected: _range,
-              onSelected: (v) => setState(() => _range = v),
+              onSelected: (v) => setState(() {
+                _range = v;
+                _resetCarousel();
+              }),
             ),
-            const SizedBox(height: AppSpacing.sm),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _labeledFilter(
+            theme,
+            'Time',
             _filterRow(
               options: const {
                 'any': 'Any time',
@@ -715,9 +840,16 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
                 'late': 'Late night',
               },
               selected: _timeOfDay,
-              onSelected: (v) => setState(() => _timeOfDay = v),
+              onSelected: (v) => setState(() {
+                _timeOfDay = v;
+                _resetCarousel();
+              }),
             ),
-            const SizedBox(height: AppSpacing.sm),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _labeledFilter(
+            theme,
+            'Distance',
             _filterRow(
               options: {
                 for (final r in _radiusOptions) '$r': '$r mi',
@@ -733,9 +865,26 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
                 _fetchAndRender();
               },
             ),
-          ],
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _labeledFilter(ThemeData theme, String label, Widget row) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 74,
+          child: Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        Expanded(child: row),
+      ],
     );
   }
 
@@ -872,49 +1021,71 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
     }
 
     final grouped = _range == 'week' || _range == 'any';
-    final List<Widget> cards = [];
-    int count;
+    final now = DateTime.now();
+    final List<Meeting> reps = [];
+    final List<_MeetingGroup> groups = [];
 
     if (grouped) {
-      final filtered = _filterByTimeOfDay(data.meetings, _timeOfDay);
-      final groups = _groupOccurrences(filtered);
-      count = groups.length;
-      for (final g in groups) {
-        cards.add(_groupCard(theme, g));
-      }
+      groups.addAll(_groupOccurrences(
+        _filterByTimeOfDay(data.meetings, _timeOfDay),
+      ));
+      reps.addAll([for (final g in groups) g.rep]);
     } else {
       final filtered = _filterByTimeOfDay(
         _filterByRange(data.meetings, _range),
         _timeOfDay,
       );
       final seen = <String>{};
-      final display = <Meeting>[];
       for (final m in filtered) {
         final k = '${_dedupeKey(m)}|${m.day}|${m.time}';
-        if (seen.add(k)) display.add(m);
+        if (seen.add(k)) reps.add(m);
       }
-      count = display.length;
-      for (final m in display) {
-        cards.add(_meetingCard(theme, m));
+      // Chronological: soonest occurrence first ("Upcoming" spans the whole
+      // week, so late tonight rolls straight into tomorrow morning).
+      if (_range != 'any') {
+        reps.sort((a, b) => (_minutesUntilNext(a, now) ?? 1 << 30)
+            .compareTo(_minutesUntilNext(b, now) ?? 1 << 30));
       }
     }
 
-    final countLabel = count > 0
-        ? '$count ${grouped ? 'groups' : 'meetings'} within $_radiusMi mi'
-        : 'No meetings match';
+    final count = grouped ? groups.length : reps.length;
+    final pins = _buildPins(reps);
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.md,
-        AppSpacing.lg,
-        AppSpacing.xl,
-      ),
+    if (count == 0 || pins.isEmpty) {
+      // Nothing to plot (no matches, or online-only results) — plain list.
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          AppSpacing.xl,
+        ),
+        children: [
+          if (count == 0)
+            _emptyCard(theme)
+          else if (grouped)
+            ...groups.map((g) => _groupCard(theme, g))
+          else
+            ...reps.map((m) => _meetingCard(theme, m)),
+          const SizedBox(height: AppSpacing.lg),
+          _coverageFooter(theme),
+        ],
+      );
+    }
+
+    final countLabel = _range == 'upcoming'
+        ? '$count upcoming meetings within $_radiusMi mi · swipe to browse'
+        : '$count ${grouped ? 'groups' : 'meetings'} within $_radiusMi mi';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.only(
-            left: AppSpacing.xs,
-            bottom: AppSpacing.sm,
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.sm,
+            AppSpacing.xl,
+            AppSpacing.sm,
           ),
           child: Text(
             countLabel,
@@ -923,30 +1094,316 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
             ),
           ),
         ),
-        if (count == 0)
-          _emptyCard(theme)
-        else
-          ...cards,
-        const SizedBox(height: AppSpacing.lg),
-        Center(
-          child: Column(
-            children: [
-              Text(
-                "Coverage from a curated set of intergroup feeds.",
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color:
-                      theme.textTheme.bodySmall?.color?.withValues(alpha: 0.6),
-                ),
-              ),
-              TextButton(
-                onPressed: _reportCoverageGap,
-                child: const Text("Don't see meetings near you? Tell us"),
-              ),
-            ],
+        Expanded(
+          child: _MeetingMap(
+            pins: pins,
+            selectedKey: _selectedPinKey,
+            onPinTap: (pin) => _onPinTapped(pin, reps),
           ),
         ),
+        SizedBox(
+          height: 176,
+          // Allow mouse/trackpad drags too — Flutter web only enables touch
+          // by default, which left desktop users unable to swipe the cards.
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              dragDevices: {
+                PointerDeviceKind.touch,
+                PointerDeviceKind.mouse,
+                PointerDeviceKind.trackpad,
+                PointerDeviceKind.stylus,
+              },
+            ),
+            child: PageView.builder(
+              controller: _pageController,
+              onPageChanged: (i) => _onCarouselChanged(i, reps),
+              itemCount: count + 1, // trailing "tell us" page
+              itemBuilder: (context, i) {
+                if (i >= count) return _coveragePage(theme);
+                final active = i == _carouselIndex;
+                return grouped
+                    ? _carouselGroupCard(theme, groups[i], active: active)
+                    : _carouselCard(theme, reps[i], active: active);
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
       ],
+    );
+  }
+
+  void _onCarouselChanged(int i, List<Meeting> reps) {
+    setState(() {
+      _carouselIndex = i;
+      _selectedPinKey = i < reps.length ? _pinKeyOf(reps[i]) : null;
+    });
+  }
+
+  void _onPinTapped(_MapPin pin, List<Meeting> reps) {
+    for (var i = 0; i < reps.length; i++) {
+      if (_pinKeyOf(reps[i]) == pin.key) {
+        if (_pageController.hasClients) {
+          _pageController.animateToPage(
+            i,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        }
+        setState(() {
+          _carouselIndex = i;
+          _selectedPinKey = pin.key;
+        });
+        return;
+      }
+    }
+  }
+
+  Widget _coverageFooter(ThemeData theme) {
+    return Center(
+      child: Column(
+        children: [
+          Text(
+            "Coverage from a curated set of intergroup feeds.",
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+            ),
+          ),
+          TextButton(
+            onPressed: _reportCoverageGap,
+            child: const Text("Don't see meetings near you? Tell us"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Final carousel page: coverage note + report button.
+  Widget _coveragePage(ThemeData theme) {
+    return Card(
+      margin: const EdgeInsets.symmetric(
+        horizontal: 6,
+        vertical: AppSpacing.xs,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Center(child: _coverageFooter(theme)),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Map pins + carousel cards.
+  // ---------------------------------------------------------------------------
+
+  /// Pin key for a meeting, or null when it has nothing to plot.
+  String? _pinKeyOf(Meeting m) {
+    if (!m.isInperson) return null;
+    if (!m.lat.isFinite || !m.lng.isFinite) return null;
+    if (m.lat == 0 && m.lng == 0) return null;
+    return '${m.lat.toStringAsFixed(4)},${m.lng.toStringAsFixed(4)}';
+  }
+
+  /// Group in-person meetings with usable coordinates into one pin per spot.
+  List<_MapPin> _buildPins(List<Meeting> meetings) {
+    final order = <String>[];
+    final byLoc = <String, List<Meeting>>{};
+    for (final m in meetings) {
+      final key = _pinKeyOf(m);
+      if (key == null) continue;
+      byLoc.putIfAbsent(key, () {
+        order.add(key);
+        return <Meeting>[];
+      }).add(m);
+    }
+    return [for (final k in order) _MapPin(k, byLoc[k]!)];
+  }
+
+  /// Compact swipeable card: when + distance, name, address, actions.
+  Widget _carouselCard(ThemeData theme, Meeting m, {required bool active}) {
+    final where = m.address.isNotEmpty ? m.address : m.location;
+    final t =
+        m.timeFormatted.isNotEmpty ? m.timeFormatted : _formatTime(m.time);
+    final when = [_relativeDayLabel(m), t].where((s) => s.isNotEmpty).join(' · ');
+    return _carouselShell(
+      theme,
+      active: active,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                when.isEmpty ? '—' : when,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            if (_distanceLabel(m).isNotEmpty)
+              Text(
+                _distanceLabel(m),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: m.isOnline && !m.isInperson
+                      ? AppColors.accent
+                      : theme.textTheme.bodySmall?.color,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            _fellowshipPill(m),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                m.name.isEmpty ? 'Meeting' : m.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (where.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              where,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        const Spacer(),
+        _actionsRow(m),
+      ],
+    );
+  }
+
+  /// Compact swipeable card for the grouped ("This week"/"Any day") views.
+  Widget _carouselGroupCard(ThemeData theme, _MeetingGroup g,
+      {required bool active}) {
+    final m = g.rep;
+    final occ = [...g.occurrences]
+      ..sort((a, b) {
+        final da = (a.day ?? 99).compareTo(b.day ?? 99);
+        if (da != 0) return da;
+        return _timeAsMinutes(a.time).compareTo(_timeAsMinutes(b.time));
+      });
+    final compact = occ
+        .take(3)
+        .map((o) {
+          final ds = (o.day != null && o.day! >= 0 && o.day! < 7)
+              ? _dayShort[o.day!]
+              : '';
+          return '$ds ${_formatTime(o.time)}'.trim();
+        })
+        .where((s) => s.isNotEmpty)
+        .join(' · ');
+    final more = occ.length > 3 ? ' +${occ.length - 3}' : '';
+    final where = m.address.isNotEmpty ? m.address : m.location;
+    return _carouselShell(
+      theme,
+      active: active,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                compact.isEmpty ? '—' : '$compact$more',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (_distanceLabel(m).isNotEmpty)
+              Text(_distanceLabel(m), style: theme.textTheme.bodySmall),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            _fellowshipPill(m),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                m.name.isEmpty ? 'Meeting' : m.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (where.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              where,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        const Spacer(),
+        _actionsRow(m),
+      ],
+    );
+  }
+
+  Widget _carouselShell(ThemeData theme,
+      {required bool active, required List<Widget> children}) {
+    return Card(
+      margin: const EdgeInsets.symmetric(
+        horizontal: 6,
+        vertical: AppSpacing.xs,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: active
+            ? const BorderSide(color: AppColors.accent, width: 1.5)
+            : BorderSide(
+                color: theme.dividerColor.withValues(alpha: 0.3),
+              ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: children,
+        ),
+      ),
+    );
+  }
+
+  /// Action buttons in one horizontally scrollable row (fixed height so the
+  /// carousel cards stay uniform).
+  Widget _actionsRow(Meeting m) {
+    final actions = _actions(m);
+    if (actions.isEmpty) return const SizedBox(height: 32);
+    return SizedBox(
+      height: 32,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final a in actions)
+              Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.sm),
+                child: a,
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1441,6 +1898,192 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Map widget (port of the old PWA's Leaflet meeting map).
+// -----------------------------------------------------------------------------
+
+Color _fellowshipColorFor(Meeting m) {
+  return m.fellowship.toLowerCase() == 'na'
+      ? const Color(0xFFB4654A)
+      : AppColors.accent;
+}
+
+String _fellowshipLetterFor(Meeting m) {
+  final f = m.fellowship.toLowerCase();
+  if (f.isEmpty) return 'A';
+  if (f.startsWith('recovery')) return 'D';
+  return f[0].toUpperCase();
+}
+
+/// The results map. Owns its [MapController] so the controller's lifecycle
+/// matches the map's (the widget unmounts whenever there is nothing to plot).
+///
+/// Camera behavior: fits all pins on first build and whenever the pin set
+/// changes; pans/zooms to [selectedKey] when it changes (carousel swipe or
+/// pin tap); the fit-all button zooms back out to everything.
+class _MeetingMap extends StatefulWidget {
+  final List<_MapPin> pins;
+  final String? selectedKey;
+  final ValueChanged<_MapPin> onPinTap;
+
+  const _MeetingMap({
+    required this.pins,
+    required this.selectedKey,
+    required this.onPinTap,
+  });
+
+  @override
+  State<_MeetingMap> createState() => _MeetingMapState();
+}
+
+class _MeetingMapState extends State<_MeetingMap> {
+  final MapController _controller = MapController();
+  bool _ready = false;
+
+  static String _sig(List<_MapPin> pins) =>
+      [for (final p in pins) p.key].join(';');
+
+  @override
+  void didUpdateWidget(_MeetingMap old) {
+    super.didUpdateWidget(old);
+    if (!_ready) return;
+    if (_sig(old.pins) != _sig(widget.pins)) {
+      _fitAll();
+    } else if (widget.selectedKey != null &&
+        widget.selectedKey != old.selectedKey) {
+      for (final p in widget.pins) {
+        if (p.key == widget.selectedKey) {
+          _controller.move(
+            p.point,
+            math.max(_controller.camera.zoom, 13.5),
+          );
+          break;
+        }
+      }
+    }
+  }
+
+  void _fitAll() {
+    if (!_ready || widget.pins.isEmpty) return;
+    _controller.fitCamera(
+      CameraFit.coordinates(
+        coordinates: [for (final p in widget.pins) p.point],
+        padding: const EdgeInsets.fromLTRB(36, 36, 36, 48),
+        maxZoom: 14.5,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Marker _marker(_MapPin pin) {
+    final selected = pin.key == widget.selectedKey;
+    final m = pin.meetings.first;
+    final size = selected ? 34.0 : 27.0;
+    return Marker(
+      point: pin.point,
+      width: size,
+      height: size,
+      child: GestureDetector(
+        onTap: () => widget.onPinTap(pin),
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _fellowshipColorFor(m),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? AppColors.gold : Colors.white,
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            pin.meetings.length > 1
+                ? '${pin.meetings.length}'
+                : _fellowshipLetterFor(m),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: selected ? 13 : 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget tiles = TileLayer(
+      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      userAgentPackageName: 'com.sobrietycopilot.app',
+    );
+    if (theme.brightness == Brightness.dark) {
+      // Luminance-inverted tiles so the map doesn't glare in dark mode.
+      tiles = ColorFiltered(
+        colorFilter: const ColorFilter.matrix(<double>[
+          -0.2126, -0.7152, -0.0722, 0, 255, //
+          -0.2126, -0.7152, -0.0722, 0, 255, //
+          -0.2126, -0.7152, -0.0722, 0, 255, //
+          0, 0, 0, 1, 0,
+        ]),
+        child: tiles,
+      );
+    }
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: FlutterMap(
+            mapController: _controller,
+            options: MapOptions(
+              initialCameraFit: CameraFit.coordinates(
+                coordinates: [for (final p in widget.pins) p.point],
+                padding: const EdgeInsets.fromLTRB(36, 36, 36, 48),
+                maxZoom: 14.5,
+              ),
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+              ),
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              onMapReady: () => _ready = true,
+            ),
+            children: [
+              tiles,
+              MarkerLayer(
+                markers: [for (final p in widget.pins) _marker(p)],
+              ),
+              const SimpleAttributionWidget(
+                source: Text('OpenStreetMap'),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          top: AppSpacing.sm,
+          right: AppSpacing.sm,
+          child: IconButton.filledTonal(
+            tooltip: 'Show all meetings',
+            onPressed: _fitAll,
+            icon: const Icon(Icons.zoom_out_map, size: 18),
+          ),
+        ),
+      ],
     );
   }
 }

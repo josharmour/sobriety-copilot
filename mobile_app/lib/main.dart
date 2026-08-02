@@ -96,12 +96,13 @@ class _SobrietyCopilotAppState extends ConsumerState<SobrietyCopilotApp> {
 
   @override
   Widget build(BuildContext context) {
+    final config = ref.watch(appConfigProvider);
     return MaterialApp(
       title: 'Sobriety Copilot',
       debugShowCheckedModeBanner: false,
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(),
-      themeMode: ThemeMode.dark,
+      themeMode: config.themeMode,
       home: const ChatScreen(),
     );
   }
