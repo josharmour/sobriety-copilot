@@ -626,9 +626,12 @@ class _SlippedAffordance extends ConsumerWidget {
         style: Theme.of(context).textTheme.bodyMedium,
       ),
       subtitle: Text(
+        // "day count" is specifically the sobriety day count — the FR5
+        // check-in streak also restarts, and its best is likewise kept.
         discreet
             ? 'Resets the day count. Your history stays.'
-            : "Resets today's count. Your history and longest streak are kept.",
+            : "Resets today's day count. Your history and longest streak "
+                'are kept.',
       ),
       onTap: onTap,
     );

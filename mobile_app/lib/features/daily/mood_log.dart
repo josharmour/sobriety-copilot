@@ -151,8 +151,11 @@ class MoodNotifier extends Notifier<List<MoodEntry>> {
     next.insert(0, entry);
     state = _normalize(next);
     await _persist();
-    if (entry.dateIso == dateIsoOf(DateTime.now())) {
-      await ref.read(streakProvider.notifier).recordCheckIn();
+    // One captured instant so the today-guard and the recorded day can never
+    // straddle midnight and disagree.
+    final now = DateTime.now();
+    if (entry.dateIso == dateIsoOf(now)) {
+      await ref.read(streakProvider.notifier).recordCheckIn(now: now);
     }
   }
 

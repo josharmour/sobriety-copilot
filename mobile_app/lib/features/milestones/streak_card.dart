@@ -21,23 +21,31 @@ class StreakCard extends ConsumerWidget {
     final s = ref.watch(streakProvider);
     final theme = Theme.of(context);
     final today = DateTime.now();
-    final checkedToday = s.checkedIn(today) &&
-        s.lastCheckIn != null &&
-        s.current > 0;
+    // The live run as of today — never the raw stored count, which would
+    // render a lapsed streak as alive and then visibly collapse to day 1
+    // the moment the user checks back in.
+    final current = s.currentAt(today);
+    final checkedToday = s.checkedInOn(today);
 
     // Never show what was lost: a fresh day-1 after a longer best is greeted,
     // not mourned.
     final String headline;
-    if (s.current == 0) {
+    if (current == 0) {
       headline = s.best > 0
           ? "A new streak starts whenever you're ready."
           : 'Show up for yourself today.';
-    } else if (s.current == 1 && s.best > 1) {
-      headline = 'Welcome back — day 1 of a new streak.';
-    } else if (s.current == 1) {
-      headline = 'Day 1 — you showed up for yourself today.';
+    } else if (current == 1 && s.best > 1) {
+      headline = checkedToday
+          ? 'Welcome back — day 1 of a new streak.'
+          : "Welcome back whenever you're ready.";
+    } else if (current == 1) {
+      headline = checkedToday
+          ? 'Day 1 — you showed up for yourself today.'
+          : 'Day 1 so far. Check in when you like.';
     } else {
-      headline = 'You showed up for yourself ${s.current} days in a row.';
+      headline = checkedToday
+          ? 'You showed up for yourself $current days in a row.'
+          : '$current days in a row so far.';
     }
 
     return Card(
@@ -91,10 +99,14 @@ class StreakCard extends ConsumerWidget {
                   )
                 else
                   FilledButton.tonal(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: theme.colorScheme.secondaryContainer,
+                      foregroundColor: theme.colorScheme.onSecondaryContainer,
+                    ),
                     onPressed: () => ref
                         .read(streakProvider.notifier)
                         .recordCheckIn(),
-                    child: const Text('Check in'),
+                    child: const Text('Check in for today'),
                   ),
               ],
             ),
@@ -129,14 +141,22 @@ class _WeekDots extends StatelessWidget {
         margin: const EdgeInsets.only(right: AppSpacing.xs),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
+          // Filled dots use the theme's primary (not the light accent, which
+          // washes out against a light surface); unfilled stay hollow so the
+          // two read apart by fill AND border, not color alone.
           color: filled
-              ? AppColors.accent
+              ? theme.colorScheme.primary
               : theme.colorScheme.surfaceContainerHighest,
-          border: Border.all(color: theme.colorScheme.outlineVariant),
+          border: Border.all(
+            color: filled
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outline,
+          ),
         ),
       ));
     }
     return Semantics(
+      container: true,
       label: 'Last 7 days: $checkIns '
           '${checkIns == 1 ? 'check-in' : 'check-ins'}',
       child: ExcludeSemantics(child: Row(children: dots)),

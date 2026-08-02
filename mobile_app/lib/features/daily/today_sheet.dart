@@ -157,6 +157,13 @@ class TodaySheet extends ConsumerWidget {
                                         fontStyle: FontStyle.italic,
                                       ),
                                     ),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    // Finishing the reading counts as
+                                    // today's check-in (FR5 trigger list).
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: _ReadItButton(),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -212,7 +219,10 @@ class TodaySheet extends ConsumerWidget {
                           color: moodToday != null ? AppColors.accent : null,
                         ),
                         title: Text(
-                          discreet ? 'Check in' : 'How are you feeling?',
+                          // Distinct from the streak card's "Check in for
+                          // today" so discreet mode has no two identically
+                          // named controls on this sheet.
+                          discreet ? "How's today?" : 'How are you feeling?',
                         ),
                         subtitle: Text(
                           moodToday != null
@@ -283,6 +293,43 @@ class TodaySheet extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// "I read this" affordance under today's reading — the daily-reading
+/// check-in trigger. Once today is recorded it becomes a quiet confirmation
+/// rather than a prompt (checking in again is a no-op anyway).
+class _ReadItButton extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final checkedToday =
+        ref.watch(streakProvider).checkedInOn(DateTime.now());
+    if (checkedToday) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle_outline,
+              size: 16, color: AppColors.accent),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            'Checked in today',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      );
+    }
+    return TextButton.icon(
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+      ),
+      icon: const Icon(Icons.done, size: 16),
+      label: const Text('I read this'),
+      onPressed: () => ref.read(streakProvider.notifier).recordCheckIn(),
     );
   }
 }

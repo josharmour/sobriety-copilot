@@ -10,6 +10,7 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:sobriety_copilot_mobile/features/daily/inventory.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 
 /// Local calendar date with the time stripped.
@@ -56,9 +57,12 @@ class StreakState {
         : _utcDateOnly(d).difference(_utcDateOnly(last)).inDays;
     final next = gap == 1 ? current + 1 : 1;
     // After a relapse reset lastCheckIn is cleared but history is kept, so a
-    // same-day restart must not duplicate today's history entry.
-    final alreadyLogged = history.isNotEmpty && history.last == d;
-    final h = alreadyLogged ? history : [...history, d];
+    // same-day restart must not duplicate today's entry — and with the guard
+    // above disabled by the null lastCheckIn, an out-of-order day must not
+    // append a duplicate either. Check the whole history, then re-sort.
+    final h = history.contains(d)
+        ? history
+        : ([...history, d]..sort((a, b) => a.compareTo(b)));
     return StreakState(
       current: next,
       best: next > best ? next : best,
@@ -71,6 +75,30 @@ class StreakState {
   bool checkedIn(DateTime day) {
     final d = _dateOnly(day);
     return history.any((h) => h == d);
+  }
+
+  /// The run as it stands on [now]: [current] only while the run is still
+  /// live (last check-in today or yesterday), otherwise 0.
+  ///
+  /// Display must use this, never the raw [current] — a lapsed run rendered
+  /// as alive would collapse from N to 1 the instant the user checks in,
+  /// showing them exactly what they lost at the moment they came back.
+  int currentAt(DateTime now) {
+    final last = lastCheckIn;
+    if (last == null || current == 0) return 0;
+    final gap = _utcDateOnly(_dateOnly(now))
+        .difference(_utcDateOnly(_dateOnly(last)))
+        .inDays;
+    if (gap < 0) return current; // clock skew: don't erase a real run
+    return gap <= 1 ? current : 0;
+  }
+
+  /// Whether [now]'s calendar date already has a check-in recorded, i.e. a
+  /// further check-in today would be a no-op.
+  bool checkedInOn(DateTime now) {
+    final last = lastCheckIn;
+    if (last == null) return false;
+    return !_dateOnly(last).isBefore(_dateOnly(now));
   }
 
   factory StreakState.fromJson(Map<String, dynamic> json) {
@@ -118,12 +146,35 @@ class StreakNotifier extends Notifier<StreakState> {
   @override
   StreakState build() {
     final raw = ref.read(sharedPreferencesProvider).getString(prefsKey);
-    if (raw == null || raw.isEmpty) return const StreakState();
+    if (raw == null || raw.isEmpty) return _seedFromInventory();
     try {
       return StreakState.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     } catch (_) {
       return const StreakState();
     }
+  }
+
+  /// First run after upgrading: the evening-review streak used to be the
+  /// app's streak, so carry it over rather than resetting a long-standing
+  /// run to zero. Read-only — inventory persistence is never touched.
+  StreakState _seedFromInventory() {
+    final entries = ref.read(inventoryProvider);
+    if (entries.isEmpty) return const StreakState();
+    final days = entries.keys.map(DateTime.tryParse).whereType<DateTime>().map(
+          (d) => DateTime(d.year, d.month, d.day),
+        );
+    if (days.isEmpty) return const StreakState();
+    final sorted = days.toList()..sort((a, b) => a.compareTo(b));
+    final kept = sorted.length > StreakState.historyCap
+        ? sorted.sublist(sorted.length - StreakState.historyCap)
+        : sorted;
+    final prior = ref.read(inventoryProvider.notifier).streak;
+    return StreakState(
+      current: prior,
+      best: prior,
+      lastCheckIn: sorted.last,
+      history: kept,
+    );
   }
 
   /// Records today's check-in (idempotent per day). [now] is a test seam;

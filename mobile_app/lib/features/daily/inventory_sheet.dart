@@ -90,8 +90,8 @@ class _InventorySheetState extends ConsumerState<InventorySheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final entries = ref.watch(inventoryProvider);
-    final streak = ref.read(inventoryProvider.notifier).streak;
     final today = DateTime.now();
+    final doneToday = entries.containsKey(dateIsoOf(today));
 
     return SafeArea(
       top: false,
@@ -127,11 +127,14 @@ class _InventorySheetState extends ConsumerState<InventorySheet> {
                         ],
                       ),
                     ),
-                    if (streak > 0)
-                      Chip(
-                        avatar: const Icon(Icons.local_fire_department,
-                            size: 16, color: AppColors.gold),
-                        label: Text('$streak-day streak'),
+                    // The check-in streak card on Today is the app's single
+                    // streak display; a second, divergent count here (with
+                    // gamification iconography) would contradict it.
+                    if (doneToday)
+                      const Chip(
+                        avatar: Icon(Icons.check_circle_outline,
+                            size: 16, color: AppColors.accent),
+                        label: Text('Done today'),
                         visualDensity: VisualDensity.compact,
                       ),
                   ],

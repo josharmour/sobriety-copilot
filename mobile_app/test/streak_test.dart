@@ -98,15 +98,25 @@ void main() {
     });
 
     test('DST spring-forward day still counts as consecutive', () {
-      // US spring-forward 2026-03-08: the local day is 23h; UTC-normalized
-      // diffs must still see exactly one calendar day.
+      // US spring-forward is 02:00 on 2026-03-08, so the 23-hour local
+      // calendar day is Mar 8 -> Mar 9. A local-time diff truncates that to
+      // 0 days and would break the streak; UTC-normalized dates must not.
       final s0 = StreakState(
         current: 3,
         best: 3,
-        lastCheckIn: DateTime(2026, 3, 7),
+        lastCheckIn: DateTime(2026, 3, 8),
       );
-      final s1 = s0.record(DateTime(2026, 3, 8));
+      final s1 = s0.record(DateTime(2026, 3, 9));
       expect(s1.current, 4);
+
+      // Fall-back 2026-11-01 gives a 25-hour local day (Nov 1 -> Nov 2),
+      // which must also count as exactly one day, not two.
+      final f0 = StreakState(
+        current: 2,
+        best: 2,
+        lastCheckIn: DateTime(2026, 11, 1),
+      );
+      expect(f0.record(DateTime(2026, 11, 2)).current, 3);
     });
 
     test('history keeps the NEWEST 30 days', () {
@@ -119,6 +129,50 @@ void main() {
       expect(s.history.first, DateTime(2026, 1, 11)); // day 11 (oldest kept)
       expect(s.current, 40);
       expect(s.best, 40);
+    });
+
+    test('currentAt decays a lapsed run to 0 without touching stored state',
+        () {
+      final s = StreakState(
+        current: 5,
+        best: 5,
+        lastCheckIn: DateTime(2026, 8, 1),
+        history: [DateTime(2026, 8, 1)],
+      );
+      // Live today and yesterday...
+      expect(s.currentAt(DateTime(2026, 8, 1, 20)), 5);
+      expect(s.currentAt(DateTime(2026, 8, 2, 9)), 5);
+      // ...lapsed from the day after that: the card must not advertise a run
+      // that a check-in would collapse to 1.
+      expect(s.currentAt(DateTime(2026, 8, 3)), 0);
+      expect(s.currentAt(DateTime(2026, 9, 1)), 0);
+      // Stored state is untouched (best/history survive for the record).
+      expect(s.current, 5);
+      // Clock skew backwards must not erase a real run.
+      expect(s.currentAt(DateTime(2026, 7, 30)), 5);
+    });
+
+    test('checkedInOn is true only once the day is recorded', () {
+      const empty = StreakState();
+      expect(empty.checkedInOn(DateTime(2026, 8, 2)), isFalse);
+      final s = empty.record(DateTime(2026, 8, 2, 7));
+      expect(s.checkedInOn(DateTime(2026, 8, 2, 23)), isTrue);
+      expect(s.checkedInOn(DateTime(2026, 8, 3)), isFalse);
+      // Clock ahead: the day is already covered, so no dead button state.
+      expect(s.checkedInOn(DateTime(2026, 8, 1)), isTrue);
+    });
+
+    test('post-reset rollback cannot duplicate or disorder history', () {
+      final s = const StreakState()
+          .record(DateTime(2026, 8, 1))
+          .record(DateTime(2026, 8, 2));
+      // reset() clears lastCheckIn, which disables the rollback guard.
+      final afterReset =
+          StreakState(current: 0, best: s.best, history: s.history);
+      final rolled = afterReset.record(DateTime(2026, 8, 1));
+      expect(rolled.history, [DateTime(2026, 8, 1), DateTime(2026, 8, 2)]);
+      final again = rolled.record(DateTime(2026, 8, 2));
+      expect(again.history, [DateTime(2026, 8, 1), DateTime(2026, 8, 2)]);
     });
 
     test('checkedIn reflects history by calendar date', () {
