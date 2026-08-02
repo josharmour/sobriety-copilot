@@ -76,6 +76,14 @@ class MeditationPlayerState {
       running: running ?? this.running,
     );
   }
+
+  /// Label of the current step, or null when idle.
+  String? get currentLabel {
+    final s = session;
+    if (s == null || s.steps.isEmpty) return null;
+    if (stepIndex < 0 || stepIndex >= s.steps.length) return null;
+    return s.steps[stepIndex].label;
+  }
 }
 
 /// Persistence keys.
@@ -136,13 +144,7 @@ class MeditationPlayer extends Notifier<MeditationPlayerState> {
   }
 
   /// Current step label (or null when idle).
-  String? get currentLabel {
-    final s = state;
-    final session = s.session;
-    if (session == null || session.steps.isEmpty) return null;
-    if (s.stepIndex < 0 || s.stepIndex >= session.steps.length) return null;
-    return session.steps[s.stepIndex].label;
-  }
+  String? get currentLabel => state.currentLabel;
 
   /// Loads a session into a paused ready state (user presses start).
   void load(MeditationSession session) {
