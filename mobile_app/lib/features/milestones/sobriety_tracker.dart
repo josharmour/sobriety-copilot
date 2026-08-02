@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:sobriety_copilot_mobile/features/milestones/relapse_log.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/widget_sync.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 
@@ -39,6 +40,11 @@ Milestone _yearMilestone(int years) =>
 /// Date-only helper: local calendar date with the time stripped.
 DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
+/// UTC-normalized calendar date (same year/month/day as [d]). Calendar-day
+/// differences are computed on these so a spring-forward DST transition does
+/// not undercount a span by one hour's worth of days.
+DateTime _utcDateOnly(DateTime d) => DateTime.utc(d.year, d.month, d.day);
+
 /// Locally-stored recovery tracker state. Never sent to the server.
 class SobrietyState {
   /// Local calendar date of the first sober day, or null when not tracking.
@@ -51,20 +57,59 @@ class SobrietyState {
   /// Estimated daily spend (whole cents) for the money-saved card; null = off.
   final int? dailySpendCents;
 
+  /// Relapse history, oldest first. Never deleted implicitly; the explicit
+  /// "Erase relapse history" control is the only way to remove it. Each event
+  /// carries the run length it reset in [RelapseEvent.lostDays].
+  final List<RelapseEvent> relapses;
+
+  /// Longest-run record preserved across an "Erase relapse history": erasing
+  /// the events must never silently destroy the user's all-time best streak.
+  final int bestStreakDays;
+
   const SobrietyState({
     this.sobrietyDate,
     this.discreet = false,
     this.dailySpendCents,
+    this.relapses = const [],
+    this.bestStreakDays = 0,
   });
 
   bool get isTracking => sobrietyDate != null;
 
+  /// Total number of logged relapses.
+  int get totalRelapses => relapses.length;
+
+  /// Longest continuous sober run on record. When no relapse has been logged
+  /// this equals the current run ([daysSober]); once relapses exist, each
+  /// event's [RelapseEvent.lostDays] preserves the run it reset, and the best
+  /// of those (plus the current run) is the all-time best. NaN-proof: 0 when
+  /// untracked.
+  int get longestStreak => longestStreakAt(DateTime.now());
+
+  /// Same as [longestStreak] but for a supplied "now" (see [daysSoberAt]),
+  /// so tests can pin the history-vs-current-run behavior deterministically.
+  int longestStreakAt(DateTime now) {
+    var best = daysSoberAt(now); // current run
+    if (bestStreakDays > best) best = bestStreakDays; // survives erased history
+    for (final r in relapses) {
+      if (r.lostDays > best) best = r.lostDays;
+    }
+    return best;
+  }
+
   /// Completed days since the sobriety date (0 on the date itself), computed
-  /// on local calendar days so it advances exactly at midnight.
-  int get daysSober {
+  /// on local calendar days so it advances exactly at midnight. Differences
+  /// are taken on UTC-normalized dates so DST spring-forward does not
+  /// undercount.
+  int get daysSober => daysSoberAt(DateTime.now());
+
+  /// Same as [daysSober] but for a supplied "now", so tests can pin DST,
+  /// timezone, and midnight behavior against a fixed instant instead of the
+  /// wall clock.
+  int daysSoberAt(DateTime now) {
     final d = sobrietyDate;
     if (d == null) return 0;
-    final diff = _dateOnly(DateTime.now()).difference(_dateOnly(d)).inDays;
+    final diff = _utcDateOnly(now).difference(_utcDateOnly(d)).inDays;
     return diff < 0 ? 0 : diff;
   }
 
@@ -120,12 +165,16 @@ class SobrietyState {
     bool? discreet,
     int? dailySpendCents,
     bool clearSpend = false,
+    List<RelapseEvent>? relapses,
+    int? bestStreakDays,
   }) {
     return SobrietyState(
       sobrietyDate: clearDate ? null : (sobrietyDate ?? this.sobrietyDate),
       discreet: discreet ?? this.discreet,
       dailySpendCents:
           clearSpend ? null : (dailySpendCents ?? this.dailySpendCents),
+      relapses: relapses ?? this.relapses,
+      bestStreakDays: bestStreakDays ?? this.bestStreakDays,
     );
   }
 
@@ -136,10 +185,20 @@ class SobrietyState {
       date = DateTime.tryParse(raw);
     }
     final spend = json['dailySpendCents'];
+    final rawRelapses = json['relapses'];
+    final relapses = rawRelapses is List
+        ? rawRelapses
+            .whereType<Map>()
+            .map((m) => RelapseEvent.fromJson(Map<String, dynamic>.from(m)))
+            .toList()
+        : <RelapseEvent>[];
+    final best = json['bestStreakDays'];
     return SobrietyState(
       sobrietyDate: date == null ? null : _dateOnly(date),
       discreet: json['discreet'] as bool? ?? false,
       dailySpendCents: spend is int && spend > 0 ? spend : null,
+      relapses: relapses,
+      bestStreakDays: best is int && best > 0 ? best : 0,
     );
   }
 
@@ -151,6 +210,8 @@ class SobrietyState {
                 '${sobrietyDate!.day.toString().padLeft(2, '0')}',
         'discreet': discreet,
         'dailySpendCents': dailySpendCents,
+        'relapses': relapses.map((e) => e.toJson()).toList(),
+        'bestStreakDays': bestStreakDays,
       };
 
   static const String prefsKey = 'sobriety_tracker_v1';
@@ -205,6 +266,49 @@ class SobrietyNotifier extends Notifier<SobrietyState> {
     } else {
       state = state.copyWith(dailySpendCents: (dollars * 100).round());
     }
+    await _persist();
+  }
+
+  /// Logs a relapse: records the event with the run length it reset, then
+  /// restarts the day counter from today — never deleting history. Shame-free
+  /// by design; the best/longest streak is preserved in the event log.
+  Future<void> logRelapse({String note = '', String trigger = ''}) async {
+    // Capture one instant so the event date, the lost-days count, and the
+    // reset date can never straddle a midnight and disagree.
+    final now = _dateOnly(DateTime.now());
+    final lost = state.daysSoberAt(now);
+    final event = RelapseEvent(
+      date: now,
+      note: note,
+      trigger: trigger,
+      lostDays: lost,
+    );
+    state = state.copyWith(
+      sobrietyDate: now,
+      relapses: [...state.relapses, event],
+    );
+    // TODO(fr5): reset check-in streak
+    await _persist();
+  }
+
+  /// Permanently removes all logged relapse events (dates, notes, triggers)
+  /// and the history they carry. Used by the explicit "Erase relapse history"
+  /// control — the only way to delete this sensitive history from the device.
+  /// The all-time longest-streak record is preserved (as a bare number, no
+  /// event data) so erasing private notes never destroys an achievement.
+  /// [now] is a test seam; production callers omit it.
+  Future<void> clearRelapses({DateTime? now}) async {
+    final preserved = state.longestStreakAt(now ?? DateTime.now());
+    state = state.copyWith(relapses: const [], bestStreakDays: preserved);
+    await _persist();
+  }
+
+  /// Erases the preserved longest-streak record (set by [clearRelapses]).
+  /// Completes the in-app deletion story: with history erased, tracking
+  /// stopped, and the record cleared, no recovery data remains on disk. Also
+  /// the only way to correct a record inflated by a mis-set sobriety date.
+  Future<void> clearBestStreak() async {
+    state = state.copyWith(bestStreakDays: 0);
     await _persist();
   }
 

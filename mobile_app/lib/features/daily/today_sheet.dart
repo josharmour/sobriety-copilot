@@ -7,7 +7,12 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:sobriety_copilot_mobile/features/daily/daily_readings.dart';
 import 'package:sobriety_copilot_mobile/features/daily/inventory.dart';
 import 'package:sobriety_copilot_mobile/features/daily/inventory_sheet.dart';
+import 'package:sobriety_copilot_mobile/features/daily/mood_log.dart';
+import 'package:sobriety_copilot_mobile/features/daily/mood_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/daily/reminders.dart';
+import 'package:sobriety_copilot_mobile/features/meditation/meditation_sheet.dart';
+import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
+import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/widgets.dart';
 
@@ -27,9 +32,18 @@ class TodaySheet extends ConsumerWidget {
     final theme = Theme.of(context);
     final readings = ref.watch(dailyReadingsProvider);
     final inventory = ref.watch(inventoryProvider);
+    final mood = ref.watch(moodProvider);
+    final discreet = ref.watch(sobrietyProvider).discreet;
     final streak = ref.read(inventoryProvider.notifier).streak;
     final now = DateTime.now();
     final doneToday = inventory.containsKey(dateIsoOf(now));
+    MoodEntry? moodToday;
+    for (final e in mood) {
+      if (e.dateIso == dateIsoOf(now)) {
+        moodToday = e;
+        break;
+      }
+    }
 
     return SafeArea(
       top: false,
@@ -181,6 +195,51 @@ class TodaySheet extends ConsumerWidget {
                         onTap: () => showAppSheet(
                           context,
                           const InventorySheet(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Card(
+                      child: ListTile(
+                        leading: Icon(
+                          moodToday != null
+                              ? Icons.emoji_emotions
+                              : Icons.emoji_emotions_outlined,
+                          color: moodToday != null ? AppColors.accent : null,
+                        ),
+                        title: Text(
+                          discreet ? 'Check in' : 'How are you feeling?',
+                        ),
+                        subtitle: Text(
+                          moodToday != null
+                              // Discreet mode: never surface the emotion or
+                              // score where a shoulder-surfer could see it.
+                              ? discreet
+                                  ? 'Done today · tap to edit'
+                                  : moodToday.label.isNotEmpty
+                                      ? '${moodToday.label} · mood ${moodToday.mood}/5 · tap to edit'
+                                      : 'mood ${moodToday.mood}/5 · tap to edit'
+                              : 'A quick check-in, any time of day',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => showAppSheet(
+                          context,
+                          const MoodSheet(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.self_improvement_outlined),
+                        title: const Text('Meditation'),
+                        subtitle: const Text(
+                          'Guided breathing & grounding sessions',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => showAppSheet(
+                          context,
+                          const MeditationSheet(),
                         ),
                       ),
                     ),
