@@ -78,7 +78,10 @@ void main() {
 
     test('longestStreak uses lostDays history when current run is shorter',
         () {
-      // Two relapses; the first run (31 days) is the longest on record.
+      // Two relapses; the first run (31 days) is the longest on record. The
+      // current run (from 2026-07-01) is 31 days on 2026-08-01, so history
+      // still wins; a fixed "now" keeps this deterministic regardless of the
+      // machine's wall clock.
       final state = SobrietyState(
         sobrietyDate: DateTime(2026, 7, 1),
         relapses: [
@@ -86,7 +89,8 @@ void main() {
           RelapseEvent(date: DateTime(2026, 3, 1), lostDays: 20),
         ],
       );
-      expect(state.longestStreak, 31);
+      final now = DateTime(2026, 8, 1);
+      expect(state.longestStreakAt(now), 31);
     });
 
     test('longestStreak without relapses equals current daysSober', () {
@@ -100,6 +104,24 @@ void main() {
       const state = SobrietyState();
       expect(state.longestStreak, 0);
       expect(state.totalRelapses, 0);
+    });
+
+    test('daysSober counts calendar days across a DST spring-forward', () {
+      // sobriety starts Saturday 2026-03-07; "now" is Monday 2026-03-09,
+      // straddling the US spring-forward (Mar 8). Calendar answer is 2 days;
+      // a local-midnight diff would undercount to 1 in a DST timezone.
+      final state =
+          SobrietyState(sobrietyDate: DateTime(2026, 3, 7));
+      expect(state.daysSoberAt(DateTime(2026, 3, 9)), 2);
+      expect(state.daysSoberAt(DateTime(2026, 3, 8)), 1);
+    });
+
+    test('daysSober is 0 before the sobriety date and on the date itself', () {
+      final state =
+          SobrietyState(sobrietyDate: DateTime(2026, 5, 10));
+      expect(state.daysSoberAt(DateTime(2026, 5, 10)), 0);
+      expect(state.daysSoberAt(DateTime(2026, 5, 9)), 0);
+      expect(state.daysSoberAt(DateTime(2026, 5, 20)), 10);
     });
   });
 
@@ -193,6 +215,119 @@ void main() {
       expect(n.state.totalRelapses, 2);
       // The second same-day log loses 0 days.
       expect(n.state.relapses.last.lostDays, 0);
+    });
+
+    test('clearRelapses removes all history but keeps tracking state',
+        () async {
+      final n = await makeNotifier();
+      n.state = SobrietyState(
+        sobrietyDate: DateTime(2026, 1, 1),
+        discreet: true,
+        dailySpendCents: 1500,
+      );
+      await n.logRelapse(note: 'slip', trigger: 'stress');
+      await n.logRelapse(note: 'another');
+      // logRelapse resets the sobriety date to today; capture it so we can
+      // assert clearRelapses leaves the tracker (sans history) untouched.
+      final resetDate = n.state.sobrietyDate;
+
+      // Erasing must not destroy the all-time best-streak record.
+      final bestBefore = n.state.longestStreak;
+
+      await n.clearRelapses();
+
+      expect(n.state.totalRelapses, 0);
+      expect(n.state.relapses, isEmpty);
+      // The rest of the tracker state is untouched.
+      expect(n.state.sobrietyDate, resetDate);
+      expect(n.state.isTracking, isTrue);
+      expect(n.state.discreet, isTrue);
+      expect(n.state.dailySpendCents, 1500);
+      // The longest-streak record survives the erase (as a bare number).
+      expect(n.state.longestStreak, bestBefore);
+      expect(n.state.bestStreakDays, bestBefore);
+    });
+
+    test('clearRelapses preserves the longest-streak record across a reload',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = ProviderContainer(overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+      ]);
+      addTearDown(container.dispose);
+      final n = container.read(sobrietyProvider.notifier);
+      // A historical 300-day run recorded on the event, then a short run.
+      n.state = SobrietyState(
+        sobrietyDate: DateTime(2026, 7, 30),
+        relapses: [
+          RelapseEvent(date: DateTime(2026, 7, 30), lostDays: 300),
+        ],
+      );
+      // Fixed "now" via the test seam — clearRelapses must not depend on the
+      // real wall clock or this test becomes a time bomb.
+      await n.clearRelapses(now: DateTime(2026, 8, 2));
+      expect(n.state.longestStreakAt(DateTime(2026, 8, 2)), 300);
+
+      final container2 = ProviderContainer(overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+      ]);
+      addTearDown(container2.dispose);
+      final n2 = container2.read(sobrietyProvider.notifier);
+      expect(n2.state.relapses, isEmpty);
+      expect(n2.state.bestStreakDays, 300);
+      expect(n2.state.longestStreakAt(DateTime(2026, 8, 2)), 300);
+    });
+
+    test('clearBestStreak erases the preserved record', () async {
+      final n = await makeNotifier();
+      n.state = SobrietyState(
+        sobrietyDate: DateTime(2026, 1, 1),
+        relapses: [
+          RelapseEvent(date: DateTime(2026, 1, 1), lostDays: 300),
+        ],
+      );
+      await n.clearRelapses(now: DateTime(2026, 8, 2));
+      expect(n.state.bestStreakDays, 300);
+
+      await n.clearBestStreak();
+      expect(n.state.bestStreakDays, 0);
+      // Jan 1 -> Aug 2 2026 is 213 days: the record is gone, only the
+      // current run remains.
+      expect(n.state.longestStreakAt(DateTime(2026, 8, 2)), 213);
+    });
+
+    test('fromJson defaults bestStreakDays to 0 for pre-existing data', () {
+      final s = SobrietyState.fromJson(const {
+        'sobrietyDate': '2026-01-01',
+        'discreet': false,
+      });
+      expect(s.bestStreakDays, 0);
+      final bad = SobrietyState.fromJson(const {
+        'sobrietyDate': '2026-01-01',
+        'bestStreakDays': 'oops',
+      });
+      expect(bad.bestStreakDays, 0);
+    });
+
+    test('clearRelapses persists across a reload', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = ProviderContainer(overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+      ]);
+      final n = container.read(sobrietyProvider.notifier);
+      n.state = SobrietyState(sobrietyDate: DateTime(2026, 1, 1));
+      await n.logRelapse(note: 'slip');
+      await n.clearRelapses();
+
+      final container2 = ProviderContainer(overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+      ]);
+      addTearDown(container.dispose);
+      addTearDown(container2.dispose);
+      final n2 = container2.read(sobrietyProvider.notifier);
+      expect(n2.state.totalRelapses, 0);
     });
 
     test('persists relapse history across a reload', () async {
