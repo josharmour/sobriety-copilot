@@ -11,6 +11,7 @@ import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:sobriety_copilot_mobile/data/models/meeting_models.dart';
+import 'package:sobriety_copilot_mobile/features/daily/home_group_manager.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 
@@ -1717,6 +1718,26 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
         () => _open(m.url),
       ));
     }
+    out.add(_actionButton(
+      'Home Group',
+      Icons.star_border,
+      () async {
+        final prefs = ref.read(sharedPreferencesProvider);
+        final homeGroup = HomeGroupMeeting(
+          id: m.name.isEmpty ? 'home_group' : m.name,
+          name: m.name.isEmpty ? 'Home Group Meeting' : m.name,
+          dayName: _whenLine(m),
+          timeString: m.timeFormatted.isEmpty ? m.time : m.timeFormatted,
+          location: where,
+        );
+        await HomeGroupManager.saveHomeGroup(prefs, homeGroup);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('⭐ Saved as Home Group! Proactive reminder scheduled.')),
+          );
+        }
+      },
+    ));
     return out;
   }
 
