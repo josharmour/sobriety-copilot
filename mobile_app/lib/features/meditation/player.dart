@@ -278,6 +278,7 @@ class MeditationPlayer extends Notifier<MeditationPlayerState> {
           kMeditationCompletedKey,
           jsonEncode({'count': prev + 1, 'last': today}),
         );
-    // TODO(fr5): hook into the daily streak (recordCheckIn) when FR5 merges.
+    // A completed session counts as today's check-in (same-day idempotent).
+    await ref.read(streakProvider.notifier).recordCheckIn(now: now);
   }
 }

@@ -143,13 +143,20 @@ class MoodNotifier extends Notifier<List<MoodEntry>> {
   }
 
   /// Inserts [entry] replacing any existing same-day entry, keeping the list
-  /// sorted newest-first and within storage bounds.
+  /// sorted newest-first and within storage bounds. Saving today's entry
+  /// counts as the daily check-in (FR5); edits of past days do not.
   Future<void> upsert(MoodEntry entry) async {
     final next =
         state.where((e) => e.dateIso != entry.dateIso).toList();
     next.insert(0, entry);
     state = _normalize(next);
     await _persist();
+    // One captured instant so the today-guard and the recorded day can never
+    // straddle midnight and disagree.
+    final now = DateTime.now();
+    if (entry.dateIso == dateIsoOf(now)) {
+      await ref.read(streakProvider.notifier).recordCheckIn(now: now);
+    }
   }
 
   /// Permanently removes the entry for [date] (if any). The only way to delete

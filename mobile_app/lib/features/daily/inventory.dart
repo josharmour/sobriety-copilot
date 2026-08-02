@@ -130,6 +130,8 @@ class InventoryNotifier extends Notifier<Map<String, InventoryEntry>> {
 
   InventoryEntry? entryFor(DateTime date) => state[dateIsoOf(date)];
 
+  /// Saving tonight's review counts as the daily check-in (FR5); edits of
+  /// past days do not.
   Future<void> save(InventoryEntry entry) async {
     final next = Map<String, InventoryEntry>.from(state);
     next[entry.dateIso] = entry;
@@ -141,6 +143,12 @@ class InventoryNotifier extends Notifier<Map<String, InventoryEntry>> {
     }
     state = next;
     await _persist();
+    // One captured instant so the today-guard and the recorded day can never
+    // straddle midnight and disagree.
+    final now = DateTime.now();
+    if (entry.dateIso == dateIsoOf(now)) {
+      await ref.read(streakProvider.notifier).recordCheckIn(now: now);
+    }
   }
 
   Future<void> delete(String dateIso) async {
