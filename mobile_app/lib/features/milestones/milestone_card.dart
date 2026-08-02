@@ -4,7 +4,9 @@ import 'package:intl/intl.dart';
 
 import 'package:sobriety_copilot_mobile/config/capabilities.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
+import 'package:sobriety_copilot_mobile/features/sheets/crisis_sheet.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
+import 'package:sobriety_copilot_mobile/widgets.dart';
 
 /// Milestone card shown on the conversation starter view. Styled to match
 /// the daily-reflection container (translucent over the hero image).
@@ -293,6 +295,10 @@ class _TrackerEditorSheetState extends ConsumerState<_TrackerEditorSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
+            if (state.isTracking && state.relapses.isNotEmpty) ...[
+              _HistorySection(discreet: state.discreet),
+              const SizedBox(height: AppSpacing.md),
+            ],
             if (state.isTracking)
               TextButton.icon(
                 style: TextButton.styleFrom(
@@ -305,9 +311,243 @@ class _TrackerEditorSheetState extends ConsumerState<_TrackerEditorSheet> {
                   if (context.mounted) Navigator.of(context).maybePop();
                 },
               ),
+            if (state.isTracking) ...[
+              const SizedBox(height: AppSpacing.xs),
+              _SlippedAffordance(discreet: state.discreet),
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Shame-free relapse history shown on the tracker editor: longest streak and
+/// total count, plus the list of past events (date, note, lost days). In
+/// discreet mode the ambient wording avoids the word \"relapse\".
+class _HistorySection extends ConsumerWidget {
+  final bool discreet;
+
+  const _HistorySection({required this.discreet});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(sobrietyProvider);
+    final theme = Theme.of(context);
+    final best = state.longestStreak;
+    final total = state.totalRelapses;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 1),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          discreet ? 'History' : 'Your journey',
+          style: theme.textTheme.titleSmall
+              ?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          discreet
+              ? 'Longest run: $best days · Restarts: $total'
+              : 'Longest streak: $best days · Relapses: $total — each one '
+                  'taught you something. The journey continues today.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ...state.relapses.reversed.map((r) {
+          final label = DateFormat.yMMMMd().format(r.date);
+          final lostDays = r.lostDays;
+          String subtitle;
+          if (discreet) {
+            subtitle = lostDays > 0
+                ? 'Day count restarted — $lostDays day run'
+                : 'Day count restarted';
+          } else if (r.note.isNotEmpty) {
+            subtitle = lostDays > 0
+                ? '${r.note} · $lostDays day run reset'
+                : r.note;
+          } else {
+            subtitle = lostDays > 0
+                ? '$lostDays day run reset'
+                : 'Day count restarted';
+          }
+          return ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            leading: const Icon(Icons.history, size: 18),
+            title: Text(label),
+            subtitle: Text(subtitle),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+/// Low-key \"Slipped? Restart without losing your history\" affordance on the
+/// tracker editor. Kept off the always-visible day card so relapse logging
+/// isn't advertised on the daily surface; full wording appears inside the
+/// explicit confirm dialog. In discreet mode the ambient wording avoids the
+/// word \"relapse\".
+class _SlippedAffordance extends ConsumerWidget {
+  final bool discreet;
+
+  const _SlippedAffordance({required this.discreet});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.restart_alt, size: 20),
+      title: Text(
+        discreet ? 'Restart log' : 'Slipped? Restart without losing your history',
+        style: Theme.of(context).textTheme.bodyMedium,
+      ),
+      subtitle: Text(
+        discreet
+            ? 'Resets the day count. Your history stays.'
+            : 'Resets today\'s count. Your history and longest streak are kept.',
+      ),
+      onTap: () => showRelapseLogDialog(context, ref, discreet: discreet),
+    );
+  }
+}
+
+/// Shame-free \"log a relapse\" dialog: optional note + trigger, gentle
+/// confirm that resets the count without losing history, then a supportive
+/// snackbar plus a link to the crisis/support sheet.
+Future<void> showRelapseLogDialog(
+  BuildContext context,
+  WidgetRef ref, {
+  required bool discreet,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => _RelapseLogDialog(discreet: discreet),
+  );
+}
+
+class _RelapseLogDialog extends ConsumerStatefulWidget {
+  final bool discreet;
+
+  const _RelapseLogDialog({required this.discreet});
+
+  @override
+  ConsumerState<_RelapseLogDialog> createState() => _RelapseLogDialogState();
+}
+
+class _RelapseLogDialogState extends ConsumerState<_RelapseLogDialog> {
+  final _note = TextEditingController();
+  String _trigger = '';
+
+  static const _triggers = [
+    'Stress',
+    'Social',
+    'Craving',
+    'Habit',
+    'Celebration',
+  ];
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _confirm() async {
+    await ref
+        .read(sobrietyProvider.notifier)
+        .logRelapse(note: _note.text.trim(), trigger: _trigger);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    final messenger = ScaffoldMessenger.of(context);
+    final support = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(widget.discreet
+            ? 'Day count restarted. Your history stays.'
+            : 'You\'re back. Today is day one again — your history is kept.'),
+        TextButton(
+          onPressed: () {
+            messenger.hideCurrentSnackBar();
+            showAppSheet(context, const CrisisSheet());
+          },
+          child: const Text('Get support now'),
+        ),
+      ],
+    );
+    messenger.showSnackBar(
+      SnackBar(
+        content: support,
+        duration: const Duration(seconds: 6),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: Text(widget.discreet ? 'Restart log' : 'Log a relapse'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.discreet
+                  ? 'This restarts today\'s count. Your history stays.'
+                  : 'This resets today\'s count. Your history and longest '
+                      'streak are kept. Nothing is sent anywhere.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _note,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Note (optional)',
+                hintText: 'What happened? Only you ever see this.',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Trigger (optional)',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: _triggers
+                  .map(
+                    (t) => ChoiceChip(
+                      label: Text(t),
+                      selected: _trigger == t,
+                      onSelected: (sel) =>
+                          setState(() => _trigger = sel ? t : ''),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _confirm,
+          child: Text(widget.discreet ? 'Restart' : 'Restart day count'),
+        ),
+      ],
     );
   }
 }
