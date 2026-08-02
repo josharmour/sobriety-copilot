@@ -28,6 +28,7 @@ import 'package:sobriety_copilot_mobile/config/capabilities.dart';
 import 'package:sobriety_copilot_mobile/features/asr/asr_manager.dart';
 import 'package:sobriety_copilot_mobile/features/asr/asr_service.dart';
 import 'package:sobriety_copilot_mobile/features/daily/study_themes.dart';
+import 'package:sobriety_copilot_mobile/features/meditation/meditation_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/daily/today_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
@@ -48,6 +49,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 /// Menu actions surfaced by the app-bar overflow menu.
 enum _MenuAction {
   today,
+  meditation,
   saved,
   meetings,
   crisis,
@@ -457,6 +459,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     switch (action) {
       case _MenuAction.today:
         await showAppSheet(context, const TodaySheet());
+      case _MenuAction.meditation:
+        await showAppSheet(context, const MeditationSheet());
       case _MenuAction.saved:
         await showAppSheet(context, const SavedPassagesSheet());
       case _MenuAction.meetings:
@@ -597,6 +601,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 child: ListTile(
                   leading: Icon(Icons.wb_twilight_outlined),
                   title: Text('Today'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: _MenuAction.meditation,
+                child: ListTile(
+                  leading: Icon(Icons.self_improvement_outlined),
+                  title: Text('Meditation'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),

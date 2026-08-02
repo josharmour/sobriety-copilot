@@ -10,6 +10,7 @@ import 'package:sobriety_copilot_mobile/features/daily/inventory_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/daily/mood_log.dart';
 import 'package:sobriety_copilot_mobile/features/daily/mood_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/daily/reminders.dart';
+import 'package:sobriety_copilot_mobile/features/meditation/meditation_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
@@ -224,6 +225,21 @@ class TodaySheet extends ConsumerWidget {
                         onTap: () => showAppSheet(
                           context,
                           const MoodSheet(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.self_improvement_outlined),
+                        title: const Text('Meditation'),
+                        subtitle: const Text(
+                          'Guided breathing & grounding sessions',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => showAppSheet(
+                          context,
+                          const MeditationSheet(),
                         ),
                       ),
                     ),
