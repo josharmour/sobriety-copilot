@@ -14,6 +14,7 @@ import 'package:sobriety_copilot_mobile/data/repositories/library_repository.dar
 import 'package:sobriety_copilot_mobile/features/chat/chat_notifier.dart';
 import 'package:sobriety_copilot_mobile/features/chat/conversations.dart';
 import 'package:sobriety_copilot_mobile/features/chat/saved_passages.dart';
+import 'package:sobriety_copilot_mobile/features/meditation/player.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/local_chat_repository.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/model_manager.dart';
 import 'package:sobriety_copilot_mobile/features/tts/tts_service.dart';
@@ -158,3 +159,9 @@ final appTtsProvider = Provider<AppTts>((ref) {
   ref.onDispose(tts.dispose);
   return tts;
 });
+
+/// Timer-driven meditation player state machine.
+final meditationPlayerProvider =
+    NotifierProvider<MeditationPlayer, MeditationPlayerState>(
+  MeditationPlayer.new,
+);
