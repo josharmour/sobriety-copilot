@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:sobriety_copilot_mobile/features/milestones/relapse_log.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/widget_sync.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 
@@ -51,13 +52,34 @@ class SobrietyState {
   /// Estimated daily spend (whole cents) for the money-saved card; null = off.
   final int? dailySpendCents;
 
+  /// Relapse history, oldest first, never deleted. Each event carries the
+  /// run length it reset in [RelapseEvent.lostDays].
+  final List<RelapseEvent> relapses;
+
   const SobrietyState({
     this.sobrietyDate,
     this.discreet = false,
     this.dailySpendCents,
+    this.relapses = const [],
   });
 
   bool get isTracking => sobrietyDate != null;
+
+  /// Total number of logged relapses.
+  int get totalRelapses => relapses.length;
+
+  /// Longest continuous sober run on record. When no relapse has been logged
+  /// this equals the current run ([daysSober]); once relapses exist, each
+  /// event's [RelapseEvent.lostDays] preserves the run it reset, and the best
+  /// of those (plus the current run) is the all-time best. NaN-proof: 0 when
+  /// untracked.
+  int get longestStreak {
+    var best = daysSober; // current run
+    for (final r in relapses) {
+      if (r.lostDays > best) best = r.lostDays;
+    }
+    return best;
+  }
 
   /// Completed days since the sobriety date (0 on the date itself), computed
   /// on local calendar days so it advances exactly at midnight.
@@ -120,12 +142,14 @@ class SobrietyState {
     bool? discreet,
     int? dailySpendCents,
     bool clearSpend = false,
+    List<RelapseEvent>? relapses,
   }) {
     return SobrietyState(
       sobrietyDate: clearDate ? null : (sobrietyDate ?? this.sobrietyDate),
       discreet: discreet ?? this.discreet,
       dailySpendCents:
           clearSpend ? null : (dailySpendCents ?? this.dailySpendCents),
+      relapses: relapses ?? this.relapses,
     );
   }
 
@@ -136,10 +160,18 @@ class SobrietyState {
       date = DateTime.tryParse(raw);
     }
     final spend = json['dailySpendCents'];
+    final rawRelapses = json['relapses'];
+    final relapses = rawRelapses is List
+        ? rawRelapses
+            .whereType<Map>()
+            .map((m) => RelapseEvent.fromJson(Map<String, dynamic>.from(m)))
+            .toList()
+        : <RelapseEvent>[];
     return SobrietyState(
       sobrietyDate: date == null ? null : _dateOnly(date),
       discreet: json['discreet'] as bool? ?? false,
       dailySpendCents: spend is int && spend > 0 ? spend : null,
+      relapses: relapses,
     );
   }
 
@@ -151,6 +183,7 @@ class SobrietyState {
                 '${sobrietyDate!.day.toString().padLeft(2, '0')}',
         'discreet': discreet,
         'dailySpendCents': dailySpendCents,
+        'relapses': relapses.map((e) => e.toJson()).toList(),
       };
 
   static const String prefsKey = 'sobriety_tracker_v1';
@@ -205,6 +238,25 @@ class SobrietyNotifier extends Notifier<SobrietyState> {
     } else {
       state = state.copyWith(dailySpendCents: (dollars * 100).round());
     }
+    await _persist();
+  }
+
+  /// Logs a relapse: records the event with the run length it reset, then
+  /// restarts the day counter from today — never deleting history. Shame-free
+  /// by design; the best/longest streak is preserved in the event log.
+  Future<void> logRelapse({String note = '', String trigger = ''}) async {
+    final lost = state.daysSober;
+    final event = RelapseEvent(
+      date: _dateOnly(DateTime.now()),
+      note: note,
+      trigger: trigger,
+      lostDays: lost,
+    );
+    state = state.copyWith(
+      sobrietyDate: _dateOnly(DateTime.now()),
+      relapses: [...state.relapses, event],
+    );
+    // TODO(fr5): reset check-in streak
     await _persist();
   }
 
