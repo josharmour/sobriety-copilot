@@ -114,9 +114,12 @@ class MoodNotifier extends Notifier<List<MoodEntry>> {
     }
   }
 
-  /// The farthest-back dateIso we retain (two years ago today).
-  String _oldestKept() =>
-      dateIsoOf(DateTime.now().subtract(const Duration(days: 730)));
+  /// The farthest-back dateIso we retain (two years ago today). Calendar-date
+  /// arithmetic keeps this DST-safe.
+  String _oldestKept() {
+    final now = DateTime.now();
+    return dateIsoOf(DateTime(now.year, now.month, now.day - 730));
+  }
 
   /// Prunes entries older than two years and enforces the cap, newest-first.
   List<MoodEntry> _normalize(Iterable<MoodEntry> entries) {
@@ -146,6 +149,17 @@ class MoodNotifier extends Notifier<List<MoodEntry>> {
         state.where((e) => e.dateIso != entry.dateIso).toList();
     next.insert(0, entry);
     state = _normalize(next);
+    await _persist();
+  }
+
+  /// Permanently removes the entry for [date] (if any). The only way to delete
+  /// a past mood/journal record from the device — mirrors the sibling
+  /// InventoryNotifier.delete API.
+  Future<void> delete(DateTime date) async {
+    final iso = dateIsoOf(date);
+    final next = state.where((e) => e.dateIso != iso).toList();
+    if (next.length == state.length) return; // nothing to delete
+    state = next;
     await _persist();
   }
 

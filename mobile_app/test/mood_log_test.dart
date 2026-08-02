@@ -135,4 +135,42 @@ void main() {
       expect(n.state.length, 1);
     });
   });
+
+  group('MoodNotifier delete', () {
+    test('delete removes the entry and the journal text leaves the disk',
+        () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final prefs = await SharedPreferences.getInstance();
+      final c1 = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      );
+      final n1 = c1.read(moodProvider.notifier);
+      await n1.upsert(
+        MoodEntry(dateIso: '2026-08-01', mood: 2, journal: 'rough day'),
+      );
+      await n1.upsert(MoodEntry(dateIso: '2026-08-02', mood: 4));
+      await n1.delete(DateTime(2026, 8, 1));
+      expect(n1.state.map((e) => e.dateIso).toList(), ['2026-08-02']);
+      c1.dispose();
+
+      // The removal survives a reload and the text is gone from storage.
+      final c2 = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      );
+      addTearDown(c2.dispose);
+      expect(
+        c2.read(moodProvider.notifier).entryFor(DateTime(2026, 8, 1)),
+        isNull,
+      );
+      expect(prefs.getString(MoodNotifier.prefsKey), isNot(contains('rough')));
+    });
+
+    test('delete of a day with no entry is a no-op', () async {
+      final n = await _notifier();
+      await n.upsert(MoodEntry(dateIso: '2026-08-01', mood: 3));
+      await n.delete(DateTime(2026, 7, 15));
+      expect(n.state.length, 1);
+      expect(n.entryFor(DateTime(2026, 8, 1)), isNotNull);
+    });
+  });
 }

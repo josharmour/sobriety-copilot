@@ -211,9 +211,13 @@ class TodaySheet extends ConsumerWidget {
                         ),
                         subtitle: Text(
                           moodToday != null
-                              ? moodToday.label.isNotEmpty
-                                  ? '${moodToday.label} · mood ${moodToday.mood}/5 · tap to edit'
-                                  : 'mood ${moodToday.mood}/5 · tap to edit'
+                              // Discreet mode: never surface the emotion or
+                              // score where a shoulder-surfer could see it.
+                              ? discreet
+                                  ? 'Done today · tap to edit'
+                                  : moodToday.label.isNotEmpty
+                                      ? '${moodToday.label} · mood ${moodToday.mood}/5 · tap to edit'
+                                      : 'mood ${moodToday.mood}/5 · tap to edit'
                               : 'A quick check-in, any time of day',
                         ),
                         trailing: const Icon(Icons.chevron_right),

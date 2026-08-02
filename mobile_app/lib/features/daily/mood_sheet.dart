@@ -7,6 +7,8 @@ import 'package:sobriety_copilot_mobile/features/daily/inventory.dart'
     show dateIsoOf;
 import 'package:sobriety_copilot_mobile/features/daily/mood_history.dart';
 import 'package:sobriety_copilot_mobile/features/daily/mood_log.dart';
+import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
+import 'package:sobriety_copilot_mobile/features/sheets/crisis_sheet.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/widgets.dart';
@@ -108,7 +110,35 @@ class _MoodSheetState extends ConsumerState<MoodSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final today = DateTime.now();
-    final existing = ref.watch(moodProvider.notifier).entryFor(today);
+    // Watch the entry LIST (not the notifier, which never notifies) so a
+    // delete from the embedded history below immediately updates this sheet —
+    // otherwise it would keep showing and sharing the deleted entry.
+    final entries = ref.watch(moodProvider);
+    final todayIso = dateIsoOf(today);
+    // If today's entry is deleted (from the embedded history) while this
+    // sheet is open, clear the form seeded from it in initState — otherwise
+    // the "permanently deleted" journal text stays in the TextField and one
+    // tap of Save silently resurrects the whole entry.
+    ref.listen(moodProvider, (prev, next) {
+      final iso = dateIsoOf(DateTime.now());
+      final had = prev?.any((e) => e.dateIso == iso) ?? false;
+      final has = next.any((e) => e.dateIso == iso);
+      if (had && !has) {
+        setState(() {
+          _label = null;
+          _mood = null;
+          _journal.clear();
+        });
+      }
+    });
+    MoodEntry? existing;
+    for (final e in entries) {
+      if (e.dateIso == todayIso) {
+        existing = e;
+        break;
+      }
+    }
+    final discreet = ref.watch(sobrietyProvider).discreet;
 
     return SafeArea(
       top: false,
@@ -148,7 +178,9 @@ class _MoodSheetState extends ConsumerState<MoodSheet> {
                       IconButton(
                         tooltip: 'Share journal entry',
                         icon: const Icon(Icons.ios_share),
-                        onPressed: () => _share(existing),
+                        // Guarded by the surrounding null check; the loop
+                        // assignment blocks promotion inside the closure.
+                        onPressed: () => _share(existing!),
                       ),
                   ],
                 ),
@@ -179,9 +211,13 @@ class _MoodSheetState extends ConsumerState<MoodSheet> {
                         child: Chip(
                           avatar: const Icon(Icons.check_circle_outline,
                               size: 16, color: AppColors.accent),
-                          label: Text(existing.label.isNotEmpty
-                              ? '${existing.label} · mood ${existing.mood}/5'
-                              : 'mood ${existing.mood}/5'),
+                          // Discreet mode: don't auto-display the stored
+                          // emotion/score the moment the sheet opens.
+                          label: Text(discreet
+                              ? 'Checked in today'
+                              : existing.label.isNotEmpty
+                                  ? '${existing.label} · mood ${existing.mood}/5'
+                                  : 'mood ${existing.mood}/5'),
                           visualDensity: VisualDensity.compact,
                         ),
                       ),
@@ -204,13 +240,33 @@ class _MoodSheetState extends ConsumerState<MoodSheet> {
                     ),
                     if (_mood != null) ...[
                       const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        'Mood $_mood/5',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: moodColor(context, _mood!),
-                          fontWeight: FontWeight.w600,
-                        ),
+                      // Mood as a color swatch + full-contrast text (the ramp
+                      // color alone fails WCAG as a text color).
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            margin:
+                                const EdgeInsets.only(right: AppSpacing.xs),
+                            decoration: BoxDecoration(
+                              color: moodColor(context, _mood!),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          Text(
+                            'Mood $_mood/5',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
+                      if (_mood! <= kMoodMin) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        const _CrisisPointer(),
+                      ],
                     ],
                     const SizedBox(height: AppSpacing.lg),
                     const SectionHeader('Journal (optional)'),
@@ -240,6 +296,52 @@ class _MoodSheetState extends ConsumerState<MoodSheet> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Gentle, non-alarming pointer to support shown when a low (severe) mood is
+/// selected — the moment of highest signal. Opens the app's CrisisSheet (AA
+/// helpline, 988, SAMHSA) and is intentionally optional (never blocks saving).
+class _CrisisPointer extends StatelessWidget {
+  const _CrisisPointer();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: cs.errorContainer.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(AppSpacing.radius),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.support_agent, size: 20, color: cs.onErrorContainer),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              "It sounds like it's been a hard day. You don't have to go "
+              'through this alone.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onErrorContainer,
+              ),
+            ),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: cs.onErrorContainer,
+              visualDensity: VisualDensity.compact,
+            ),
+            onPressed: () => showAppSheet(context, const CrisisSheet()),
+            child: const Text('Get support'),
+          ),
+        ],
       ),
     );
   }
