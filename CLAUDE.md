@@ -25,12 +25,45 @@ curl -X POST http://localhost:5000/api/index
 # Stop
 docker compose down
 
-# Deploy local changes to production Synology NAS (10.0.0.2) and rebuild
+# FIRST, if any Dart in mobile_app/ changed: rebuild the web bundle (see
+# "Shipping UI changes to the website" below). deploy.sh ships static/ as-is,
+# so merging Flutter source without rebuilding deploys the OLD UI.
+
+# Deploy local changes to production and rebuild app+nginx there. Production is
+# joshu@10.0.0.100 at /home/joshu/docker-stack/sobriety-copilot (the cloudflared
+# tunnel origin for sobrietycopilot.com; runs the full stack incl. ollama:rocm).
+# The Synology NAS (10.0.0.2) copy is a stale, non-serving mirror — never
+# deploy there.
 ./deploy.sh
 
-# Watch files and auto-deploy to Synology NAS on save
+# Watch files and auto-deploy to production on save
 ./watch_and_deploy.sh
 ```
+
+**What `deploy.sh` does and does *not* do.** It tars `src static nginx
+docker-compose.yml Dockerfile requirements.txt .env` to the remote, copies it
+into place, and runs `docker compose build app nginx && docker compose up -d`.
+That is all. It does **not** verify health, report `.env` drift, or normalize
+permissions — verify those yourself:
+
+- **Production `.env` diverges deliberately** (custom `LLM_MODEL` /
+  `EMBEDDING_MODEL`, among others) and must never be clobbered. It *is* in the
+  tar, and survives only because the script's `cp -R deploy_temp/*` does not
+  glob dotfiles — an accident, not a safeguard. After deploying, confirm
+  `/api/health` still reports the production models (`sc-generator`,
+  `fine-tuned-embeddinggemma`) rather than the repo defaults.
+- **File modes are shipped as-is by tar.** Deploy from a local-disk clone;
+  the SMB `/Volumes` copy carries `rwx------` modes that make nginx 403.
+- **Verify what is actually being served** (a deploy log looks identical
+  whether or not the bundle changed):
+  ```bash
+  curl -s https://sobrietycopilot.com/api/health
+  curl -s https://sobrietycopilot.com/version.json          # expect the version you just built
+  curl -s https://sobrietycopilot.com/main.dart.js -o /tmp/live.js
+  diff -q static/main.dart.js /tmp/live.js && echo "IN SYNC"
+  ```
+- `deploy.sh` needs its executable bit (`chmod +x`, or run `bash deploy.sh`);
+  it has been lost in a commit before.
 
 For evaluation (heavyweight RAGAS deps live in `requirements-eval.txt`,
 kept out of the runtime image):
@@ -89,9 +122,37 @@ To make the app run faster, you can disable the CPU-heavy reranker and/or skip t
 - **`src/tasks/`** — Celery app, `indexing` task, Redis-backed `job_store` for shadow-collection indexing.
 - **`src/meetings/`** — A.A./N.A. meeting feeds (BMLT) and geocoded search.
 - **`src/render_cache.py`** — On-disk PDF/EPUB text extraction cache used by `/api/render`.
-- **`static/`** — the **Flutter web build** of `mobile_app/` (the hand-written PWA is retired). Rebuild with `cd mobile_app && ../flutter/bin/flutter build web --release && cp -R build/web/. ../static/` (preserves the hand-maintained `privacy.html`). Served by nginx.
-- **`mobile_app/`** — the single Flutter codebase for every surface (Android on Play, web at sobrietycopilot.com, desktop). Android builds: vendored SDK at `../flutter/bin/flutter`, `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64`, `flutter build apk --release`. Private Mode (on-device Gemma 4 E2B via flutter_gemma + offline-pack FTS retrieval) lives in `lib/features/private_mode/` — see Fable-Features.md for its constraints (no Tensor-G5 NPU model; bundled SQLite required for FTS5).
+- **`static/`** — the **committed output** of `flutter build web`, served verbatim by nginx (the hand-written PWA is retired). It is a build artifact, not source: editing `mobile_app/` changes nothing here until you rebuild. See "Shipping UI changes to the website" below.
+- **`mobile_app/`** — the single Flutter codebase for every surface (Android on Play, web at sobrietycopilot.com, desktop). Android builds: vendored SDK at `../flutter/bin/flutter`, `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64`, `flutter build apk --release`. Private Mode (on-device Gemma 4 E2B via flutter_gemma + offline-pack FTS retrieval) lives in `lib/features/private_mode/` — see Fable-Features.md for its constraints (no Tensor-G5 NPU model; bundled SQLite required for FTS5). The meetings sheet (`lib/features/sheets/meetings_sheet.dart`) renders its map with `flutter_map` (added 2026-07-19).
 - **`tests/eval_rag.py`** — Out-of-band RAGAS evaluation harness (faithfulness, answer relevancy, context precision/recall). Not run in the image.
+
+## Shipping UI changes to the website
+
+`static/` is a build artifact, so the chain from source to the live site is:
+
+```
+mobile_app/lib → flutter build web → static/ → commit → deploy.sh → nginx
+```
+
+**Merging Flutter source is not enough.** On 2026-08-02 four merged features
+were invisible on sobrietycopilot.com because `static/` still held the previous
+release's bundle — source and served site were a whole release apart, and the
+deploy would have silently shipped the old UI.
+
+```bash
+# 1. Bump mobile_app/pubspec.yaml `version:` so the served version.json
+#    distinguishes this build from the one already live.
+# 2. Rebuild. On macOS use the flutter-mac SDK — the vendored flutter/ is
+#    Linux-only. Build from a local-disk clone, never the SMB /Volumes copy.
+cd mobile_app
+/Users/joshu/development/flutter-mac/bin/flutter build web --release
+cp -R build/web/. ../static/   # cp, NOT rsync --delete: preserves the
+                               # hand-maintained static/privacy.html
+# 3. Commit static/, then deploy and verify (see the Commands section).
+```
+
+Sanity-check the bundle before deploying by grepping it for a distinctive new
+UI string — `grep -c "Some New Button" static/main.dart.js` should be ≥ 1.
 
 ## Domain considerations
 
