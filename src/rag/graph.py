@@ -99,16 +99,32 @@ def build_knowledge_graph(query: str, retriever: RAGRetriever | None = None) -> 
             })
 
     q_lower = q.lower()
-    for step_node in CORE_RECOVERY_NODES:
-        if any(term in q_lower for term in [step_node["id"].replace("_", " "), step_node["label"].lower(), "step", "inventory"]):
-            if step_node["id"] not in node_ids:
-                nodes.append(step_node)
-                node_ids.add(step_node["id"])
-            edges.append({
-                "source": central_id,
-                "target": step_node["id"],
-                "label": "relates to",
-            })
+
+    # Determine which steps to link. A *specific* step query ("step 9", "Step 4:
+    # Fourth-Step Inventory", ...) must focus on THAT step only — otherwise every
+    # step tap returns the same full 12-step wheel and clicking appears to do
+    # nothing. A broad overview query ("The Twelve Steps", "the steps",
+    # "inventory", ...) links the full wheel of 12.
+    linked_steps: list[dict[str, Any]] = []
+    step_num_match = re.search(r"step[\s_]*(\d{1,2})", q_lower)
+    if step_num_match and 1 <= int(step_num_match.group(1)) <= 12:
+        target_num = int(step_num_match.group(1))
+        linked_steps = [
+            s for s in CORE_RECOVERY_NODES
+            if int(s["id"].split("_")[-1]) == target_num
+        ]
+    elif any(kw in q_lower for kw in ("step", "inventory", "twelve")):
+        linked_steps = list(CORE_RECOVERY_NODES)
+
+    for step_node in linked_steps:
+        if step_node["id"] not in node_ids:
+            nodes.append(step_node)
+            node_ids.add(step_node["id"])
+        edges.append({
+            "source": central_id,
+            "target": step_node["id"],
+            "label": "relates to",
+        })
 
     prompts = [
         f"How do I apply {q} in daily recovery?",

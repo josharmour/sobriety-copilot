@@ -469,7 +469,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => RagGraphScreen(
-              initialQuery: 'Step 9',
+              initialQuery: 'The Twelve Steps',
               onSelectPrompt: (prompt) => _send(prompt),
             ),
           ),
