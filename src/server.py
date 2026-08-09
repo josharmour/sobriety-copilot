@@ -2187,6 +2187,14 @@ def deepdive_generate(
         default=False,
         description="When section is omitted, return a summarized ordered overview of all sections.",
     ),
+    block_ids: str | None = Query(
+        default=None,
+        description="Comma-separated block_ids of the retrieved passage; scopes the deep dive to that passage's section when section is omitted.",
+    ),
+    page: int | None = Query(
+        default=None,
+        description="Printed page of the retrieved passage; scopes the deep dive to that section when section is omitted.",
+    ),
     max_tokens: int = Query(default=2048, ge=64, le=8192, description="Max tokens for the generated deep-dive."),
 ):
     """Generate a grounded prose deep-dive via the local LLM engine.
@@ -2208,6 +2216,11 @@ def deepdive_generate(
         )
 
     try:
+        # Parse the comma-separated block_ids query param (if present) so the
+        # deep dive can scope to the passage's actual section.
+        parsed_block_ids = None
+        if block_ids and block_ids.strip():
+            parsed_block_ids = [b.strip() for b in block_ids.split(",") if b.strip()]
         result = generate_deepdive(
             engine,
             manifest_path,
@@ -2215,6 +2228,8 @@ def deepdive_generate(
             tone=tone,
             summary_only=summary_only,
             max_tokens=max_tokens,
+            block_ids=parsed_block_ids,
+            printed_page=page,
         )
     except DeepdiveGenerationError as exc:
         raise HTTPException(status_code=502, detail=f"Deep-dive generation failed: {exc}")

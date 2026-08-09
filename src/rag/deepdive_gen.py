@@ -79,6 +79,8 @@ def generate_deepdive(
     tone: str = "warm",
     summary_only: bool = False,
     max_tokens: int = 2048,
+    block_ids: list[str] | None = None,
+    printed_page: int | str | None = None,
 ) -> dict[str, Any]:
     """Generate a grounded deep-dive for an assembled literature section.
 
@@ -91,13 +93,17 @@ def generate_deepdive(
             ``src.rag.deepdive.resolve_manifest_path``).
         section: Optional specific section to deep-dive (a step number, 'step
             one', or a section title). When None, either produce an ordered
-            overview (``summary_only=True``) or a full deep-dive over all
-            sections.
+            overview (``summary_only=True``), a full deep-dive, or — when
+            ``block_ids``/``printed_page`` are provided — a deep-dive of the
+            passage's actual containing section.
         tone: Tone variant used to pick the safety-bearing system message
             (warm/factual/reflective/brief).
         summary_only: When section is None, if True produce an ordered overview
             of every section instead of a full deep-dive.
         max_tokens: Max tokens requested from the engine.
+        block_ids: Comma-passed block_ids of the retrieved passage; scopes the
+            deep dive to that passage's section when ``section`` is omitted.
+        printed_page: Printed page of the retrieved passage; same scoping.
 
     Returns:
         A dict:
@@ -113,7 +119,12 @@ def generate_deepdive(
         DeepdiveGenerationError: when the assembly yields nothing usable or the
             engine fails to return text (so a route can map to HTTP 502).
     """
-    payload = assemble_deepdive(manifest_path, section=section)
+    payload = assemble_deepdive(
+        manifest_path,
+        section=section,
+        block_ids=block_ids,
+        printed_page=printed_page,
+    )
 
     if section is not None:
         # Long-context path: one specific section, grounded on its full text.

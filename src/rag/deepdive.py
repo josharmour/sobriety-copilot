@@ -123,6 +123,8 @@ def assemble_deepdive(
     section: str | None = None,
     *,
     step_only: bool = True,
+    block_ids: list[str] | None = None,
+    printed_page: int | str | None = None,
 ) -> dict[str, Any]:
     """Assemble a deep-dive payload from a real manifest file.
 
@@ -135,6 +137,11 @@ def assemble_deepdive(
     When ``section`` is given (a step number, 'step one', or a section title),
     only that one section's full text is returned; otherwise all sections are
     returned with title + word_count + a 500-char preview.
+
+    ``block_ids`` / ``printed_page`` (from a retrieved chunk) scope the deep
+    dive to the *actual* section the passage belongs to when ``section`` is not
+    given — see ``resolve_section_for_blocks``. So a citation from "Step Four"
+    deep-dives Step Four, not a whole-book overview.
 
     Returns a dict:
         {doc_id, title, requested_section, sections: [{title, order,
@@ -151,6 +158,13 @@ def assemble_deepdive(
         sections.sort(key=lambda s: _step_number(s.get("title", "")) or 0)
 
     requested = _match_requested(sections, section) if section else None
+
+    # No explicit section but a retrieved passage's block_ids/page is given:
+    # scope to that passage's containing section.
+    if requested is None and not section and (block_ids or printed_page is not None):
+        resolved = resolve_section_for_blocks(sections, block_ids, printed_page)
+        if resolved is not None:
+            requested = resolved
 
     if requested is not None:
         listing = _section_listing(requested)
@@ -196,3 +210,64 @@ def _match_requested(
     if len(matches) == 1:
         return matches[0]
     return None
+
+
+def resolve_section_for_blocks(
+    sections: list[dict[str, Any]],
+    block_ids: list[str] | None = None,
+    printed_page: int | str | None = None,
+) -> dict[str, Any] | None:
+    """Find the section containing a given passage, by block_ids or page.
+
+    The retrieval layer attaches ``block_ids`` and ``printed_page_start/end``
+    to each returned chunk. This maps that passage back to the structural
+    section it belongs to, so a deep-dive can be scoped to the *actual* section
+    a citation came from instead of always defaulting to the whole document.
+
+    Matching order:
+    1. Best block_id overlap — the section whose block_ids is a superset of (or
+       shares the most with) the passage's block_ids.
+    2. Printed page range — a section whose heading printed_page (or page span)
+       equals/contains the passage's printed page.
+    3. Fallback: the first section (so a deep-dive still works when no section
+       can be confidently resolved).
+
+    Returns None only when there are no sections at all.
+    """
+    if not sections:
+        return None
+
+    block_ids = [b for b in (block_ids or []) if b]
+    page = printed_page
+
+    # 1) block_id overlap (most precise when block_ids present)
+    if block_ids:
+        best = None
+        best_overlap = -1
+        for s in sections:
+            sbid = set(s.get("block_ids") or [])
+            overlap = sum(1 for b in block_ids if b in sbid)
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best = s
+        if best_overlap > 0:
+            return best
+
+    # 2) printed page containment (falls back for docs w/o block_ids)
+    if page is not None:
+        try:
+            pnum = int(page)
+        except (TypeError, ValueError):
+            pnum = None
+        if pnum is not None:
+            for s in sections:
+                sp = s.get("printed_page")
+                if sp is not None:
+                    try:
+                        if int(sp) == pnum:
+                            return s
+                    except (TypeError, ValueError):
+                        pass
+
+    # 3) Fallback to first section
+    return sections[0]

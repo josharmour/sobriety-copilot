@@ -1724,7 +1724,13 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
     if (!mounted) return;
     await showAppSheet(
       context,
-      _DeepDiveSheet(deepDive: deepDive, doc: doc, baseUrl: baseUrl),
+      _DeepDiveSheet(
+        deepDive: deepDive,
+        doc: doc,
+        baseUrl: baseUrl,
+        blockIds: s.blockIds,
+        page: s.page,
+      ),
       initialSize: 0.85,
     );
   }
@@ -1876,10 +1882,14 @@ class _DeepDiveSheet extends ConsumerStatefulWidget {
   final DeepDive deepDive;
   final String doc;
   final String baseUrl;
+  final List<String>? blockIds;
+  final dynamic page;
   const _DeepDiveSheet({
     required this.deepDive,
     required this.doc,
     required this.baseUrl,
+    this.blockIds,
+    this.page,
   });
 
   @override
@@ -1921,6 +1931,12 @@ class _DeepDiveSheetState extends ConsumerState<_DeepDiveSheet> {
     final uri = Uri.parse('$root/api/deepdive/generate').replace(
       queryParameters: {
         if (widget.doc.isNotEmpty) 'doc': widget.doc,
+        // Scope to the passage's actual section when the source carried
+        // block_ids / a printed page, so we deep-dive the real section
+        // (e.g. Step Four) instead of a whole-book overview.
+        if (widget.blockIds != null && widget.blockIds!.isNotEmpty)
+          'block_ids': widget.blockIds!.join(','),
+        if (widget.page != null) 'page': widget.page.toString(),
       },
     );
     final res = await client.post(uri).timeout(const Duration(seconds: 60));
@@ -1957,12 +1973,14 @@ class _DeepDiveSheetState extends ConsumerState<_DeepDiveSheet> {
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: AppSpacing.md),
-            // AI study guide
-            _aiGuideSection(context),
-            const SizedBox(height: AppSpacing.md),
             Expanded(
               child: ListView(
                 children: [
+                  // AI study guide lives INSIDE the scrollable area so long
+                  // generated prose scrolls with the rest instead of being a
+                  // fixed non-scrolling block that overflows the sheet.
+                  _aiGuideSection(context),
+                  const SizedBox(height: AppSpacing.md),
                   for (final section in sections) _deepDiveSection(context, section),
                 ],
               ),
