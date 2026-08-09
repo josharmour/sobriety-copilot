@@ -97,6 +97,43 @@ def test_specific_section_passes_full_text_into_prompt(tmp_path):
     assert "Step One" not in prompt
 
 
+def test_block_ids_scope_to_section_and_use_section_mode(tmp_path):
+    """block_ids select the containing section -> mode 'section', not 'full'.
+
+    This is the section-aware regression: deep-diving a citation whose passage
+    falls in Step Two must ground on Step Two's full text and report
+    mode == 'section', NOT a whole-document overview.
+    """
+    manifest = _make_manifest(tmp_path)
+    engine = FakeEngine(canned="Scoped deep dive on Step Two.")
+
+    # Step Two's content block id is b3; Step One's is b1/b2.
+    result = generate_deepdive(engine, manifest, block_ids=["b3"])
+
+    assert result["mode"] == "section"          # scoped, not full/overview
+    assert result["section_title"] == "Step Two"
+    assert result["word_count"] > 0
+
+    prompt = engine.calls[0]["prompt"]
+    assert "Step Two" in prompt
+    # grounds on Step Two's full text (not a preview-only whole-book overview)
+    assert "Came to believe that a Power greater than ourselves" in prompt
+
+
+def test_block_ids_scoped_to_step_one(tmp_path):
+    """A block_id in Step One resolves/grounds Step One."""
+    manifest = _make_manifest(tmp_path)
+    engine = FakeEngine(canned="Step One scoped.")
+
+    result = generate_deepdive(engine, manifest, block_ids=["b1"])
+
+    assert result["section_title"] == "Step One"
+    assert result["mode"] == "section"
+    prompt = engine.calls[0]["prompt"]
+    assert "We admitted we were powerless" in prompt
+    assert "Step Two" not in prompt
+
+
 def test_all_sections_summary_list_works(tmp_path):
     manifest = _make_manifest(tmp_path)
     engine = FakeEngine(canned="Ordered overview of the whole book.")

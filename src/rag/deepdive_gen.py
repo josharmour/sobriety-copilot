@@ -126,7 +126,12 @@ def generate_deepdive(
         printed_page=printed_page,
     )
 
-    if section is not None:
+    # Determine whether a *single, specific* section was selected — either by an
+    # explicit `section`, or by scoping to a retrieved passage's containing
+    # section via block_ids/printed_page (section-aware deep dive).
+    scoped_to_section = section is not None or bool(block_ids) or printed_page is not None
+
+    if scoped_to_section:
         # Long-context path: one specific section, grounded on its full text.
         out_sections = payload.get("sections") or []
         if not out_sections:
