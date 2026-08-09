@@ -32,6 +32,7 @@ from src.meetings.online import search_online_meetings, warmup_online_feeds
 from src.meetings.service import search_meetings, warmup_feeds as warmup_meeting_feeds
 from src.prompts.templates import NO_CONTEXT_TEMPLATE, USER_MESSAGE_TEMPLATE, system_message_for_tone
 from src.rag.chroma_client import find_largest_collection_with_prefix
+from src.rag.deepdive import assemble_deepdive, resolve_manifest_path
 from src.rag.embeddings import warmup as warmup_embeddings
 from src.rag.indexer import DEFAULT_COLLECTION
 from src.rag.memory import UserMemoryManager, format_state_note
@@ -2096,6 +2097,47 @@ p {{ margin: 0.75em 0; }}
 </script>
 </body></html>"""
     return HTMLResponse(page)
+
+
+@app.get("/api/deepdive")
+def deepdive_doc(
+    topic: str = Query(
+        default="", description="Reserved for the deep-dive generation layer; not used for assembly."
+    ),
+    doc: str = Query(
+        ..., description="Manifest doc_id or source-filename stem (e.g. twelve-steps-and-twelve-traditions)."
+    ),
+    section: str | None = Query(
+        default=None,
+        description="Optional section to return in full (e.g. '5', 'step five', 'tradition one').",
+    ),
+):
+    """Assemble whole literature sections from the real manifest for deep grounding.
+
+    Returns the assembled literature text only (no LLM call). When ``section``
+    is supplied, that one section's full ``content_text`` is returned for
+    long-context grounding; otherwise all sections are returned as a listing
+    (title, order, word_count, 500-char preview).
+    """
+    manifest_path = resolve_manifest_path(doc)
+    if manifest_path is None:
+        raise HTTPException(
+            status_code=404, detail=f"Document manifest not found for doc_id: {doc}"
+        )
+
+    try:
+        payload = assemble_deepdive(manifest_path, section=section)
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404, detail=f"Document manifest not found on disk: {manifest_path}"
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to assemble deepdive: {exc}")
+
+    if section is not None and not payload.get("sections"):
+        raise HTTPException(status_code=404, detail=f"No section matched: {section}")
+
+    return payload
 
 
 @app.get("/api/private/embedder/{part}")
