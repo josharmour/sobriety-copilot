@@ -105762,7 +105762,7 @@ return this.a.j(0,b.a)&&this.b.j(0,b.b)},
 gA(a){return A.S(this.a,this.b,B.a,B.a,B.a,B.a,B.a,B.a,B.a,B.a,B.a,B.a,B.a,B.a,B.a,B.a,B.a,B.a,B.a,B.a)}}
 A.Zx.prototype={
 H(a){var s=null,r=A.C(a)
-return A.eW(!0,new A.d2(B.FF,s,s,A.yj(A.k1(s,new A.a9(B.Lz,A.b0(A.b([B.a83,A.jq(B.a7f,B.aE,s,s,s,s)],t.p),B.p,B.i,B.O,0,s),s),B.a0,!1,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,!1,B.bV),r.ax.k2,!0),s),B.u,!0)}}
+return A.eW(!0,new A.d2(B.FF,s,s,A.yj(A.k1(s,new A.a9(B.Lz,A.b0(A.b([B.a84,A.jq(B.a7f,B.aE,s,s,s,s)],t.p),B.p,B.i,B.O,0,s),s),B.a0,!1,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,!1,B.bV),r.ax.k2,!0),s),B.u,!0)}}
 A.WG.prototype={}
 A.GY.prototype={
 a8(){return new A.a4R()}}
@@ -114580,9 +114580,9 @@ m=m==null?p:m.vA(1.4)
 r.push(A.bB(A.oI(A.Q(n.d,p,p,p,m,p,p,p),p,p,B.aa),1))
 r.push(B.ba)
 m=A.de(l?B.Me:B.rN,p,p,p)
-r.push(A.b0(A.b([A.bB(A.Xg(m,A.Q(l?"Saved":"Save passage",p,p,p,p,p,p,p),new A.aT1(o,b),p),1),B.ah,A.bB(A.Uq(B.No,B.a7G,new A.aT2(o,n)),1)],s),B.p,B.i,B.l,0,p))
+r.push(A.b0(A.b([A.bB(A.Xg(m,A.Q(l?"Saved":"Save passage",p,p,p,p,p,p,p),new A.aT1(o,b),p),1),B.ah,A.bB(A.Uq(B.No,B.a7H,new A.aT2(o,n)),1)],s),B.p,B.i,B.l,0,p))
 r.push(B.S)
-r.push(A.cV(A.ky(B.NV,B.a88,new A.aT3(o,n),p),p,1/0))
+r.push(A.cV(A.ky(B.NV,B.a7p,new A.aT3(o,n),p),p,1/0))
 return new A.a9(B.eN,A.b1(r,B.I,B.i,B.l),p)},
 $S:757}
 A.aT1.prototype={
@@ -114697,7 +114697,7 @@ s=s.f
 q=q.z
 return A.iC(new A.a9(B.aR,A.b1(A.b([p,B.a6,o,B.S,A.Q(s,m,m,m,q==null?m:q.vA(1.5),m,m,m)],t.p),B.I,B.i,B.l),m),r,m,m)}s=n.y
 if(s!=null){r=l.ok.Q
-return A.b1(A.b([new A.a9(B.m2,A.Q(s,m,m,m,r==null?m:r.b1(l.ax.fy),m,m,m),m),A.cV(A.Uq(B.mT,B.EK,n.gZT()),m,1/0)],t.p),B.I,B.i,B.l)}return A.cV(A.Uq(B.NS,B.a7P,n.gZT()),m,1/0)}}
+return A.b1(A.b([new A.a9(B.m2,A.Q(s,m,m,m,r==null?m:r.b1(l.ax.fy),m,m,m),m),A.cV(A.Uq(B.mT,B.EK,n.gZT()),m,1/0)],t.p),B.I,B.i,B.l)}return A.cV(A.Uq(B.NS,B.a7Q,n.gZT()),m,1/0)}}
 A.aJ5.prototype={
 $0(){var s=this.a
 s.w=!0
@@ -114869,7 +114869,7 @@ return A.r($async$$0,r)},
 $S:7}
 A.afP.prototype={
 $1(a){var s=null
-return A.xI(A.b([A.eZ(B.ek,s,s,new A.afN(a),s,s),A.Up(B.EO,new A.afO(a))],t.p),B.a8u,B.a7J)},
+return A.xI(A.b([A.eZ(B.ek,s,s,new A.afN(a),s,s),A.Up(B.EO,new A.afO(a))],t.p),B.a8u,B.a7K)},
 $S:68}
 A.afN.prototype={
 $0(){return A.cu(this.a,!1).fT(!1)},
@@ -115420,7 +115420,7 @@ k.push(new A.d2(B.bZ,i,i,A.ky(B.Oc,B.a7e,new A.aOI(this,a,b),A.ha(i,i,i,i,i,i,i,
 return A.em(!1,B.H,!0,o,new A.a9(B.aR,A.b1(k,B.I,B.i,B.l),i),B.o,p,0,i,i,i,i,i,B.bi)}}
 A.aOH.prototype={
 $1(a){var s=null
-return A.xI(A.b([A.eZ(B.ek,s,s,new A.aOF(a),s,s),A.eZ(B.a7r,s,s,new A.aOG(a),s,A.ha(s,s,s,s,s,s,s,s,s,A.C(this.a).ax.fy,s,s,s,s,s,s,s,s,s,s,s))],t.p),B.a8l,B.a8n)},
+return A.xI(A.b([A.eZ(B.ek,s,s,new A.aOF(a),s,s),A.eZ(B.a7s,s,s,new A.aOG(a),s,A.ha(s,s,s,s,s,s,s,s,s,A.C(this.a).ax.fy,s,s,s,s,s,s,s,s,s,s,s))],t.p),B.a8l,B.a8n)},
 $S:68}
 A.aOF.prototype={
 $0(){return A.cu(this.a,!1).fT(!1)},
@@ -115633,7 +115633,7 @@ i=q.y
 i===$&&A.a()
 k.push(A.oU(l,B.aN,!1,l,!0,B.B,l,A.t3(),i,l,l,l,l,l,2,B.OG,B.a0,!0,l,!0,l,!1,l,B.bD,l,l,l,l,l,l,5000,l,l,l,l,!1,"\u2022",l,l,l,l,l,!1,l,l,!1,l,!0,l,B.ci,l,l,l,l,l,l,l,l,l,l,l,l,!0,B.ar,l,B.cp,l,l,l,l))
 k.push(B.S)
-k.push(A.Uq(B.hf,B.a7T,q.gaBz()))
+k.push(A.Uq(B.hf,B.a7U,q.gaBz()))
 k.push(B.bm)
 k.push(B.cy)
 k.push(B.S)
@@ -115721,7 +115721,7 @@ if(q)if(o)s="Done today \xb7 tap to edit"
 else{q=s.c
 s=""+s.b
 s=q.length!==0?q+" \xb7 mood "+s+k:"mood "+s+k}else s="A quick check-in, any time of day"
-n=A.b([B.a1J,B.aA,h,B.aA,r,B.aA,A.iC(A.fu(!1,l,l,l,!0,l,l,l,!0,l,p,l,l,l,l,new A.aDK(a),!1,l,l,l,l,A.Q(s,l,l,l,l,l,l,l),l,n,l,B.dX,l),l,l,l),B.bm,A.iC(A.fu(!1,l,l,l,!0,l,l,l,!0,l,B.jm,l,l,l,l,new A.aDL(a),!1,l,l,l,l,B.a7t,l,B.ER,l,B.dX,l),l,l,l),B.bm],f)
+n=A.b([B.a1J,B.aA,h,B.aA,r,B.aA,A.iC(A.fu(!1,l,l,l,!0,l,l,l,!0,l,p,l,l,l,l,new A.aDK(a),!1,l,l,l,l,A.Q(s,l,l,l,l,l,l,l),l,n,l,B.dX,l),l,l,l),B.bm,A.iC(A.fu(!1,l,l,l,!0,l,l,l,!0,l,B.jm,l,l,l,l,new A.aDL(a),!1,l,l,l,l,B.a7u,l,B.ER,l,B.dX,l),l,l,l),B.bm],f)
 n.push(B.ZT)
 n.push(B.a6)
 if(g==null)j=l
@@ -115730,7 +115730,7 @@ h=j.rx
 j=g.b1(h==null?j.k3:h)}n.push(A.Q("Daily Reflections and Just for Today are published by A.A. World Services and N.A. World Services \u2014 read today's page on their sites.",l,l,l,j,l,l,l))
 j=m.b
 n.push(A.fu(!1,B.u,l,l,!0,l,l,l,!0,l,B.tc,l,l,l,l,new A.aDM(j),!1,l,l,l,l,l,l,B.a8a,l,l,l))
-n.push(A.fu(!1,B.u,l,l,!0,l,l,l,!0,l,B.tc,l,l,l,l,new A.aDN(j),!1,l,l,l,l,l,l,B.a7z,l,l,l))
+n.push(A.fu(!1,B.u,l,l,!0,l,l,l,!0,l,B.tc,l,l,l,l,new A.aDN(j),!1,l,l,l,l,l,l,B.a7A,l,l,l))
 return A.b1(A.b([new A.a9(B.di,i,l),B.cy,A.bB(A.uK(n,b,B.h9),1)],f),B.p,B.i,B.l)},
 $S:93}
 A.aDF.prototype={
@@ -115777,7 +115777,7 @@ if(b.cd($.t5(),t.nk).a6E(new A.aJ(Date.now(),0,!1))){s=o.ok.Q
 if(s==null)s=p
 else{r=o.ax
 q=r.rx
-s=s.b1(q==null?r.k3:q)}return A.b0(A.b([B.mU,B.c8,A.Q("Checked in today",p,p,p,s,p,p,p)],t.p),B.p,B.i,B.O,0,p)}return A.ky(B.NK,B.a7H,new A.aQE(b),A.ha(p,p,p,p,p,p,p,p,p,p,p,p,p,B.u,p,p,p,p,p,p,B.bb))}}
+s=s.b1(q==null?r.k3:q)}return A.b0(A.b([B.mU,B.c8,A.Q("Checked in today",p,p,p,s,p,p,p)],t.p),B.p,B.i,B.O,0,p)}return A.ky(B.NK,B.a7I,new A.aQE(b),A.ha(p,p,p,p,p,p,p,p,p,p,p,p,p,B.u,p,p,p,p,p,p,B.bb))}}
 A.aQE.prototype={
 $0(){return this.a.aE($.t5().gcn(),t.IC).abj()},
 $S:0}
@@ -115977,7 +115977,7 @@ o=b.as.f
 if(o!=null){if(n==null)a1=a
 else{k=a1.rx
 a1=n.vB(k==null?a1.k3:k,B.cj)}B.b.L(r,A.b([B.a6,A.Q('"'+o+'"',2,B.a9,a,a1,a,a,a)],a3))}a1=A.bB(A.b1(r,B.I,B.i,B.O),1)
-s.push(A.bX(a,A.b0(A.b([a1,B.ah,new A.U5(!0,new A.aQm(b,a6),a,a,a,a,B.o,a,!1,a,!0,a,new A.a38(B.a7L,B.Nt,a,a,a),a)],a3),B.p,B.i,B.l,0,a),B.o,a,a,new A.bG(q,a,new A.d3(new A.aA(p,1,B.t,-1),B.q,B.q,B.q),a,a,a,B.T),a,a,a,a,B.aR,a,a,a))}return A.b01(a4,A.b1(s,B.p,B.i,B.l))},
+s.push(A.bX(a,A.b0(A.b([a1,B.ah,new A.U5(!0,new A.aQm(b,a6),a,a,a,a,B.o,a,!1,a,!0,a,new A.a38(B.a7M,B.Nt,a,a,a),a)],a3),B.p,B.i,B.l,0,a),B.o,a,a,new A.bG(q,a,new A.d3(new A.aA(p,1,B.t,-1),B.q,B.q,B.q),a,a,a,B.T),a,a,a,a,B.aR,a,a,a))}return A.b01(a4,A.b1(s,B.p,B.i,B.l))},
 a15(a,b){switch(a){case"query":return B.dd
 case"step":return B.eG
 case"passage":return B.IM
@@ -116325,7 +116325,7 @@ if(j.f)r="Session complete"
 else{q=j.ga7o()
 r=q==null?"":q}p=l.aE(k.gcn(),t.l0).gac9()
 l=t.p
-return A.b1(A.b([new A.a9(B.di,A.b0(A.b([B.jm,B.ah,A.bB(A.Q(s.b,n,n,n,m.ok.r,n,n,n),1),A.cZ(n,n,n,B.mY,n,n,new A.aPC(o,a),n,n,n,"Close",n)],l),B.p,B.i,B.l,0,n),n),B.cy,A.bB(A.Gw(new A.aPD(o,r,m,j,s.a==="surf_urge",j.d,s)),1),A.a_m(n,!0,new A.aPE(o),B.a7m,B.a7U,p),B.ba],l),B.aX,B.i,B.l)}}
+return A.b1(A.b([new A.a9(B.di,A.b0(A.b([B.jm,B.ah,A.bB(A.Q(s.b,n,n,n,m.ok.r,n,n,n),1),A.cZ(n,n,n,B.mY,n,n,new A.aPC(o,a),n,n,n,"Close",n)],l),B.p,B.i,B.l,0,n),n),B.cy,A.bB(A.Gw(new A.aPD(o,r,m,j,s.a==="surf_urge",j.d,s)),1),A.a_m(n,!0,new A.aPE(o),B.a7m,B.a7V,p),B.ba],l),B.aX,B.i,B.l)}}
 A.aPA.prototype={
 $1(a){return a.f},
 $S:185}
@@ -116352,7 +116352,7 @@ q=n.d
 s=s.ok
 p=s.w
 if(q.f){j=A.b([A.Q("Nice work \u2014 take this calm with you.",m,m,m,p,B.aH,m,m),B.ba,A.Up(B.a8b,new A.aPv(i))],r)
-if(n.e)B.b.L(j,A.b([B.aA,A.ky(B.mV,B.a7E,new A.aPw(a),m)],r))
+if(n.e)B.b.L(j,A.b([B.aA,A.ky(B.mV,B.a7F,new A.aPw(a),m)],r))
 B.b.L(h,j)}else{j=A.Q(j+" \xb7 "+n.f,m,m,m,p,m,m,m)
 p=n.r
 s=A.Q("Step "+(q.c+1)+" of "+p.d.length+" \xb7 Cycle "+(q.b+1)+" of "+p.e,m,m,m,s.Q,m,m,m)
@@ -116721,7 +116721,7 @@ p=q.rx
 s=s.b1(p==null?q.k3:p)}s=A.Q("Stored only on this device. Never sent anywhere.",k,k,k,s,k,k,k)
 q=A.fu(!1,B.u,k,k,!0,k,k,k,!0,k,B.Nx,k,k,k,k,l.gaA4(),!1,k,k,k,k,A.Q(f,k,k,k,k,k,k,k),k,B.a7b,k,B.dX,k)
 p=j.b
-o=A.a_m(B.u,k,new A.aUN(l),A.Q('Show "Day 92" with no recovery wording.',k,k,k,k,k,k,k),B.a7q,p)
+o=A.a_m(B.u,k,new A.aUN(l),A.Q('Show "Day 92" with no recovery wording.',k,k,k,k,k,k,k),B.a7r,p)
 n=l.w
 n===$&&A.a()
 m=t.p
@@ -116828,7 +116828,7 @@ $1(a){var s,r=null
 if(!this.a)s="The day counter turns off. You can start tracking again any time."
 else s=this.b?"The day counter turns off. Your history and notes stay on this device \u2014 you can erase them separately.":'The day counter turns off. Your relapse history and notes stay on this device \u2014 you can erase them separately with "Erase relapse history".'
 s=A.Q(s,r,r,r,r,r,r,r)
-return A.xI(A.b([A.eZ(B.ek,r,r,new A.aWn(a),r,r),A.eZ(B.EN,r,r,new A.aWo(a),r,r)],t.p),s,B.a8_)},
+return A.xI(A.b([A.eZ(B.ek,r,r,new A.aWn(a),r,r),A.eZ(B.EN,r,r,new A.aWo(a),r,r)],t.p),s,B.a80)},
 $S:68}
 A.aWn.prototype={
 $0(){return A.cu(this.a,!1).fT(!1)},
@@ -116857,7 +116857,7 @@ p=(p==null?m.y:p).cG(0.4)
 s=A.by(12)
 if(this.e)r=o?"Day count restarted. Your history stays.":"Day count restarted."
 else r=o?"You're back. Today is day one again \u2014 your history is kept.":"You're back. Today is day one again."
-return A.bX(q,A.b1(A.b([A.Q(r,q,q,q,n.ok.z,q,q,q),B.a6,A.ky(B.mV,B.a7Y,new A.aTr(a),A.ha(q,q,q,q,q,q,q,q,q,m.b,q,q,q,B.u,q,q,q,q,q,q,B.bb))],t.p),B.I,B.i,B.l),B.o,q,q,new A.bG(p,q,q,s,q,q,B.T),q,q,q,q,B.aR,q,q,q)}}
+return A.bX(q,A.b1(A.b([A.Q(r,q,q,q,n.ok.z,q,q,q),B.a6,A.ky(B.mV,B.a7Z,new A.aTr(a),A.ha(q,q,q,q,q,q,q,q,q,m.b,q,q,q,B.u,q,q,q,q,q,q,B.bb))],t.p),B.I,B.i,B.l),B.o,q,q,new A.bG(p,q,q,s,q,q,B.T),q,q,q,q,B.aR,q,q,q)}}
 A.aTq.prototype={
 $1(a){return a.d.length!==0},
 $S:791}
@@ -117243,7 +117243,7 @@ else{l=r.rx
 r=p.b1(l==null?r.k3:l)}m.push(A.b0(A.b([B.Nu,B.c8,A.Q("Checked in",j,j,j,r,j,j,j)],n),B.p,B.i,B.O,0,j))}else{p=r.Q
 if(p==null)p=r.y
 l=r.as
-m.push(new A.u1(B.Ff,!1,new A.aBu(b),j,j,j,A.b4R(p,l==null?r.z:l,j,j),B.o,j,!1,j,!0,j,B.a7C,j))}return A.iC(new A.a9(B.dT,A.b1(A.b([q,B.S,o,B.aA,A.b0(m,B.p,B.i,B.l,0,j)],n),B.I,B.i,B.l),j),j,j,j)}}
+m.push(new A.u1(B.Ff,!1,new A.aBu(b),j,j,j,A.b4R(p,l==null?r.z:l,j,j),B.o,j,!1,j,!0,j,B.a7D,j))}return A.iC(new A.a9(B.dT,A.b1(A.b([q,B.S,o,B.aA,A.b0(m,B.p,B.i,B.l,0,j)],n),B.I,B.i,B.l),j),j,j,j)}}
 A.aBu.prototype={
 $0(){return this.a.aE($.t5().gcn(),t.IC).abj()},
 $S:0}
@@ -117877,7 +117877,7 @@ if(r)o=k
 else{o=i.rx
 o=s.b1(o==null?i.k3:o)}o=A.Q("Sobriety Copilot is not affiliated with, endorsed by, or an official service of Alcoholics Anonymous, Narcotics Anonymous, or any fellowship whose literature it may reference.",k,k,k,o,k,k,k)
 n=A.Q("We treat what you share as sensitive. Saved passages and your recovery tracker stay on this device. Questions you ask are answered by our own private answer service \u2014 never third-party AI providers \u2014 and are not used for advertising or tied to an account. No account is required.",k,k,k,g,k,k,k)
-m=A.fu(!1,B.u,k,k,!0,k,k,k,!0,k,B.Nq,k,k,k,k,new A.ack(this),!1,k,k,k,k,k,k,B.a7N,k,B.tl,k)
+m=A.fu(!1,B.u,k,k,!0,k,k,k,!0,k,B.Nq,k,k,k,k,new A.ack(this),!1,k,k,k,k,k,k,B.a7O,k,B.tl,k)
 l=A.Q("AA 24-Hour Helpline \u2014 (212) 647-1680.\nFree, confidential, answered by a sober AA member 24/7.",k,k,k,g,k,k,k)
 g=A.Q("While this app focuses on 12-step recovery literature, we recognize that different paths work for different people. If you are exploring other programs, resources like SMART Recovery and Refuge Recovery are also available to support you.",k,k,k,g,k,k,k)
 if(r)s=k
@@ -117960,7 +117960,7 @@ h=t.p
 l=A.eQ(!1,p,!0,A.bX(g,A.b0(A.b([j,B.ah,A.bB(A.b1(A.b([i,A.Q("(212) 647-1680",g,g,g,e==null?g:e.k_(n,B.ap),g,g,g)],h),B.I,B.i,B.l),1),B.NF],h),B.p,B.i,B.l,0,g),B.o,g,g,new A.bG(m,g,k,l,g,g,B.T),g,g,g,g,B.aR,g,g,g),g,!0,g,g,g,g,g,g,g,g,g,g,new A.afX(this,a),g,g,g,g,g,g,g)
 k=f.a6Z(B.C)
 e=A.Q("More support options",g,g,g,r?g:s.b1(o.k3.cG(0.65)),g,g,g)
-return A.eW(!0,new A.a9(B.Lm,A.b1(A.b([d,B.a6,q,B.aA,l,B.S,new A.oW(k,A.b4J(A.b([A.fu(!1,B.u,g,g,!0,g,g,g,!0,g,B.O7,g,g,g,g,new A.afY(this,a),!1,g,g,g,g,B.a74,g,B.a7x,g,g,g),A.fu(!1,B.u,g,g,!0,g,g,g,!0,g,B.Ob,g,g,g,g,new A.afZ(this,a),!1,g,g,g,g,B.a7i,g,B.a8d,g,g,g)],h),B.u,g,B.u,e),g)],h),B.aX,B.i,B.O),g),B.u,!1)}}
+return A.eW(!0,new A.a9(B.Lm,A.b1(A.b([d,B.a6,q,B.aA,l,B.S,new A.oW(k,A.b4J(A.b([A.fu(!1,B.u,g,g,!0,g,g,g,!0,g,B.O7,g,g,g,g,new A.afY(this,a),!1,g,g,g,g,B.a74,g,B.a7y,g,g,g),A.fu(!1,B.u,g,g,!0,g,g,g,!0,g,B.Ob,g,g,g,g,new A.afZ(this,a),!1,g,g,g,g,B.a7i,g,B.a8d,g,g,g)],h),B.u,g,B.u,e),g)],h),B.aX,B.i,B.O),g),B.u,!1)}}
 A.afX.prototype={
 $0(){return this.a.uv(this.b,"12126471680")},
 $S:0}
@@ -118350,7 +118350,7 @@ uG(a,b,c){var s,r,q=null,p=A.b([],t.p)
 for(s=b.giu(),s=s.gac(s);s.t();){r=s.gO()
 p.push(new A.a9(B.r3,A.Ee(q,A.Q(r.b,q,q,q,q,q,q,q),new A.aO0(c,r,a),c===r.a),q))}return A.oI(A.b0(p,B.p,B.i,B.l,0,q),q,q,B.ay)},
 XM(a){var s=null,r=t.p
-return A.dc(new A.a9(B.ha,A.b1(A.b([B.NI,B.aA,A.Q("Enter a ZIP code or use your location to find meetings nearby.",s,s,s,a.ok.z,B.aH,s,s),B.ba,A.hd(B.kE,A.b([A.Xg(B.mW,B.a78,new A.aNj(this),s),A.Xg(B.mW,B.a7y,new A.aNk(this),s),A.Xg(B.mW,B.a7R,new A.aNl(this),s)],r),B.b6,8,8)],r),B.p,B.i,B.O),s),s,s)},
+return A.dc(new A.a9(B.ha,A.b1(A.b([B.NI,B.aA,A.Q("Enter a ZIP code or use your location to find meetings nearby.",s,s,s,a.ok.z,B.aH,s,s),B.ba,A.hd(B.kE,A.b([A.Xg(B.mW,B.a78,new A.aNj(this),s),A.Xg(B.mW,B.a7z,new A.aNk(this),s),A.Xg(B.mW,B.a7S,new A.aNl(this),s)],r),B.b6,8,8)],r),B.p,B.i,B.O),s),s,s)},
 Lo(a){var s=null
 return A.dc(new A.a9(B.ha,A.b1(A.b([B.pW,B.ba,A.Q("Searching nearby intergroup feeds\u2026\n(first call can take 5\u201310 s)",s,s,s,a.ok.Q,B.aH,s,s)],t.p),B.p,B.i,B.O),s),s,s)},
 XG(a){var s,r=null,q=this.fx
@@ -118405,7 +118405,7 @@ if(q==null)q=r
 else{s=q.b
 s=s==null?r:s.cG(0.6)
 s=q.b1(s)
-q=s}return A.dc(A.b1(A.b([A.Q("Coverage from a curated set of intergroup feeds.",r,r,r,q,B.aH,r,r),A.eZ(B.a7W,r,r,this.gaB_(),r,r)],t.p),B.p,B.i,B.l),r,r)},
+q=s}return A.dc(A.b1(A.b([A.Q("Coverage from a curated set of intergroup feeds.",r,r,r,q,B.aH,r,r),A.eZ(B.a7X,r,r,this.gaB_(),r,r)],t.p),B.p,B.i,B.l),r,r)},
 Ob(a){var s
 if(!a.CW)return null
 s=a.at
@@ -119016,7 +119016,7 @@ fp(a,b){var s=$.i8()
 return A.eW(!0,A.U1(new A.aAt(b.cd(s,t.ne),b.aE(s.gcn(),t.r8),b),!1,0.85,0.95,0.5),B.u,!1)}}
 A.aAt.prototype={
 $2(a,b){var s,r,q,p=null,o=t.p,n=A.b0(A.b([B.ti,B.ah,A.Q("Settings",p,p,p,A.C(a).ok.r,p,p,p),B.fr,A.cZ(p,p,p,B.hf,p,p,new A.aAi(a),p,p,p,"Done",p)],o),B.p,B.i,B.l,0,p),m=this.a,l=m.y,k=this.b
-l=A.b([B.abQ,B.ba,B.YD,B.aau,B.bm,B.ZQ,B.a6,A.b0(A.b([A.bB(A.Ee(B.Nz,B.a7O,new A.aAj(k),l===B.i2),1),B.c8,A.bB(A.Ee(B.O8,B.a73,new A.aAk(k),l===B.oG),1),B.c8,A.bB(A.Ee(B.NW,B.a7v,new A.aAl(k),l===B.ku),1)],o),B.p,B.i,B.l,0,p),B.bm,B.ZP,B.a6],o)
+l=A.b([B.abQ,B.ba,B.YD,B.aau,B.bm,B.ZQ,B.a6,A.b0(A.b([A.bB(A.Ee(B.Nz,B.a7P,new A.aAj(k),l===B.i2),1),B.c8,A.bB(A.Ee(B.O8,B.a73,new A.aAk(k),l===B.oG),1),B.c8,A.bB(A.Ee(B.NW,B.a7w,new A.aAl(k),l===B.ku),1)],o),B.p,B.i,B.l,0,p),B.bm,B.ZP,B.a6],o)
 B.b.L(l,new A.W(B.n3,new A.aAm(m,k),t.D_))
 l.push(B.bm)
 l.push(B.ZI)
@@ -119033,9 +119033,9 @@ l.push(B.ZX)
 l.push(new A.ew(new A.aAq(this.c),p))
 l.push(B.bm)
 l.push(B.ZU)
-l.push(A.a_m(B.u,p,new A.aAr(k),B.a7S,B.a7I,m.d))
+l.push(A.a_m(B.u,p,new A.aAr(k),B.a7T,B.a7J,m.d))
 m=m.e
-l.push(A.a_m(B.u,p,new A.aAs(k),B.a7F,B.a7s,m))
+l.push(A.a_m(B.u,p,new A.aAs(k),B.a7G,B.a7t,m))
 if(m){m=A.C(a).ok.Q
 if(m==null)m=p
 else{k=A.C(a).ax
@@ -119245,9 +119245,9 @@ s=A.Q(s>=1?"Installing citations pack\u2026":"Downloading citations pack\u2026 "
 return A.fu(!1,B.u,p,p,!0,p,p,p,!0,p,B.E7,p,p,p,p,p,!1,p,p,p,p,A.b_u(p,p,p,p,p),p,s,p,p,p)}if(q.x){s=q.Q
 if(s!=null){q.gbT().aE($.Dr(),t.Vl)
 r=s>0}else r=!1
-return A.fu(!1,B.u,!0,p,!0,p,p,p,!0,p,B.O4,p,p,p,p,p,!1,p,p,p,p,B.a7n,p,B.a7K,p,r?A.eZ(B.a7X,p,p,q.gZf(),p,p):p,p)}if(q.w)s=B.a19
+return A.fu(!1,B.u,!0,p,!0,p,p,p,!0,p,B.O4,p,p,p,p,p,!1,p,p,p,p,B.a7n,p,B.a7L,p,r?A.eZ(B.a7Y,p,p,q.gZf(),p,p):p,p)}if(q.w)s=B.a19
 else s=A.eZ(B.a7a,p,p,q.Q==null?p:q.gZf(),p,p)
-return A.fu(!1,B.u,p,p,!0,p,p,p,!0,p,B.NE,p,p,p,p,p,!1,p,p,p,p,B.a7Z,p,B.a8g,p,s,p)}}
+return A.fu(!1,B.u,p,p,!0,p,p,p,!0,p,B.NE,p,p,p,p,p,!1,p,p,p,p,B.a8_,p,B.a8g,p,s,p)}}
 A.aHZ.prototype={
 $0(){return this.a.x=this.b},
 $S:0}
@@ -124551,8 +124551,8 @@ B.I8=new A.SF(1,"front")
 B.dc=new A.tn(3,"experimentalWebParagraph")
 B.Ic=new A.to(null,null,null,null,null,null,null)
 B.Id=new A.E8(null,null,null,null,null,null)
-B.a84=new A.aC("This book is empty.",null,null,null,null,null,null,null,null,null)
-B.Ie=new A.l1(B.N,null,null,B.a84,null)
+B.a85=new A.aC("This book is empty.",null,null,null,null,null,null,null,null,null)
+B.Ie=new A.l1(B.N,null,null,B.a85,null)
 B.acu=new A.aF8(0,"material")
 B.pW=new A.tw(null,null,null,null,null,null,null,null)
 B.pT=new A.l1(B.N,null,null,B.pW,null)
@@ -124567,9 +124567,9 @@ B.eD=new A.y0(3,3,"mixed")
 B.Ii=new A.y2(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.mO=new A.ay(57690,"MaterialIcons",!1)
 B.mU=new A.aY(B.mO,16,B.z,null,null)
-B.a7A=new A.aC("Done today",null,null,null,null,null,null,null,null,null)
+B.a7B=new A.aC("Done today",null,null,null,null,null,null,null,null,null)
 B.o=new A.ya(0,"none")
-B.Ij=new A.Ed(B.mU,B.a7A,B.bb,null,null)
+B.Ij=new A.Ed(B.mU,B.a7B,B.bb,null,null)
 B.eE=new A.eL(0,B.q)
 B.Il=new A.Em(null)
 B.Im=new A.Em(B.nU)
@@ -125096,8 +125096,8 @@ B.M=new A.F(0,0)
 B.LZ=new A.Ut(B.M,B.M)
 B.bh=new A.Uw(1,"loose")
 B.EF=new A.B5(1,"fade")
-B.a87=new A.aC("Sobriety Copilot",null,null,null,null,B.EF,null,null,null,null)
-B.M_=new A.f8(1,B.bh,B.a87,null)
+B.a88=new A.aC("Sobriety Copilot",null,null,null,null,B.EF,null,null,null,null)
+B.M_=new A.f8(1,B.bh,B.a88,null)
 B.a1b=new A.d7(null,38,null,null)
 B.M0=new A.f8(1,B.bh,B.a1b,null)
 B.M1=new A.u3(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
@@ -125579,8 +125579,8 @@ B.QH=s([B.a1T,B.a1O,B.a1N,B.a1Q,B.a1S,B.a1V,B.a1Z,B.a1R,B.a1W,B.a1U,B.a1Y,B.a1X,
 B.QJ=s(["BC","AD"],t.s)
 B.a8h=new A.aC("Nearby",null,null,null,null,null,null,null,null,null)
 B.Gv=new A.nw("nearby",B.a8h,t.Zx)
-B.a7p=new A.aC("Online now",null,null,null,null,null,null,null,null,null)
-B.Gu=new A.nw("online",B.a7p,t.Zx)
+B.a7q=new A.aC("Online now",null,null,null,null,null,null,null,null,null)
+B.Gu=new A.nw("online",B.a7q,t.Zx)
 B.QK=s([B.Gv,B.Gu],A.ah("A<nw<j>>"))
 B.QM=s([18,15,10,12,15,18,15,12,12],t.n)
 B.a8E=new A.lE("warm","Warm","Reassuring, conversational")
@@ -125705,8 +125705,8 @@ B.PE=new A.fQ(B.jm,B.ER,null,null,null,null,null,null,null,B.u,!0,null,null,!1,n
 B.Yt=new A.ii(B.ab8,B.PE,null,t.qH)
 B.ab9=new A.hf(2,"saved")
 B.NT=new A.aY(B.rN,null,null,null,null)
-B.a85=new A.aC("Saved passages",null,null,null,null,null,null,null,null,null)
-B.PC=new A.fQ(B.NT,B.a85,null,null,null,null,null,null,null,B.u,!0,null,null,!1,null,null,null,!1,null,null,null,null,null,null,null,null,!0,null)
+B.a86=new A.aC("Saved passages",null,null,null,null,null,null,null,null,null)
+B.PC=new A.fQ(B.NT,B.a86,null,null,null,null,null,null,null,B.u,!0,null,null,!1,null,null,null,!1,null,null,null,null,null,null,null,null,!0,null)
 B.Yq=new A.ii(B.ab9,B.PC,null,t.qH)
 B.Fo=new A.hf(3,"graph")
 B.Nf=new A.ay(984598,"MaterialIcons",!1)
@@ -125716,13 +125716,13 @@ B.PF=new A.fQ(B.O5,B.EP,null,null,null,null,null,null,null,B.u,!0,null,null,!1,n
 B.Yr=new A.ii(B.Fo,B.PF,null,t.qH)
 B.Fp=new A.hf(4,"meetings")
 B.Ny=new A.aY(B.mR,null,null,null,null)
-B.a80=new A.aC("Find meetings",null,null,null,null,null,null,null,null,null)
-B.PD=new A.fQ(B.Ny,B.a80,null,null,null,null,null,null,null,B.u,!0,null,null,!1,null,null,null,!1,null,null,null,null,null,null,null,null,!0,null)
+B.a81=new A.aC("Find meetings",null,null,null,null,null,null,null,null,null)
+B.PD=new A.fQ(B.Ny,B.a81,null,null,null,null,null,null,null,B.u,!0,null,null,!1,null,null,null,!1,null,null,null,null,null,null,null,null,!0,null)
 B.Yw=new A.ii(B.Fp,B.PD,null,t.qH)
 B.aba=new A.hf(5,"crisis")
 B.Od=new A.aY(B.t4,null,null,null,null)
-B.a86=new A.aC("Crisis resources",null,null,null,null,null,null,null,null,null)
-B.PA=new A.fQ(B.Od,B.a86,null,null,null,null,null,null,null,B.u,!0,null,null,!1,null,null,null,!1,null,null,null,null,null,null,null,null,!0,null)
+B.a87=new A.aC("Crisis resources",null,null,null,null,null,null,null,null,null)
+B.PA=new A.fQ(B.Od,B.a87,null,null,null,null,null,null,null,B.u,!0,null,null,!1,null,null,null,!1,null,null,null,null,null,null,null,null,!0,null)
 B.Yo=new A.ii(B.aba,B.PA,null,t.qH)
 B.abb=new A.hf(6,"altRecovery")
 B.MT=new A.ay(61041,"MaterialIcons",!1)
@@ -127059,8 +127059,8 @@ B.cL=new A.aEx(1,"down")
 B.NA=new A.aY(B.t8,13,B.z,null,null)
 B.a18=new A.d7(3,null,null,null)
 B.a5X=new A.G(!0,B.z,null,null,null,null,11,B.aq,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
-B.a7D=new A.aC("Private",null,B.a5X,null,null,null,null,null,null,null)
-B.Qs=s([B.NA,B.a18,B.a7D],t.p)
+B.a7E=new A.aC("Private",null,B.a5X,null,null,null,null,null,null,null)
+B.Qs=s([B.NA,B.a18,B.a7E],t.p)
 B.Zr=new A.vN(B.ay,B.i,B.O,B.p,null,B.cL,null,0,B.Qs,null)
 B.Zs=new A.YW(null)
 B.Zt=new A.J1(1333)
@@ -127373,18 +127373,18 @@ B.a1g=new A.ly(3,"hide")
 B.acr=new A.ly(4,"remove")
 B.a1h=new A.ly(5,"timeout")
 B.a1i=new A.AM(null,null,null,null,null,null,null,null,null,null,null,null,null,null)
-B.a7w=new A.aC("Couldn't send the report.",null,null,null,null,null,null,null,null,null)
-B.a1j=new A.eY(B.a7w,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
-B.a7M=new A.aC("Mood saved.",null,null,null,null,null,null,null,null,null)
-B.a1k=new A.eY(B.a7M,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
+B.a7x=new A.aC("Couldn't send the report.",null,null,null,null,null,null,null,null,null)
+B.a1j=new A.eY(B.a7x,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
+B.a7N=new A.aC("Mood saved.",null,null,null,null,null,null,null,null,null)
+B.a1k=new A.eY(B.a7N,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
 B.a8s=new A.aC("No text found in the image.",null,null,null,null,null,null,null,null,null)
 B.a1l=new A.eY(B.a8s,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
 B.a7g=new A.aC("Thanks \u2014 we'll look for feeds covering your area.",null,null,null,null,null,null,null,null,null)
 B.a1m=new A.eY(B.a7g,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
-B.a7u=new A.aC("Thanks \u2014 reported.",null,null,null,null,null,null,null,null,null)
-B.a1n=new A.eY(B.a7u,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
-B.a81=new A.aC(u.F,null,null,null,null,null,null,null,null,null)
-B.a1o=new A.eY(B.a81,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
+B.a7v=new A.aC("Thanks \u2014 reported.",null,null,null,null,null,null,null,null,null)
+B.a1n=new A.eY(B.a7v,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
+B.a82=new A.aC(u.F,null,null,null,null,null,null,null,null,null)
+B.a1o=new A.eY(B.a82,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
 B.a7k=new A.aC("Could not open the document.",null,null,null,null,null,null,null,null,null)
 B.a1p=new A.eY(B.a7k,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
 B.a8p=new A.aC("Could not scan text \u2014 please try again.",null,null,null,null,null,null,null,null,null)
@@ -127395,16 +127395,16 @@ B.a75=new A.aC("Couldn't open link",null,null,null,null,null,null,null,null,null
 B.a1s=new A.eY(B.a75,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
 B.a7h=new A.aC("Saved \u2014 good night.",null,null,null,null,null,null,null,null,null)
 B.a1t=new A.eY(B.a7h,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
-B.a82=new A.aC("Could not open the link.",null,null,null,null,null,null,null,null,null)
-B.a1u=new A.eY(B.a82,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
-B.a7B=new A.aC("Couldn't send the request.",null,null,null,null,null,null,null,null,null)
-B.a1v=new A.eY(B.a7B,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
+B.a83=new A.aC("Could not open the link.",null,null,null,null,null,null,null,null,null)
+B.a1u=new A.eY(B.a83,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
+B.a7C=new A.aC("Couldn't send the request.",null,null,null,null,null,null,null,null,null)
+B.a1v=new A.eY(B.a7C,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
 B.a8c=new A.aC("Up to 4 photos at a time.",null,null,null,null,null,null,null,null,null)
 B.a1w=new A.eY(B.a8c,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
-B.a7Q=new A.aC("Download failed \u2014 check your connection.",null,null,null,null,null,null,null,null,null)
-B.a1x=new A.eY(B.a7Q,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
-B.a7V=new A.aC("Copied",null,null,null,null,null,null,null,null,null)
-B.Ed=new A.eY(B.a7V,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
+B.a7R=new A.aC("Download failed \u2014 check your connection.",null,null,null,null,null,null,null,null,null)
+B.a1x=new A.eY(B.a7R,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
+B.a7W=new A.aC("Copied",null,null,null,null,null,null,null,null,null)
+B.Ed=new A.eY(B.a7W,null,null,null,null,null,null,null,null,null,null,null,null,B.aL,!1,null,null,null,B.B,null)
 B.Ee=new A.JL(0,"permissive")
 B.a1y=new A.JL(1,"normal")
 B.a1z=new A.JL(2,"forced")
@@ -127814,40 +127814,40 @@ B.a7m=new A.aC("An on-device voice reads each step label.",null,null,null,null,n
 B.ek=new A.aC("Cancel",null,null,null,null,null,null,null,null,null)
 B.a7n=new A.aC("Answers can cite indexed sources with no connection",null,null,null,null,null,null,null,null,null)
 B.a7o=new A.aC('Video apps show your account name and photo to everyone in the meeting. For anonymity, consider renaming yourself to a first name and last initial (e.g. "Sam B.") and joining with your camera off.',null,null,null,null,null,null,null,null,null)
+B.a7p=new A.aC("Deep dive \xb7 read the full source section",null,null,null,null,null,null,null,null,null)
 B.EM=new A.aC("Erase",null,null,null,null,null,null,null,null,null)
-B.a7q=new A.aC("Discreet display",null,null,null,null,null,null,null,null,null)
-B.a7r=new A.aC("Delete",null,null,null,null,null,null,null,null,null)
-B.a7s=new A.aC("Read answers aloud",null,null,null,null,null,null,null,null,null)
-B.a7t=new A.aC("Guided breathing & grounding sessions",null,null,null,null,null,null,null,null,null)
-B.a7v=new A.aC("System",null,null,null,null,null,null,null,null,null)
-B.a7x=new A.aC("988 Suicide & Crisis Lifeline",null,null,null,null,null,null,null,null,null)
-B.a7y=new A.aC("NA meetings",null,null,null,null,null,null,null,null,null)
-B.a7z=new A.aC("Just for Today (na.org)",null,null,null,null,null,null,null,null,null)
-B.a7C=new A.aC("Check in for today",null,null,null,null,null,null,null,null,null)
+B.a7r=new A.aC("Discreet display",null,null,null,null,null,null,null,null,null)
+B.a7s=new A.aC("Delete",null,null,null,null,null,null,null,null,null)
+B.a7t=new A.aC("Read answers aloud",null,null,null,null,null,null,null,null,null)
+B.a7u=new A.aC("Guided breathing & grounding sessions",null,null,null,null,null,null,null,null,null)
+B.a7w=new A.aC("System",null,null,null,null,null,null,null,null,null)
+B.a7y=new A.aC("988 Suicide & Crisis Lifeline",null,null,null,null,null,null,null,null,null)
+B.a7z=new A.aC("NA meetings",null,null,null,null,null,null,null,null,null)
+B.a7A=new A.aC("Just for Today (na.org)",null,null,null,null,null,null,null,null,null)
+B.a7D=new A.aC("Check in for today",null,null,null,null,null,null,null,null,null)
 B.EN=new A.aC("Stop tracking",null,null,null,null,null,null,null,null,null)
-B.a7E=new A.aC("Still riding it? Get support",null,null,null,null,null,null,null,null,null)
-B.a7F=new A.aC("Enable a play button to hear answers (text-to-speech).",null,null,null,null,null,null,null,null,null)
-B.a7G=new A.aC("Open",null,null,null,null,null,null,null,null,null)
-B.a7H=new A.aC("I read this",null,null,null,null,null,null,null,null,null)
+B.a7F=new A.aC("Still riding it? Get support",null,null,null,null,null,null,null,null,null)
+B.a7G=new A.aC("Enable a play button to hear answers (text-to-speech).",null,null,null,null,null,null,null,null,null)
+B.a7H=new A.aC("Open",null,null,null,null,null,null,null,null,null)
+B.a7I=new A.aC("I read this",null,null,null,null,null,null,null,null,null)
 B.EO=new A.aC("Clear all",null,null,null,null,null,null,null,null,null)
-B.a7I=new A.aC("Show thinking",null,null,null,null,null,null,null,null,null)
-B.a7J=new A.aC("Clear all conversations?",null,null,null,null,null,null,null,null,null)
-B.a7K=new A.aC("Offline citations enabled",null,null,null,null,null,null,null,null,null)
-B.a7L=new A.aC("Study This",null,null,null,null,null,null,null,null,null)
-B.a7N=new A.aC("Privacy Policy",null,null,null,null,null,null,null,null,null)
-B.a7O=new A.aC("Dark",null,null,null,null,null,null,null,null,null)
-B.a7P=new A.aC("Generate AI study guide for the whole Step",null,null,null,null,null,null,null,null,null)
-B.a7R=new A.aC("SMART Recovery",null,null,null,null,null,null,null,null,null)
-B.a7S=new A.aC("Display the model's reasoning steps for each answer.",null,null,null,null,null,null,null,null,null)
-B.a7T=new A.aC("Save check-in",null,null,null,null,null,null,null,null,null)
-B.a7U=new A.aC("Speak step cues",null,null,null,null,null,null,null,null,null)
-B.a7W=new A.aC("Don't see meetings near you? Tell us",null,null,null,null,null,null,null,null,null)
-B.a7X=new A.aC("Update",null,null,null,null,null,null,null,null,null)
-B.a7Y=new A.aC("Get support now",null,null,null,null,null,null,null,null,null)
-B.a7Z=new A.aC("~44 MB \xb7 lets answers cite sources when offline",null,null,null,null,null,null,null,null,null)
-B.a8_=new A.aC("Stop tracking?",null,null,null,null,null,null,null,null,null)
-B.a83=new A.aC("flutter_map | \xa9 ",null,null,null,null,null,null,null,null,null)
-B.a88=new A.aC("Deep dive \xb7 read the full Step section",null,null,null,null,null,null,null,null,null)
+B.a7J=new A.aC("Show thinking",null,null,null,null,null,null,null,null,null)
+B.a7K=new A.aC("Clear all conversations?",null,null,null,null,null,null,null,null,null)
+B.a7L=new A.aC("Offline citations enabled",null,null,null,null,null,null,null,null,null)
+B.a7M=new A.aC("Study This",null,null,null,null,null,null,null,null,null)
+B.a7O=new A.aC("Privacy Policy",null,null,null,null,null,null,null,null,null)
+B.a7P=new A.aC("Dark",null,null,null,null,null,null,null,null,null)
+B.a7Q=new A.aC("Generate AI study guide for the whole Step",null,null,null,null,null,null,null,null,null)
+B.a7S=new A.aC("SMART Recovery",null,null,null,null,null,null,null,null,null)
+B.a7T=new A.aC("Display the model's reasoning steps for each answer.",null,null,null,null,null,null,null,null,null)
+B.a7U=new A.aC("Save check-in",null,null,null,null,null,null,null,null,null)
+B.a7V=new A.aC("Speak step cues",null,null,null,null,null,null,null,null,null)
+B.a7X=new A.aC("Don't see meetings near you? Tell us",null,null,null,null,null,null,null,null,null)
+B.a7Y=new A.aC("Update",null,null,null,null,null,null,null,null,null)
+B.a7Z=new A.aC("Get support now",null,null,null,null,null,null,null,null,null)
+B.a8_=new A.aC("~44 MB \xb7 lets answers cite sources when offline",null,null,null,null,null,null,null,null,null)
+B.a80=new A.aC("Stop tracking?",null,null,null,null,null,null,null,null,null)
+B.a84=new A.aC("flutter_map | \xa9 ",null,null,null,null,null,null,null,null,null)
 B.a89=new A.aC("Find a meeting",null,null,null,null,null,null,null,null,null)
 B.a8a=new A.aC("Daily Reflections (aa.org)",null,null,null,null,null,null,null,null,null)
 B.a8b=new A.aC("Done",null,null,null,null,null,null,null,null,null)
