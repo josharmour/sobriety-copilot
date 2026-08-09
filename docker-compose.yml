@@ -35,6 +35,10 @@ x-app-env: &app-env
   CHROMA_PORT: "8000"
   CHROMA_BATCH_SIZE: "256"
   DOCUMENTS_DIR: /app/documents
+  # Manifest corpus for structure-aware deep dives (reads the .manifests dir
+  # mounted from ./documents at container path /app/documents). Explicit so
+  # the container never falls back to a dev-machine SMB path.
+  MANIFESTS_DIR: /app/documents/.manifests
   RAG_COLLECTION: recovery_literature
   INDEX_QUEUE_NAME: indexing
   INDEX_TASK_TTL_SECONDS: "604800"

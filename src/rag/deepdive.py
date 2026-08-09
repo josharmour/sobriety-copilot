@@ -18,9 +18,28 @@ from typing import Any
 
 from src.rag.sections import load as sections_load
 
-# Default location of the manifest corpus (the SMB-mounted, read-only store).
-# Overridable via the MANIFESTS_DIR env var so tests can point elsewhere.
-DEFAULT_MANIFESTS_DIR = "/Users/joshu/repos/sobriety-copilot/documents/.manifests"
+# Location of the manifest corpus. Production runs in Docker where the
+# documents tree (incl. .manifests) is mounted at /app/documents; the SMB path
+# below is the local (macOS dev) fallback. Override via the MANIFESTS_DIR env
+# var (set in docker-compose app-env for the container).
+CONTAINER_MANIFESTS_DIR = "/app/documents/.manifests"
+LOCAL_MANIFESTS_DIR = "/Users/joshu/repos/sobriety-copilot/documents/.manifests"
+
+
+def manifests_dir() -> str:
+    """Return the configured manifests directory.
+
+    Resolution order: MANIFESTS_DIR env var → container path (if it exists on
+    disk) → local macOS SMB path. The container path is checked because the
+    Docker image has no MANIFESTS_DIR baked in, and the default must point at
+    real manifests in production as well as on a dev machine.
+    """
+    env = os.environ.get("MANIFESTS_DIR", "").strip()
+    if env:
+        return env
+    if os.path.isdir(CONTAINER_MANIFESTS_DIR):
+        return CONTAINER_MANIFESTS_DIR
+    return LOCAL_MANIFESTS_DIR
 
 _STEP_WORD_NUMS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
@@ -31,11 +50,6 @@ _STEP_WORD_NUMS = {
 # 'Step Five. As we took inventory, ...' that some manifests carry as their
 # own level-2 heading, so the canonical 12 steps are selected cleanly.
 _STEP_HEADING_RE = re.compile(r"^Step\s+([A-Za-z]+|\d+)$", re.IGNORECASE)
-
-
-def manifests_dir() -> str:
-    """Return the configured manifests directory (default: the SMB store)."""
-    return os.environ.get("MANIFESTS_DIR", DEFAULT_MANIFESTS_DIR)
 
 
 def _is_step_heading(title: str) -> bool:
