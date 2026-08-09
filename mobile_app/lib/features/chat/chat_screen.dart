@@ -1683,8 +1683,16 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
     final baseUrl = ref.read(appConfigProvider).baseUrl;
     final client = ref.read(httpClientProvider);
     final root = baseUrl.replaceAll(RegExp(r'/+$'), '');
-    final dir = s.url.replaceFirst('/api/documents/', '').trim();
-    final doc = s.docId ?? dir;
+    // Prefer the server-provided manifest doc_id (a slug like
+    // "twelve-steps-and-twelve-traditions"). Fall back to the bare filename
+    // stem of the source URL when doc_id is absent (e.g. legacy bundles).
+    String doc = s.docId ?? '';
+    if (doc.isEmpty) {
+      final dir = s.url.replaceFirst('/api/documents/', '').trim();
+      // Strip any leading category dir and file extension to a bare stem.
+      final stem = dir.split('/').last.replaceFirst(RegExp(r'\.[^.]+$'), '');
+      doc = stem;
+    }
     final uri = Uri.parse('$root/api/deepdive').replace(
       queryParameters: {
         if (doc.isNotEmpty) 'doc': doc,

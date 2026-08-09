@@ -901,6 +901,10 @@ def _build_chat_sources(results) -> list[dict[str, Any]]:
             "excerpt": excerpt,
             "match_scale": result.match_scale,
             "context_scale": result.scale,
+            # Manifest doc_id (slug) so clients can fetch the assembled section
+            # via /api/deepdive?doc=<doc_id>. Defaults to empty when the chunk
+            # has no manifest doc_id (e.g. legacy indices or non-manifest docs).
+            "doc_id": result.doc_id or "",
             # Conceptual-citation tag surfaced on the chip. Defaults to [] so
             # the frontend contract is stable even when the concept layer has
             # not run (e.g. results built before the field was populated).
