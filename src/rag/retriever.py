@@ -7,7 +7,7 @@ import os
 import re
 import threading
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .chroma_client import create_chroma_client
 from .embeddings import embed_query
@@ -206,6 +206,7 @@ class RetrievalResult:
     block_ids: list[str] | None = None
     printed_page_start: int | str | None = None
     printed_page_end: int | str | None = None
+    concepts: list[str] = field(default_factory=list)
 
 
 @dataclass
