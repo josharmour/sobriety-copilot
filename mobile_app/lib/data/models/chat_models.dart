@@ -505,6 +505,40 @@ class DeepDive {
 }
 
 // ---------------------------------------------------------------------------
+// /api/deepdive/generate — AI prose deep-dive (generation side)
+// ---------------------------------------------------------------------------
+
+/// The LLM-generated deep-dive returned by POST /api/deepdive/generate.
+class DeepDiveGeneration {
+  final String? docId;
+  final String? docTitle;
+  final String? sectionTitle;
+  final int? wordCount;
+  final String mode; // e.g. 'section', 'overview'
+  final String text; // the generated prose
+
+  const DeepDiveGeneration({
+    this.docId,
+    this.docTitle,
+    this.sectionTitle,
+    this.wordCount,
+    this.mode = '',
+    this.text = '',
+  });
+
+  factory DeepDiveGeneration.fromJson(Map<String, dynamic> json) {
+    return DeepDiveGeneration(
+      docId: json['doc_id']?.toString(),
+      docTitle: json['doc_title']?.toString(),
+      sectionTitle: json['section_title']?.toString(),
+      wordCount: _asIntOrNull(json['word_count']),
+      mode: (json['mode'] ?? '').toString(),
+      text: (json['text'] ?? '').toString(),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 

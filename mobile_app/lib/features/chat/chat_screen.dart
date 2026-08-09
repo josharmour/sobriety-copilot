@@ -1678,7 +1678,7 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
   }
 
   /// Fetches /api/deepdive for this source and shows the assembled Step
-  /// section(s) in a sheet. Uses the live AppConfig base URL.
+  /// section(s) + an option to generate an AI study guide. Uses live AppConfig.
   Future<void> _deepDive(Source s) async {
     final baseUrl = ref.read(appConfigProvider).baseUrl;
     final client = ref.read(httpClientProvider);
@@ -1690,28 +1690,30 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
         if (doc.isNotEmpty) 'doc': doc,
       },
     );
+    DeepDive? deepDive;
     try {
       final res = await client.get(uri).timeout(const Duration(seconds: 15));
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw Exception('Deep dive unavailable (${res.statusCode}).');
       }
       final json = jsonDecode(res.body) as Map<String, dynamic>;
-      final deepDive = DeepDive.fromJson(json);
+      deepDive = DeepDive.fromJson(json);
       if (deepDive.sections.isEmpty) {
         throw Exception('No Step sections found for this source.');
       }
-      if (!mounted) return;
-      await showAppSheet(
-        context,
-        _DeepDiveSheet(deepDive: deepDive),
-        initialSize: 0.85,
-      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString())),
       );
+      return;
     }
+    if (!mounted) return;
+    await showAppSheet(
+      context,
+      _DeepDiveSheet(deepDive: deepDive, doc: doc, baseUrl: baseUrl),
+      initialSize: 0.85,
+    );
   }
 
   @override
@@ -1856,18 +1858,70 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
 // ════════════════════════════════════════════════════════════════════════════
 
 /// Shows the assembled Step section(s) returned by GET /api/deepdive
-/// (read/view side only — never calls /api/deepdive/generate).
-class _DeepDiveSheet extends StatelessWidget {
+/// (read/view side) plus an optional AI-generated study guide.
+class _DeepDiveSheet extends ConsumerStatefulWidget {
   final DeepDive deepDive;
-  const _DeepDiveSheet({required this.deepDive});
+  final String doc;
+  final String baseUrl;
+  const _DeepDiveSheet({
+    required this.deepDive,
+    required this.doc,
+    required this.baseUrl,
+  });
+
+  @override
+  ConsumerState<_DeepDiveSheet> createState() => _DeepDiveSheetState();
+}
+
+class _DeepDiveSheetState extends ConsumerState<_DeepDiveSheet> {
+  bool _generating = false;
+  DeepDiveGeneration? _generation;
+  String? _error;
 
   String get _docTitle =>
-      deepDive.title?.isNotEmpty == true ? deepDive.title! : 'Deep dive';
+      widget.deepDive.title?.isNotEmpty == true ? widget.deepDive.title! : 'Deep dive';
+
+  Future<void> _generate() async {
+    setState(() {
+      _generating = true;
+      _error = null;
+    });
+    try {
+      final gen = await _generateDeepDiveImpl();
+      if (!mounted) return;
+      setState(() {
+        _generation = gen;
+        _generating = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _generating = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  Future<DeepDiveGeneration> _generateDeepDiveImpl() async {
+    final client = ref.read(httpClientProvider);
+    final root = widget.baseUrl.replaceAll(RegExp(r'/+$'), '');
+    final uri = Uri.parse('$root/api/deepdive/generate').replace(
+      queryParameters: {
+        if (widget.doc.isNotEmpty) 'doc': widget.doc,
+      },
+    );
+    final res = await client.post(uri).timeout(const Duration(seconds: 60));
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('Generation unavailable (${res.statusCode}).');
+    }
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    return DeepDiveGeneration.fromJson(json);
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final sections = deepDive.sections;
+    final sections = widget.deepDive.sections;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -1882,13 +1936,16 @@ class _DeepDiveSheet extends StatelessWidget {
             Text(_docTitle, style: theme.textTheme.titleLarge),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              deepDive.sections.length == 1
-                  ? (deepDive.requestedSection?.isNotEmpty == true
-                      ? 'Full text · ${deepDive.requestedSection}'
+              widget.deepDive.sections.length == 1
+                  ? (widget.deepDive.requestedSection?.isNotEmpty == true
+                      ? 'Full text · ${widget.deepDive.requestedSection}'
                       : 'Full Step section')
                   : '${sections.length} Step sections',
               style: theme.textTheme.bodySmall,
             ),
+            const SizedBox(height: AppSpacing.md),
+            // AI study guide
+            _aiGuideSection(context),
             const SizedBox(height: AppSpacing.md),
             Expanded(
               child: ListView(
@@ -1899,6 +1956,78 @@ class _DeepDiveSheet extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _aiGuideSection(BuildContext context) {
+    final theme = Theme.of(context);
+    if (_generating) {
+      return Row(
+        children: [
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text('Writing your study guide…', style: theme.textTheme.bodyMedium),
+        ],
+      );
+    }
+    if (_generation != null) {
+      final g = _generation!;
+      return Card(
+        color: AppColors.highlightBg(Theme.of(context).brightness == Brightness.dark),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('✨ AI Study Guide', style: theme.textTheme.titleMedium),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                g.sectionTitle?.isNotEmpty == true ? (g.sectionTitle!) : 'Deep dive',
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(g.text, style: theme.textTheme.bodyMedium?.copyWith(height: 1.5)),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_error != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+            child: Text(
+              _error!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _generate,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ),
+        ],
+      );
+    }
+    // CTA
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        onPressed: _generate,
+        icon: const Icon(Icons.auto_awesome),
+        label: const Text('Generate AI study guide for the whole Step'),
       ),
     );
   }

@@ -10,6 +10,11 @@ x-app-env: &app-env
   SLOW_COOLDOWN_S: "${SLOW_COOLDOWN_S:-120}"
   # Cloud RAG context diet — cap injected context chars (smaller = faster prefill).
   RAG_MAX_CONTEXT_CHARS: "${RAG_MAX_CONTEXT_CHARS:-12000}"
+  # OPT-IN conceptual-citation layer: when enabled, retrieved chunks are tagged
+  # with the concepts their passages speak to (concept facet expansion + label).
+  # Off by default to preserve existing retrieval behavior; enable for concept
+  # tags on citation chips.
+  RAG_CONCEPT_LABELS: "${RAG_CONCEPT_LABELS:-0}"
   # LLM_BASE_URL_DIFFUSION removed — single model on 10.0.0.10:8002
   # LLM_MODEL_DIFFUSION removed — single model on 10.0.0.10:8002
   LLM_BASE_URL_STANDARD: "${LLM_BASE_URL_STANDARD:-http://10.0.0.10:8002/v1}"
