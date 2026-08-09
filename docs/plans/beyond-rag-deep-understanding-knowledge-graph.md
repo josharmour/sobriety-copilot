@@ -4,12 +4,14 @@
 > **Owner:** Josh / Hermes
 > **Repo:** `~/development/sobriety-copilot` (local-disk clone; ship via `deploy.sh`)
 >
-> **⚠️ Update (2026-08-08):** Part 1A (deep-dive assembly), Part 2 (conceptual
-> citations), Part 3 (concept-coverage eval) foundation, and Part 4A/B backend
-> embryo are now **implemented and deployed** (commits b353b7d, ce6c6fc,
-> 587f977). `/api/deepdive` is live in production (verified). Remaining: the
-> **generation layer** (feed assembled sections to the LLM), the **frontend**
-> surfaces, and the **community-detection / WebGL graph** upgrade.
+> **⚠️ Update (2026-08-08):** All four parts now have working, **deployed**
+> implementations. Backend: `/api/deepdive` (assembly) + `/api/deepdive/generate`
+> (LLM prose deep-dive), conceptual citations (concept tags on source chips),
+> concept-coverage eval, and ontology-enriched `/api/graph` — all live and
+> verified in production (commits 587f977 → ed0a605, + web rebuild 5b6fec2).
+> Remaining (future/optional): WebGL/animated force-graph visual upgrade and
+> full per-step study-mode refinements; the deep-dive generation layer is in
+> but could gain streaming and per-step sequential assembly.
 
 **Goal:** Move the app from *surface similarity over an undifferentiated chunk blob* to a *structured, concept-aware model of the literature* that (1) deeply understands the common topics, (2) answers nuanced questions and gives deep dives on any topic, (3) cites passages on **conceptual** (not lexical) relevance, and (4) renders that knowledge as a rich, dynamic, navigable graph.
 
