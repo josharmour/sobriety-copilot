@@ -503,6 +503,8 @@ class _RagGraphScreenState extends ConsumerState<RagGraphScreen> {
         return const Color(0xFF1E3A8A);
       case 'term':
         return const Color(0xFF0D9488);
+      case 'concept':
+        return const Color(0xFF7C3AED);
       case 'prompt':
         return AppColors.accent;
       default:
@@ -520,6 +522,8 @@ class _RagGraphScreenState extends ConsumerState<RagGraphScreen> {
         return Icons.menu_book;
       case 'term':
         return Icons.local_offer;
+      case 'concept':
+        return Icons.account_tree;
       case 'prompt':
         return Icons.lightbulb_outline;
       default:

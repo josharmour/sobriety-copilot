@@ -33,6 +33,7 @@ from src.meetings.service import search_meetings, warmup_feeds as warmup_meeting
 from src.prompts.templates import NO_CONTEXT_TEMPLATE, USER_MESSAGE_TEMPLATE, system_message_for_tone
 from src.rag.chroma_client import find_largest_collection_with_prefix
 from src.rag.deepdive import assemble_deepdive, resolve_manifest_path
+from src.rag.deepdive_gen import DeepdiveGenerationError, generate_deepdive
 from src.rag.embeddings import warmup as warmup_embeddings
 from src.rag.indexer import DEFAULT_COLLECTION
 from src.rag.memory import UserMemoryManager, format_state_note
@@ -1708,7 +1709,35 @@ def suggest(
 def graph(q: str = Query(default="The Twelve Steps")):
     from src.rag.graph import build_knowledge_graph
     retriever_instance = _safe_get_retriever()
-    return build_knowledge_graph(q, retriever=retriever_instance)
+    ontology = _get_ontology()
+    return build_knowledge_graph(q, retriever=retriever_instance, ontology=ontology)
+
+
+# Ontology cache: the manifest corpus is a slow SMB mount, so we build it at
+# most once per short TTL window and fall back to the hand-authored graph
+# (ontology=None) on any failure — the endpoint shape never changes.
+_ontology_cache: dict[str, Any] = {"at": 0.0, "ontology": None}
+_ONTOLOGY_TTL_SECONDS = 300.0
+
+
+def _get_ontology() -> dict[str, Any] | None:
+    """Return the data-driven ontology, or ``None`` if unavailable/stale-safe build fails."""
+    now = time.time()
+    cached = _ontology_cache.get("ontology")
+    if cached is not None and (now - _ontology_cache.get("at", 0.0)) < _ONTOLOGY_TTL_SECONDS:
+        return cached
+    try:
+        from src.rag.ontology import build_ontology
+        ontology = build_ontology()
+        _ontology_cache["at"] = now
+        _ontology_cache["ontology"] = ontology
+        return ontology
+    except Exception:
+        # Corpus missing / unreadable / slow mount — keep graph working with the
+        # hand-authored (ontology=None) path.
+        _ontology_cache["at"] = now
+        _ontology_cache["ontology"] = None
+        return None
 
 
 _geocode_cache: dict[str, dict[str, Any] | None] = {}
@@ -2138,6 +2167,61 @@ def deepdive_doc(
         raise HTTPException(status_code=404, detail=f"No section matched: {section}")
 
     return payload
+
+
+@app.post("/api/deepdive/generate")
+def deepdive_generate(
+    doc: str = Query(
+        ..., description="Manifest doc_id or source-filename stem (e.g. twelve-steps-and-twelve-traditions)."
+    ),
+    section: str | None = Query(
+        default=None,
+        description="Optional specific section to deep-dive ('5', 'step five', 'tradition one').",
+    ),
+    tone: str = Query(default="warm", description="Tone variant: warm/factual/reflective/brief."),
+    summary_only: bool = Query(
+        default=False,
+        description="When section is omitted, return a summarized ordered overview of all sections.",
+    ),
+    max_tokens: int = Query(default=2048, ge=64, le=8192, description="Max tokens for the generated deep-dive."),
+):
+    """Generate a grounded prose deep-dive via the local LLM engine.
+
+    Mirrors the existing ``/api/deepdive`` assembly route but adds the
+    generation layer: it resolves the manifest, assembles the requested section
+    (or the whole listing), and drives the shared ``InferenceEngine`` (the same
+    global constructed from LLM_BASE_URL / LLM_MODEL / LLM_API_KEY) to produce
+    grounded prose.
+
+    Distinguishes failure modes cleanly:
+    - 404 when the doc or requested section is not found (assembly layer);
+    - 502 when the engine itself fails or returns empty (generation layer).
+    """
+    manifest_path = resolve_manifest_path(doc)
+    if manifest_path is None:
+        raise HTTPException(
+            status_code=404, detail=f"Document manifest not found for doc_id: {doc}"
+        )
+
+    try:
+        result = generate_deepdive(
+            engine,
+            manifest_path,
+            section=section,
+            tone=tone,
+            summary_only=summary_only,
+            max_tokens=max_tokens,
+        )
+    except DeepdiveGenerationError as exc:
+        raise HTTPException(status_code=502, detail=f"Deep-dive generation failed: {exc}")
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404, detail=f"Document manifest not found on disk: {manifest_path}"
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to generate deepdive: {exc}")
+
+    return result
 
 
 @app.get("/api/private/embedder/{part}")

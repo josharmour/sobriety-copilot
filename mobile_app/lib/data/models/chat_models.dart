@@ -11,6 +11,7 @@ class Source {
   final String? docId;
   final List<String>? blockIds;
   final dynamic page; // printed page number (printed_page_start)
+  final List<String> concepts; // conceptual tags ("step two", "surrender", ...)
 
   const Source({
     required this.source,
@@ -22,6 +23,7 @@ class Source {
     this.docId,
     this.blockIds,
     this.page,
+    this.concepts = const [],
   });
 
   factory Source.fromJson(Map<String, dynamic> json) {
@@ -37,6 +39,10 @@ class Source {
           ? (json['block_ids'] as List<dynamic>).map((e) => e.toString()).toList()
           : null,
       page: json['page'],
+      concepts: (json['concepts'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList(),
     );
   }
 
@@ -50,6 +56,7 @@ class Source {
         if (docId != null) 'doc_id': docId,
         if (blockIds != null) 'block_ids': blockIds,
         if (page != null) 'page': page,
+        if (concepts.isNotEmpty) 'concepts': concepts,
       };
 
   /// Human title derived from the filename: basename, strip ext, '_'->' ',
@@ -437,6 +444,67 @@ class DoneEvent extends ChatEvent {
 }
 
 // ---------------------------------------------------------------------------
+// /api/deepdive — assembled Step-section payload (read/view side)
+// ---------------------------------------------------------------------------
+
+/// A single assembled section from a manifest, as returned by /api/deepdive.
+/// When `full_text` is present the server was asked for that one section in
+/// full (GET /api/deepdive?doc=...&section=...); otherwise only the listing
+/// fields (title, order, word_count, preview) are populated.
+class DeepDiveSection {
+  final String? title;
+  final int? order;
+  final int? wordCount;
+  final String preview;
+  final String fullText;
+
+  const DeepDiveSection({
+    this.title,
+    this.order,
+    this.wordCount,
+    this.preview = '',
+    this.fullText = '',
+  });
+
+  factory DeepDiveSection.fromJson(Map<String, dynamic> json) {
+    return DeepDiveSection(
+      title: json['title']?.toString(),
+      order: _asIntOrNull(json['order']),
+      wordCount: _asIntOrNull(json['word_count']),
+      preview: (json['preview'] ?? '').toString(),
+      fullText: (json['full_text'] ?? '').toString(),
+    );
+  }
+}
+
+/// Top-level /api/deepdive response.
+class DeepDive {
+  final String? docId;
+  final String? title; // document title
+  final String? requestedSection; // section title when one was requested
+  final List<DeepDiveSection> sections;
+
+  const DeepDive({
+    this.docId,
+    this.title,
+    this.requestedSection,
+    this.sections = const [],
+  });
+
+  factory DeepDive.fromJson(Map<String, dynamic> json) {
+    return DeepDive(
+      docId: json['doc_id']?.toString(),
+      title: json['title']?.toString(),
+      requestedSection: json['requested_section']?.toString(),
+      sections: (json['sections'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(DeepDiveSection.fromJson)
+          .toList(),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
@@ -450,6 +518,12 @@ int _asInt(dynamic v) {
   if (v is num) return v.toInt();
   if (v is String) return int.tryParse(v) ?? 0;
   return 0;
+}
+
+int? _asIntOrNull(dynamic v) {
+  if (v is num) return v.toInt();
+  if (v is String) return int.tryParse(v);
+  return null;
 }
 
 final Random _rng = Random();

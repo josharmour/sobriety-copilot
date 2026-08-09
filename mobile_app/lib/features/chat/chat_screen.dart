@@ -1467,9 +1467,23 @@ class _MessageBubble extends StatelessWidget {
     return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.start,
       children: [
         for (final s in unique)
-          SourceChip(source: s, onTap: () => onSourceTap(s, unique)),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SourceChip(source: s, onTap: () => onSourceTap(s, unique)),
+              if (s.concepts.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xs),
+                _ConceptTags(
+                  concepts: s.concepts,
+                  onTap: () => onSourceTap(s, unique),
+                ),
+              ],
+            ],
+          ),
       ],
     );
   }
@@ -1535,6 +1549,50 @@ class _MessageBubble extends StatelessWidget {
 // ════════════════════════════════════════════════════════════════════════════
 // Source detail bottom sheet
 // ════════════════════════════════════════════════════════════════════════════
+
+/// Small labelled chips showing a source's conceptual tags (e.g. "step two",
+/// "surrender"). Tapping one opens the source detail sheet. Styled with the
+/// lighthouse palette; renders nothing when [concepts] is empty.
+class _ConceptTags extends StatelessWidget {
+  final List<String> concepts;
+  final VoidCallback? onTap;
+  const _ConceptTags({required this.concepts, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    if (concepts.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final borderCol =
+        isDark ? const Color(0xFF2E4A63) : const Color(0xFFBFDCE9);
+    final labelColor = AppColors.accent;
+    return Wrap(
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      children: [
+        for (final concept in concepts)
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: 2,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.accent.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+              border: Border.all(color: borderCol),
+            ),
+            child: Text(
+              concept,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: labelColor,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
 
 class _SourceDetailSheet extends ConsumerStatefulWidget {
   final Source initialSource;
@@ -1619,6 +1677,43 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
     }
   }
 
+  /// Fetches /api/deepdive for this source and shows the assembled Step
+  /// section(s) in a sheet. Uses the live AppConfig base URL.
+  Future<void> _deepDive(Source s) async {
+    final baseUrl = ref.read(appConfigProvider).baseUrl;
+    final client = ref.read(httpClientProvider);
+    final root = baseUrl.replaceAll(RegExp(r'/+$'), '');
+    final dir = s.url.replaceFirst('/api/documents/', '').trim();
+    final doc = s.docId ?? dir;
+    final uri = Uri.parse('$root/api/deepdive').replace(
+      queryParameters: {
+        if (doc.isNotEmpty) 'doc': doc,
+      },
+    );
+    try {
+      final res = await client.get(uri).timeout(const Duration(seconds: 15));
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw Exception('Deep dive unavailable (${res.statusCode}).');
+      }
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      final deepDive = DeepDive.fromJson(json);
+      if (deepDive.sections.isEmpty) {
+        throw Exception('No Step sections found for this source.');
+      }
+      if (!mounted) return;
+      await showAppSheet(
+        context,
+        _DeepDiveSheet(deepDive: deepDive),
+        initialSize: 0.85,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1699,6 +1794,10 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                           'Relevance ${(s.similarity * 100).round()}% | Source ${index + 1} of $total',
                           style: theme.textTheme.bodySmall,
                         ),
+                        if (s.concepts.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          _ConceptTags(concepts: s.concepts),
+                        ],
                         const SizedBox(height: AppSpacing.md),
                         Expanded(
                           child: SingleChildScrollView(
@@ -1730,6 +1829,15 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: AppSpacing.sm),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton.icon(
+                            onPressed: () => _deepDive(s),
+                            icon: const Icon(Icons.menu_book),
+                            label: const Text('Deep dive · read the full Step section'),
+                          ),
+                        ),
                       ],
                     ),
                   );
@@ -1742,3 +1850,108 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
     );
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// Deep dive bottom sheet
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Shows the assembled Step section(s) returned by GET /api/deepdive
+/// (read/view side only — never calls /api/deepdive/generate).
+class _DeepDiveSheet extends StatelessWidget {
+  final DeepDive deepDive;
+  const _DeepDiveSheet({required this.deepDive});
+
+  String get _docTitle =>
+      deepDive.title?.isNotEmpty == true ? deepDive.title! : 'Deep dive';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final sections = deepDive.sections;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_docTitle, style: theme.textTheme.titleLarge),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              deepDive.sections.length == 1
+                  ? (deepDive.requestedSection?.isNotEmpty == true
+                      ? 'Full text · ${deepDive.requestedSection}'
+                      : 'Full Step section')
+                  : '${sections.length} Step sections',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Expanded(
+              child: ListView(
+                children: [
+                  for (final section in sections) _deepDiveSection(context, section),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _deepDiveSection(BuildContext context, DeepDiveSection section) {
+    final theme = Theme.of(context);
+    final title = section.title?.isNotEmpty == true
+        ? section.title!
+        : 'Section';
+    final wordCount = section.wordCount;
+    final body = section.fullText.isNotEmpty ? section.fullText : section.preview;
+    final isFull = section.fullText.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Flexible(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleMedium,
+                ),
+              ),
+              if (wordCount != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  '$wordCount words',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            body,
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
+          ),
+          if (isFull)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: Text(
+                '— full section —',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.accent,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+

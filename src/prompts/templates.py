@@ -128,3 +128,64 @@ NO_CONTEXT_TEMPLATE = """The person said: {question}
 
 No recovery literature has been indexed yet, so draw on your general knowledge of \
 recovery principles. Be upfront that your responses would be richer with the actual literature available."""
+
+# Deep-dive generation templates (Wave-3, additive). These turn an assembled
+# literature section (from src.rag.deepdive.assemble_deepdive) into a grounded
+# prose deep-dive via the local LLM. The user template carries the program-first
+# guardrails inline so the generation layer is safe even if only this prompt is
+# inspected; the dedicated system message layers leadership guidance on top of
+# the tone variant's existing safety block.
+DEEPDIVE_SYSTEM_MESSAGE = (
+    "You are writing a deep-dive study guide over a single passage of recovery "
+    "literature (12-step literature). Your job is to help someone in recovery "
+    "actually understand and work this material, not to hand them a summary.\n\n"
+    "How to write a deep-dive:\n"
+    "- Stay strictly grounded in the provided section text. Quote sparingly when the "
+    "exact wording matters; otherwise explain the material in plain, human language.\n"
+    "- Go deep, not wide: unpack what this section actually says, why it matters, and "
+    "how someone working the program would apply it. Be concrete about the practice.\n"
+    "- Do not invent passages, page numbers, or steps the section does not support. "
+    "If the text is silent on something, say that plainly.\n"
+    "- Write continuously in flowing prose (the occasional short heading is fine). "
+    "Never output filenames, file extensions, or bracketed citation markers.\n\n"
+)
+
+DEEPDIVE_TEMPLATE = """Below is a section of recovery literature assembled for a deep-dive study guide.
+
+Document: {doc_title}
+Section title: {title}
+Section length: {word_count} words
+
+--- SECTION TEXT START ---
+{section_text}
+--- SECTION TEXT END ---
+
+Write an in-depth, grounded deep-dive of this section. Read the whole passage
+carefully and then:
+- Walk through what the section actually teaches, in the order the authors present it.
+- Translate the language into plain, practical terms someone working the program can act on.
+- Where it helps, connect this section to the broader 12-step program, a sponsor, or a meeting.
+- Close by offering a short reflection question or a concrete next step for working this material.
+
+Remember this app and its deep-dives are a supplement, not a substitute: real
+recovery happens through meetings, a sponsor, a home group, and working with
+other people. Point the reader toward a sponsor, a meeting, or talking it
+through with someone in the program when that genuinely helps. Keep every word
+grounded in the provided literature — do not fabricate passages that are not here."""
+
+# Ordered-overview prompt used when summarizing every section (summary_only),
+# where shipping full per-section text would blow the context window.
+DEEPDIVE_OVERVIEW_TEMPLATE = """Below is an ordered listing of the sections of a recovery-literature document.
+
+Document: {doc_title}
+
+Sections ({count}):
+{listing}
+
+Give an ordered overview of what this document walks through. For each section,
+in order, write 2-4 sentences capturing what it teaches and why it matters in
+the program, then add a one-line through-line on how the sections build on one
+another. Treat this as a grounded guide — draw only on the previews provided.
+
+This app and its guides are a supplement, not a substitute for real recovery
+through meetings, a sponsor, a home group, and working with other people."""
