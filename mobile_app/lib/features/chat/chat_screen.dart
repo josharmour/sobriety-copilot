@@ -854,7 +854,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     focusNode: _inputFocus,
                     minLines: 1,
                     maxLines: 5,
-                    textInputAction: TextInputAction.newline,
+                    // Send on Enter. On web the TextField is a multiline textarea,
+                    // so without an explicit action it inserts a newline. Using
+                    // `send` + `onSubmitted` makes Enter send the query (Shift+Enter
+                    // still inserts a newline).
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _send(),
                     onChanged: _onInputChanged,
                     decoration: InputDecoration(
                       hintText: _isRecording
