@@ -121,6 +121,28 @@ def test_missing_manifest_raises():
 @pytest.mark.skipif(
     not os.path.isfile(REAL_MANIFEST), reason="real manifest not present on SMB path"
 )
+def test_non_step_doc_falls_back_to_real_sections():
+    """Docs without Step headings (As Bill Sees It) get their real sections.
+
+    Previously step_only=True filtered to zero sections for any non-12&12 book,
+    so a deep dive on them returned nothing. Now it falls back to the doc's
+    actual (non-Step) sections.
+    """
+    absi = os.path.join(REAL_DIR, "as-bill-sees-it.json")
+    if not os.path.isfile(absi):
+        return  # manifest absent; skip probe
+    payload = deepdive.assemble_deepdive(absi)
+    assert payload["sections"], "As Bill Sees It should yield sections (its real headings)"
+    # and no section should be a 'Step' heading
+    assert not any(
+        deepdive._is_step_heading(s["title"]) for s in payload["sections"]
+    ), "non-Step doc should not be mislabeled as Step sections"
+
+
+
+@pytest.mark.skipif(
+    not os.path.isfile(REAL_MANIFEST), reason="real manifest not present on SMB path"
+)
 def test_resolve_section_by_block_ids_scopes_depth():
     """A passage's block_ids scope the deep dive to its *actual* section.
 

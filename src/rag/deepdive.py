@@ -151,11 +151,17 @@ def assemble_deepdive(
     sections = doc.get("sections", [])
 
     if step_only:
-        sections = [
+        step_sections = [
             s for s in sections
             if _is_step_heading(s.get("title", ""))
         ]
-        sections.sort(key=lambda s: _step_number(s.get("title", "")) or 0)
+        step_sections.sort(key=lambda s: _step_number(s.get("title", "")) or 0)
+        # Only restrict to Step sections when this document actually HAS them
+        # (the 12&12). Books like "As Bill Sees It" or "Daily Reflections" have
+        # no Step headings — falling back to their real sections lets a deep
+        # dive work there too instead of returning nothing.
+        if step_sections:
+            sections = step_sections
 
     requested = _match_requested(sections, section) if section else None
 

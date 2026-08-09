@@ -1856,7 +1856,7 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                           child: TextButton.icon(
                             onPressed: () => _deepDive(s),
                             icon: const Icon(Icons.menu_book),
-                            label: const Text('Deep dive · read the full Step section'),
+                            label: const Text('Deep dive · read the full source section'),
                           ),
                         ),
                       ],
