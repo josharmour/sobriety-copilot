@@ -1,3 +1,4 @@
+from __future__ import annotations
 import re
 
 def collapse_doubled_layers(line: str) -> str:
@@ -140,6 +141,64 @@ def repair_ligatures(text: str) -> str:
     return re.sub(pattern, replace_match, text)
 
 
+ABBREVIATIONS = {
+    # Titles & honorifics
+    "dr", "mr", "mrs", "ms", "messrs", "prof", "rev", "fr", "sr", "jr", "st",
+    "gov", "sen", "rep", "gen", "col", "capt", "lt", "maj", "sgt", "hon", "pres",
+    # Fellowships & orgs
+    "aa", "na", "ca", "oiaa", "inc", "co", "corp", "ltd",
+    # Latin / citations / reference
+    "eg", "ie", "etc", "al", "vs", "v", "cf", "ca", "approx", "viz", "ibid", "op", "cit",
+    "p", "pp", "vol", "vols", "no", "nos", "ch", "sec", "fig", "ed", "eds", "app", "monogr"
+}
+
+
+def is_abbreviation_ending(line: str) -> bool:
+    """
+    Detect if the trailing token of a line ends in an abbreviation or initial period
+    rather than a true sentence termination (e.g. 'how long Dr.', 'with Bill W.', 'members of A.A.').
+    """
+    if not line:
+        return False
+    s = line.strip().rstrip("\x22\x27\u201d\u201c\u2019\u2018)]}")
+    if not s.endswith("."):
+        return False
+    # Multi-dot acronyms: A.A., U.S., e.g., i.e., Ph.D.
+    if re.search(r"\b(?:[A-Za-z]\.){2,}$", s):
+        return True
+    # Single uppercase initial: Bill W., Bob S., Emma K.
+    if re.search(r"\b[A-Z]\.$", s):
+        return True
+    # Known abbreviation tokens: Dr., Mr., Mrs., St., etc.
+    m = re.search(r"\b([a-zA-Z]+)\.$", s)
+    if m and m.group(1).lower() in ABBREVIATIONS:
+        return True
+    # InDesign / bracket artifacts: [Dr., (Dr.
+    if re.search(r"\[(?:Dr|Mr|Mrs|Ms|St|A\.A)\.$", s, re.IGNORECASE):
+        return True
+    return False
+
+
+def is_terminal_sentence_ending(line: str) -> bool:
+    """
+    Check if a line ends in terminal punctuation (.?!:;) and is not an abbreviation.
+    """
+    if not line:
+        return False
+    s = line.strip().rstrip("\x22\x27\u201d\u201c\u2019\u2018)]}")
+    if not s:
+        return False
+    if s[-1] in "?!":
+        return True
+    if s[-1] == ".":
+        if s.endswith("..."):
+            return True
+        return not is_abbreviation_ending(line)
+    if s[-1] in ":;":
+        return True
+    return False
+
+
 def starts_list_or_heading(line: str) -> bool:
     """
     Heuristic helper to detect if a line starts a list item or heading.
@@ -184,9 +243,10 @@ def starts_heading_pattern(line: str) -> bool:
 def reflow_paragraphs(lines: list[str]) -> list[str]:
     """
     Join hard-wrapped lines into paragraphs: a line joins the previous one 
-    unless the previous ends in sentence punctuation (.?!:;") or starts a list/heading
-    and the new line doesn't start with a lowercase letter, or the new line 
-    starts a list/heading pattern.
+    unless the previous ends in terminal punctuation (.?!:;") and the next line is 
+    not a lowercase continuation, or starts a list/heading pattern.
+    Lines ending on abbreviations (e.g. 'Dr.', 'Mr.', 'Bill W.', 'A.A.') are never
+    treated as terminal punctuation.
     """
     if not lines:
         return []
@@ -205,23 +265,19 @@ def reflow_paragraphs(lines: list[str]) -> list[str]:
         if not current_line:
             current_line = line_stripped
         else:
-            # Check if previous line ends in sentence punctuation
-            ends_with_punc = current_line[-1] in '.?!:;"”'
-            # Check if previous line starts a list or heading pattern
+            prev_terminal = is_terminal_sentence_ending(current_line)
             prev_is_lh = starts_list_or_heading(current_line)
-            # Check if new line starts a list/heading pattern
             starts_lh = starts_list_or_heading(line_stripped)
-            # Check if new line starts with a lowercase letter
             next_is_lowercase = line_stripped[0].islower() if line_stripped else False
 
-            if ends_with_punc or starts_lh or (prev_is_lh and not next_is_lowercase):
+            if starts_lh or (prev_is_lh and not next_is_lowercase) or (prev_terminal and not next_is_lowercase):
                 reflowed.append(current_line)
                 current_line = line_stripped
             else:
-                # Join lines
                 current_line = current_line + " " + line_stripped
 
     if current_line:
         reflowed.append(current_line)
 
     return reflowed
+

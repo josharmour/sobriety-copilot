@@ -11,7 +11,6 @@ class Source {
   final String? docId;
   final List<String>? blockIds;
   final dynamic page; // printed page number (printed_page_start)
-  final List<String> concepts; // conceptual tags ("step two", "surrender", ...)
 
   const Source({
     required this.source,
@@ -23,7 +22,6 @@ class Source {
     this.docId,
     this.blockIds,
     this.page,
-    this.concepts = const [],
   });
 
   factory Source.fromJson(Map<String, dynamic> json) {
@@ -39,10 +37,6 @@ class Source {
           ? (json['block_ids'] as List<dynamic>).map((e) => e.toString()).toList()
           : null,
       page: json['page'],
-      concepts: (json['concepts'] as List<dynamic>? ?? const [])
-          .map((e) => e.toString().trim())
-          .where((e) => e.isNotEmpty)
-          .toList(),
     );
   }
 
@@ -56,7 +50,6 @@ class Source {
         if (docId != null) 'doc_id': docId,
         if (blockIds != null) 'block_ids': blockIds,
         if (page != null) 'page': page,
-        if (concepts.isNotEmpty) 'concepts': concepts,
       };
 
   /// Human title derived from the filename: basename, strip ext, '_'->' ',
@@ -79,12 +72,18 @@ class Source {
     return base.trim();
   }
 
-  /// Absolute render URL given a baseUrl: replaces "/api/documents/" with
-  /// "/api/render/" and prefixes baseUrl. Pass `highlight` to deep-link.
+  /// Absolute render URL given a baseUrl: prefers "/api/doc/<doc_id>" when docId
+  /// is present, otherwise falls back to "/api/render/..." with highlight query.
   String renderUrl(String baseUrl, {String? highlight}) {
     final base = baseUrl.endsWith('/')
         ? baseUrl.substring(0, baseUrl.length - 1)
         : baseUrl;
+    if (docId != null && docId!.isNotEmpty) {
+      final blocksParam = blockIds != null && blockIds!.isNotEmpty
+          ? '?blocks=${Uri.encodeQueryComponent(blockIds!.join(','))}'
+          : '';
+      return '$base/api/doc/$docId$blocksParam';
+    }
     var path = url.replaceFirst('/api/documents/', '/api/render/');
     if (!path.startsWith('/')) path = '/$path';
     var full = '$base$path';
@@ -444,101 +443,6 @@ class DoneEvent extends ChatEvent {
 }
 
 // ---------------------------------------------------------------------------
-// /api/deepdive — assembled Step-section payload (read/view side)
-// ---------------------------------------------------------------------------
-
-/// A single assembled section from a manifest, as returned by /api/deepdive.
-/// When `full_text` is present the server was asked for that one section in
-/// full (GET /api/deepdive?doc=...&section=...); otherwise only the listing
-/// fields (title, order, word_count, preview) are populated.
-class DeepDiveSection {
-  final String? title;
-  final int? order;
-  final int? wordCount;
-  final String preview;
-  final String fullText;
-
-  const DeepDiveSection({
-    this.title,
-    this.order,
-    this.wordCount,
-    this.preview = '',
-    this.fullText = '',
-  });
-
-  factory DeepDiveSection.fromJson(Map<String, dynamic> json) {
-    return DeepDiveSection(
-      title: json['title']?.toString(),
-      order: _asIntOrNull(json['order']),
-      wordCount: _asIntOrNull(json['word_count']),
-      preview: (json['preview'] ?? '').toString(),
-      fullText: (json['full_text'] ?? '').toString(),
-    );
-  }
-}
-
-/// Top-level /api/deepdive response.
-class DeepDive {
-  final String? docId;
-  final String? title; // document title
-  final String? requestedSection; // section title when one was requested
-  final List<DeepDiveSection> sections;
-
-  const DeepDive({
-    this.docId,
-    this.title,
-    this.requestedSection,
-    this.sections = const [],
-  });
-
-  factory DeepDive.fromJson(Map<String, dynamic> json) {
-    return DeepDive(
-      docId: json['doc_id']?.toString(),
-      title: json['title']?.toString(),
-      requestedSection: json['requested_section']?.toString(),
-      sections: (json['sections'] as List<dynamic>? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map(DeepDiveSection.fromJson)
-          .toList(),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// /api/deepdive/generate — AI prose deep-dive (generation side)
-// ---------------------------------------------------------------------------
-
-/// The LLM-generated deep-dive returned by POST /api/deepdive/generate.
-class DeepDiveGeneration {
-  final String? docId;
-  final String? docTitle;
-  final String? sectionTitle;
-  final int? wordCount;
-  final String mode; // e.g. 'section', 'overview'
-  final String text; // the generated prose
-
-  const DeepDiveGeneration({
-    this.docId,
-    this.docTitle,
-    this.sectionTitle,
-    this.wordCount,
-    this.mode = '',
-    this.text = '',
-  });
-
-  factory DeepDiveGeneration.fromJson(Map<String, dynamic> json) {
-    return DeepDiveGeneration(
-      docId: json['doc_id']?.toString(),
-      docTitle: json['doc_title']?.toString(),
-      sectionTitle: json['section_title']?.toString(),
-      wordCount: _asIntOrNull(json['word_count']),
-      mode: (json['mode'] ?? '').toString(),
-      text: (json['text'] ?? '').toString(),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
@@ -552,12 +456,6 @@ int _asInt(dynamic v) {
   if (v is num) return v.toInt();
   if (v is String) return int.tryParse(v) ?? 0;
   return 0;
-}
-
-int? _asIntOrNull(dynamic v) {
-  if (v is num) return v.toInt();
-  if (v is String) return int.tryParse(v);
-  return null;
 }
 
 final Random _rng = Random();

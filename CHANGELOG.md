@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 (build 22) — 2026-09-02 — Production Release
+
+### What's New in Version 1.3.0
+- **🕸️ Whole-Library Knowledge Graph**: Explore 92 curated recovery topics clustered in 8 themes across 77 books and 48k passages. Features topic focus rings, book topic profiles, co-occurrence edges, and semantic search.
+- **📖 In-App Passage Reader**: Direct reading sheet with continuous scroll ("read earlier" / "keep reading"), topic hop navigation, passage breadcrumb tracking, and high-contrast theme support.
+- **📱 Daily Reflection Home-Screen Widgets**: Native Daily Reflection widgets on Android (AppWidget) and iOS (WidgetKit) with automated background sync.
+- **⚙️ Backend Performance & Reliability**: Server-side Knowledge Graph indexing from keyword postings with disk caching, reasoning tag cleanup (`<think>` / `</think>`), and robust paragraph reflow and sentence boundary detection across all literature manifests.
+
 ## 1.1.3 (build 6) — 2026-07-27 — Production Release
 
 ### What's New in Version 1.1.3

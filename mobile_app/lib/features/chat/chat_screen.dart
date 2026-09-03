@@ -469,7 +469,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => RagGraphScreen(
-              initialQuery: 'The Twelve Steps',
+              initialQuery: '',
               onSelectPrompt: (prompt) => _send(prompt),
             ),
           ),
@@ -854,12 +854,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     focusNode: _inputFocus,
                     minLines: 1,
                     maxLines: 5,
-                    // Send on Enter. On web the TextField is a multiline textarea,
-                    // so without an explicit action it inserts a newline. Using
-                    // `send` + `onSubmitted` makes Enter send the query (Shift+Enter
-                    // still inserts a newline).
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _send(),
+                    textInputAction: TextInputAction.newline,
                     onChanged: _onInputChanged,
                     decoration: InputDecoration(
                       hintText: _isRecording
@@ -1472,23 +1467,9 @@ class _MessageBubble extends StatelessWidget {
     return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
-      crossAxisAlignment: WrapCrossAlignment.start,
       children: [
         for (final s in unique)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SourceChip(source: s, onTap: () => onSourceTap(s, unique)),
-              if (s.concepts.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xs),
-                _ConceptTags(
-                  concepts: s.concepts,
-                  onTap: () => onSourceTap(s, unique),
-                ),
-              ],
-            ],
-          ),
+          SourceChip(source: s, onTap: () => onSourceTap(s, unique)),
       ],
     );
   }
@@ -1554,50 +1535,6 @@ class _MessageBubble extends StatelessWidget {
 // ════════════════════════════════════════════════════════════════════════════
 // Source detail bottom sheet
 // ════════════════════════════════════════════════════════════════════════════
-
-/// Small labelled chips showing a source's conceptual tags (e.g. "step two",
-/// "surrender"). Tapping one opens the source detail sheet. Styled with the
-/// lighthouse palette; renders nothing when [concepts] is empty.
-class _ConceptTags extends StatelessWidget {
-  final List<String> concepts;
-  final VoidCallback? onTap;
-  const _ConceptTags({required this.concepts, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    if (concepts.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final borderCol =
-        isDark ? const Color(0xFF2E4A63) : const Color(0xFFBFDCE9);
-    final labelColor = AppColors.accent;
-    return Wrap(
-      spacing: AppSpacing.xs,
-      runSpacing: AppSpacing.xs,
-      children: [
-        for (final concept in concepts)
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: 2,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-              border: Border.all(color: borderCol),
-            ),
-            child: Text(
-              concept,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: labelColor,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
 
 class _SourceDetailSheet extends ConsumerStatefulWidget {
   final Source initialSource;
@@ -1682,59 +1619,6 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
     }
   }
 
-  /// Fetches /api/deepdive for this source and shows the assembled Step
-  /// section(s) + an option to generate an AI study guide. Uses live AppConfig.
-  Future<void> _deepDive(Source s) async {
-    final baseUrl = ref.read(appConfigProvider).baseUrl;
-    final client = ref.read(httpClientProvider);
-    final root = baseUrl.replaceAll(RegExp(r'/+$'), '');
-    // Prefer the server-provided manifest doc_id (a slug like
-    // "twelve-steps-and-twelve-traditions"). Fall back to the bare filename
-    // stem of the source URL when doc_id is absent (e.g. legacy bundles).
-    String doc = s.docId ?? '';
-    if (doc.isEmpty) {
-      final dir = s.url.replaceFirst('/api/documents/', '').trim();
-      // Strip any leading category dir and file extension to a bare stem.
-      final stem = dir.split('/').last.replaceFirst(RegExp(r'\.[^.]+$'), '');
-      doc = stem;
-    }
-    final uri = Uri.parse('$root/api/deepdive').replace(
-      queryParameters: {
-        if (doc.isNotEmpty) 'doc': doc,
-      },
-    );
-    DeepDive? deepDive;
-    try {
-      final res = await client.get(uri).timeout(const Duration(seconds: 15));
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw Exception('Deep dive unavailable (${res.statusCode}).');
-      }
-      final json = jsonDecode(res.body) as Map<String, dynamic>;
-      deepDive = DeepDive.fromJson(json);
-      if (deepDive.sections.isEmpty) {
-        throw Exception('No Step sections found for this source.');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
-      return;
-    }
-    if (!mounted) return;
-    await showAppSheet(
-      context,
-      _DeepDiveSheet(
-        deepDive: deepDive,
-        doc: doc,
-        baseUrl: baseUrl,
-        blockIds: s.blockIds,
-        page: s.page,
-      ),
-      initialSize: 0.85,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1815,10 +1699,6 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                           'Relevance ${(s.similarity * 100).round()}% | Source ${index + 1} of $total',
                           style: theme.textTheme.bodySmall,
                         ),
-                        if (s.concepts.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.sm),
-                          _ConceptTags(concepts: s.concepts),
-                        ],
                         const SizedBox(height: AppSpacing.md),
                         Expanded(
                           child: SingleChildScrollView(
@@ -1850,15 +1730,6 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: AppSpacing.sm),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton.icon(
-                            onPressed: () => _deepDive(s),
-                            icon: const Icon(Icons.menu_book),
-                            label: const Text('Deep dive · read the full source section'),
-                          ),
-                        ),
                       ],
                     ),
                   );
@@ -1871,247 +1742,3 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
     );
   }
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// Deep dive bottom sheet
-// ════════════════════════════════════════════════════════════════════════════
-
-/// Shows the assembled Step section(s) returned by GET /api/deepdive
-/// (read/view side) plus an optional AI-generated study guide.
-class _DeepDiveSheet extends ConsumerStatefulWidget {
-  final DeepDive deepDive;
-  final String doc;
-  final String baseUrl;
-  final List<String>? blockIds;
-  final dynamic page;
-  const _DeepDiveSheet({
-    required this.deepDive,
-    required this.doc,
-    required this.baseUrl,
-    this.blockIds,
-    this.page,
-  });
-
-  @override
-  ConsumerState<_DeepDiveSheet> createState() => _DeepDiveSheetState();
-}
-
-class _DeepDiveSheetState extends ConsumerState<_DeepDiveSheet> {
-  bool _generating = false;
-  DeepDiveGeneration? _generation;
-  String? _error;
-
-  String get _docTitle =>
-      widget.deepDive.title?.isNotEmpty == true ? widget.deepDive.title! : 'Deep dive';
-
-  Future<void> _generate() async {
-    setState(() {
-      _generating = true;
-      _error = null;
-    });
-    try {
-      final gen = await _generateDeepDiveImpl();
-      if (!mounted) return;
-      setState(() {
-        _generation = gen;
-        _generating = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _generating = false;
-        _error = e.toString();
-      });
-    }
-  }
-
-  Future<DeepDiveGeneration> _generateDeepDiveImpl() async {
-    final client = ref.read(httpClientProvider);
-    final root = widget.baseUrl.replaceAll(RegExp(r'/+$'), '');
-    final uri = Uri.parse('$root/api/deepdive/generate').replace(
-      queryParameters: {
-        if (widget.doc.isNotEmpty) 'doc': widget.doc,
-        // Scope to the passage's actual section when the source carried
-        // block_ids / a printed page, so we deep-dive the real section
-        // (e.g. Step Four) instead of a whole-book overview.
-        if (widget.blockIds != null && widget.blockIds!.isNotEmpty)
-          'block_ids': widget.blockIds!.join(','),
-        if (widget.page != null) 'page': widget.page.toString(),
-      },
-    );
-    final res = await client.post(uri).timeout(const Duration(seconds: 60));
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('Generation unavailable (${res.statusCode}).');
-    }
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
-    return DeepDiveGeneration.fromJson(json);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final sections = widget.deepDive.sections;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.md,
-          AppSpacing.lg,
-          AppSpacing.lg,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_docTitle, style: theme.textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              widget.deepDive.sections.length == 1
-                  ? (widget.deepDive.requestedSection?.isNotEmpty == true
-                      ? 'Full text · ${widget.deepDive.requestedSection}'
-                      : 'Full Step section')
-                  : '${sections.length} Step sections',
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Expanded(
-              child: ListView(
-                children: [
-                  // AI study guide lives INSIDE the scrollable area so long
-                  // generated prose scrolls with the rest instead of being a
-                  // fixed non-scrolling block that overflows the sheet.
-                  _aiGuideSection(context),
-                  const SizedBox(height: AppSpacing.md),
-                  for (final section in sections) _deepDiveSection(context, section),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _aiGuideSection(BuildContext context) {
-    final theme = Theme.of(context);
-    if (_generating) {
-      return Row(
-        children: [
-          const SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Text('Writing your study guide…', style: theme.textTheme.bodyMedium),
-        ],
-      );
-    }
-    if (_generation != null) {
-      final g = _generation!;
-      return Card(
-        color: AppColors.highlightBg(Theme.of(context).brightness == Brightness.dark),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('✨ AI Study Guide', style: theme.textTheme.titleMedium),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                g.sectionTitle?.isNotEmpty == true ? (g.sectionTitle!) : 'Deep dive',
-                style: theme.textTheme.bodySmall,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(g.text, style: theme.textTheme.bodyMedium?.copyWith(height: 1.5)),
-            ],
-          ),
-        ),
-      );
-    }
-    if (_error != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-            child: Text(
-              _error!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _generate,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
-            ),
-          ),
-        ],
-      );
-    }
-    // CTA
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton.icon(
-        onPressed: _generate,
-        icon: const Icon(Icons.auto_awesome),
-        label: const Text('Generate AI study guide for the whole Step'),
-      ),
-    );
-  }
-
-  Widget _deepDiveSection(BuildContext context, DeepDiveSection section) {
-    final theme = Theme.of(context);
-    final title = section.title?.isNotEmpty == true
-        ? section.title!
-        : 'Section';
-    final wordCount = section.wordCount;
-    final body = section.fullText.isNotEmpty ? section.fullText : section.preview;
-    final isFull = section.fullText.isNotEmpty;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Flexible(
-                child: Text(
-                  title,
-                  style: theme.textTheme.titleMedium,
-                ),
-              ),
-              if (wordCount != null) ...[
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  '$wordCount words',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            body,
-            style: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
-          ),
-          if (isFull)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Text(
-                '— full section —',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.accent,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-

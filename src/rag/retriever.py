@@ -7,37 +7,12 @@ import os
 import re
 import threading
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .chroma_client import create_chroma_client
 from .embeddings import embed_query
 from .indexer import DEFAULT_COLLECTION
 from . import reranker
-from .concepts import expand_query_concepts, label_concept
-
-# --- Wave-1 conceptual-citation layer (OPT-IN) ------------------------------
-# When enabled, `retrieve()` additionally tags each returned chunk with the
-# concepts it speaks to (e.g. a "serenity" query tags an acceptance passage),
-# so downstream citation chips can carry a concept tag, not just a similarity
-# percentage. See src/rag/concepts.py (Layer 1 = query facet expansion, Layer 2
-# = relevance labeling) and docs/plans/beyond-rag-deep-understanding-
-# knowledge-graph.md (Part 2).
-#
-# Defaults to OFF so existing retrieval behavior is byte-for-byte unchanged
-# unless explicitly enabled. Failures never break retrieval: any exception in
-# the concept path leaves `.concepts == []` on the result.
-RAG_CONCEPT_LABELS = os.environ.get("RAG_CONCEPT_LABELS", "").strip().lower() \
-    in ("1", "true", "yes", "on")
-
-# Injectable concept extractor(s). Defaults to None, meaning the pure-stdlib
-# static fallback in concepts.py is used — fully testable with NO live LLM /
-# Ollama / network. A production deployment may set these to LLM-backed
-# callables; see concepts.py for the expected signatures.
-#
-#   _CONCEPT_EXPANSION_EXTRACTOR(query: str) -> list[str]
-#   _CONCEPT_LABEL_EXTRACTOR(concepts: list[str], passage_text: str) -> list[str]
-_CONCEPT_EXPANSION_EXTRACTOR = None
-_CONCEPT_LABEL_EXTRACTOR = None
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9']+")
 
@@ -191,50 +166,6 @@ def _source_is_referenced(source: str, referenced: set[str]) -> bool:
     return any(sub in s for sub in referenced)
 
 
-def _apply_concept_labels(
-    results: list["RetrievalResult"],
-    query: str,
-    *,
-    expansion_extractor=None,
-    label_extractor=None,
-) -> None:
-    """Tag each result with the concepts its text speaks to (mutates in place).
-
-    Layer-1: expand ``query`` into its conceptual facets (e.g. "serenity" ->
-    acceptance, surrender, ...) via :func:`src.rag.concepts.expand_query_concepts`.
-    Layer-2: for each result, ask :func:`src.rag.concepts.label_concept` which
-    facets the passage actually addresses and set ``result.concepts`` to that
-    subset, so a citation chip can carry a concept tag even for a passage that
-    shares none of the query's surface words.
-
-    This is strictly best-effort and OPT-IN (see ``RAG_CONCEPT_LABELS``). Any
-    failure — including a raising or injected extractor — leaves ``concepts == []``
-    and NEVER raises into / breaks the retrieval path. Both extractors here
-    correspond to the injectable callables in concepts.py; when ``None`` the
-    pure-stdlib static fallback is used (no live LLM / Ollama / network).
-    """
-    try:
-        facets = expand_query_concepts(
-            query, extractor=expansion_extractor
-        )
-        if not facets:
-            return
-        for result in results:
-            if result is None:
-                continue
-            try:
-                result.concepts = label_concept(
-                    label_extractor, query, result.text or result.excerpt or ""
-                )
-                if not result.concepts:
-                    result.concepts = []
-            except Exception:
-                result.concepts = []
-    except Exception:
-        # Concept labeling must never break retrieval, no matter what.
-        return
-
-
 @dataclass
 class CachedChunk:
     id: str
@@ -275,7 +206,6 @@ class RetrievalResult:
     block_ids: list[str] | None = None
     printed_page_start: int | str | None = None
     printed_page_end: int | str | None = None
-    concepts: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -610,11 +540,6 @@ class RAGRetriever:
         semantic search (e.g., a HyDE-generated hypothetical passage). The
         BM25 keyword scoring always uses the raw `query`, so literal matches
         aren't lost.
-
-        When the OPT-IN `RAG_CONCEPT_LABELS` env is enabled, each returned
-        result is additionally tagged with the concepts its passage speaks to
-        (conceptual-citation layer, see `_apply_concept_labels`). Off by
-        default; disabled, or any concept failure, leaves `.concepts == []`.
         """
         import time as _rtime
 
@@ -773,18 +698,6 @@ class RAGRetriever:
             )
         elif len(retrieval_results) > top_k:
             retrieval_results = retrieval_results[:top_k]
-
-        # OPT-IN Wave-1 conceptual-citation layer. When enabled, tag each final
-        # result with the concepts its passage speaks to (e.g. a "serenity"
-        # query tags an acceptance passage). Strictly best-effort: any failure
-        # leaves `.concepts == []` and never breaks retrieval.
-        if RAG_CONCEPT_LABELS:
-            _apply_concept_labels(
-                retrieval_results,
-                query,
-                expansion_extractor=_CONCEPT_EXPANSION_EXTRACTOR,
-                label_extractor=_CONCEPT_LABEL_EXTRACTOR,
-            )
 
         _elapsed = _rtime.monotonic() - _t0
         if _elapsed > 0.2:

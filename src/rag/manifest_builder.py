@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import re
 import json
@@ -11,7 +12,9 @@ from src.rag.text_repair import (
     collapse_doubled_layers,
     repair_hyphenation,
     repair_ligatures,
-    reflow_paragraphs
+    reflow_paragraphs,
+    is_terminal_sentence_ending,
+    starts_list_or_heading
 )
 from src.rag.block_classifier import classify_block
 
@@ -28,7 +31,7 @@ def get_manifest_path(source_path: str, documents_dir: str) -> str:
     return os.path.join(documents_dir, ".manifests", f"{doc_id}.json")
 
 
-def should_rebuild(source_path: str, documents_dir: str, current_extractor_version: int = 3) -> bool:
+def should_rebuild(source_path: str, documents_dir: str, current_extractor_version: int = 5) -> bool:
     """
     Check if a manifest should be rebuilt (based on SHA256 of source and extractor version).
     """
@@ -255,12 +258,26 @@ def build_epub_manifest(source_path: str, category: str) -> dict[str, Any]:
                         
             blocks.append(block_dict)
             
+    # Merge continuation blocks
+    merged_blocks = []
+    for b in blocks:
+        if merged_blocks and merged_blocks[-1]["type"] in ("paragraph", "epigraph") and b["type"] in ("paragraph", "epigraph"):
+            prev_text = merged_blocks[-1]["text"]
+            if not is_terminal_sentence_ending(prev_text) and not starts_list_or_heading(b["text"]):
+                merged_blocks[-1]["text"] = prev_text + " " + b["text"]
+                continue
+        merged_blocks.append(b)
+
+    for ordinal, b in enumerate(merged_blocks, 1):
+        b["id"] = f"b{ordinal:05d}"
+    blocks = merged_blocks
+
     manifest = {
         "schema_version": 1,
         "doc_id": doc_id,
         "source_file": source_path,
         "content_sha256": content_sha256,
-        "extractor_version": 3,
+        "extractor_version": 5,
         "title": title,
         "author": author,
         "category": category,
@@ -542,6 +559,20 @@ def build_manifest(source_path: str, category: str) -> dict[str, Any]:
                     
             blocks.append(block_dict)
             
+    # Merge cross-page paragraph continuations
+    merged_blocks = []
+    for b in blocks:
+        if merged_blocks and merged_blocks[-1]["type"] in ("paragraph", "epigraph") and b["type"] in ("paragraph", "epigraph"):
+            prev_text = merged_blocks[-1]["text"]
+            if not is_terminal_sentence_ending(prev_text) and not starts_list_or_heading(b["text"]):
+                merged_blocks[-1]["text"] = prev_text + " " + b["text"]
+                continue
+        merged_blocks.append(b)
+
+    for ordinal, b in enumerate(merged_blocks, 1):
+        b["id"] = f"b{ordinal:05d}"
+    blocks = merged_blocks
+
     total_blocks_count = len(blocks)
     ocr_recommended = False
     if total_blocks_count > 0:
@@ -554,7 +585,7 @@ def build_manifest(source_path: str, category: str) -> dict[str, Any]:
         "doc_id": doc_id,
         "source_file": source_path,
         "content_sha256": content_sha256,
-        "extractor_version": 3,
+        "extractor_version": 5,
         "title": title,
         "author": author,
         "category": category,

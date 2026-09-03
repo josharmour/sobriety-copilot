@@ -11,6 +11,8 @@ import 'package:sobriety_copilot_mobile/platform_init.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/features/chat/chat_screen.dart';
+import 'package:sobriety_copilot_mobile/features/daily/daily_readings.dart';
+import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/model_manager.dart';
 
 /// Parses a deep-link URI and navigates to the appropriate screen.
@@ -73,6 +75,10 @@ class _SobrietyCopilotAppState extends ConsumerState<SobrietyCopilotApp> {
     super.initState();
     _appLinks = AppLinks();
     _initDeepLinks();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(sobrietyProvider);
+      ref.read(dailyReadingsProvider);
+    });
   }
 
   Future<void> _initDeepLinks() async {

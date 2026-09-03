@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../widgets/daily_widget_sync.dart';
 
 /// One public-domain (or original) daily reading from assets/daily/readings.json.
 class DailyReading {
@@ -51,7 +52,7 @@ final dailyReadingsProvider = FutureProvider<DailyReadingsBundle>((ref) async {
       .whereType<Map<String, dynamic>>()
       .map(DailyReading.fromJson)
       .toList();
-  return DailyReadingsBundle(
+  final bundle = DailyReadingsBundle(
     morningPractice: DailyReading.fromJson(
       json['morning_practice'] as Map<String, dynamic>,
     ),
@@ -60,4 +61,9 @@ final dailyReadingsProvider = FutureProvider<DailyReadingsBundle>((ref) async {
     ),
     entries: entries,
   );
+
+  // Sync today's reading to home-screen widgets in background
+  DailyWidgetSync.syncTodayReading(bundle).ignore();
+
+  return bundle;
 });

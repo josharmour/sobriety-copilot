@@ -48,4 +48,6 @@ packs/embedder/
 # Fine-tuned model weights (619MB) live outside git — see the ft-runs convention.
 /models/
 
-.venv/
+# macOS metadata and AppleDouble files on SMB
+.DS_Store
+._*

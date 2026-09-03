@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import Generator
+from typing import Any
 
 from openai import OpenAI
 
@@ -51,18 +52,27 @@ class InferenceEngine:
         if self.backend == "ollama":
             return {"keep_alive": self.keep_alive, "options": {"num_ctx": self.num_ctx}}
         if self.backend == "vllm":
-            # vLLM reasoning models emit ` thinking... response`
-            # when the chat template is invoked with
-            # `enable_thinking=True`. We ALWAYS send the kwarg explicitly:
-            # omitting it lets the server's --default-chat-template-kwargs win,
-            # so a server defaulting to thinking-on can't be turned off and
-            # VLLM_ENABLE_THINKING=0 becomes a no-op. Helper calls (HyDE,
-            # follow-ups) pass enable_thinking=False so their reasoning doesn't
-            # leak into the returned text; the chat answer keeps the env default
-            # so the UI's thinking panel still receives reasoning.
-            if enable_thinking is None:
-                enable_thinking = self._thinking_default()
-            return {"chat_template_kwargs": {"enable_thinking": bool(enable_thinking)}}
+            # The dsv4 alias now serves GLM-5.3-Flash (serve-glm53-blackwell.sh).
+            # GLM ALWAYS deliberates: with thinking=false the reasoning is not
+            # separated into the reasoning field and leaks inline into the
+            # visible content — observed live 2026-08-29 as raw reasoning in
+            # the chat bubble and meta-deliberation ("I just need to output 3
+            # follow-up questions...") inside the Keep Exploring card. Sending
+            # thinking=true + reasoning_effort=low on EVERY call lets the glm45
+            # reasoning parser strip the deliberation from content (stream_typed
+            # still receives it as "thinking" items for the thinking panel), and
+            # low effort keeps latency sane. Helper calls (HyDE, follow-ups)
+            # previously got the old enable_thinking=False toggle; under GLM that
+            # toggle is exactly what caused the leak, so it is deliberately
+            # retired here. CAVEAT: if a real DeepSeek-dialect dsv4 container
+            # returns to :8002, revisit — dsv4 slowed badly with thinking=true
+            # (2026-07-29 bug); re-gate on the served engine then.
+            return {
+                "chat_template_kwargs": {
+                    "thinking": True,
+                    "reasoning_effort": "low",
+                }
+            }
         # Other OpenAI-compatible servers: send nothing extra.
         return {}
 
@@ -84,12 +94,16 @@ class InferenceEngine:
         )
         message = response.choices[0].message
         content = message.content or ""
+        if "</think>" in content:
+            content = content.split("</think>")[-1].strip()
         # Some thinking-model variants emit their answer into a separate
         # `reasoning` field once the visible reply is short or the budget is
         # exhausted. Fall back to that so non-streaming generations actually
         # return text.
         if not content:
-            reasoning = getattr(message, "reasoning", "") or ""
+            reasoning = getattr(message, "reasoning", "") or getattr(message, "reasoning_content", "") or ""
+            if "</think>" in reasoning:
+                reasoning = reasoning.split("</think>")[-1].strip()
             return reasoning
         return content
 
@@ -116,20 +130,10 @@ class InferenceEngine:
         continue_text: str | None = None,
         n_blocks: int | None = None,
         user_content: list[dict] | None = None,
-    ) -> Generator[tuple[str, str], None, None]:
-        """Stream both reasoning and content as tagged (kind, text) pairs.
-
-        Multimodal: pass `user_content` (an OpenAI content-parts list, e.g.
-        [{"type":"text",...}, {"type":"image_url",...}, {"type":"input_audio",...}])
-        to replace the plain-string user turn — used to attach photos/audio. When
-        None the user turn is the plain `prompt` string (text-only path).
-
-        For thinking-model variants, reasoning is emitted on
-        `delta.reasoning` before the visible content. Callers can choose to
-        forward the reasoning to the user or discard it.
-        """
+    ) -> Generator[tuple[str, Any], None, None]:
+        """Stream both reasoning and content as tagged (kind, text) pairs."""
         messages = self._build_messages(prompt, history, system_message, user_content)
-        extra = self._extra_body(enable_thinking)
+        extra = dict(self._extra_body(enable_thinking))
         if continue_text:
             extra["continue_text"] = continue_text
         if n_blocks:
@@ -140,8 +144,9 @@ class InferenceEngine:
             max_tokens=max_tokens,
             temperature=0.7,
             stream=True,
-            extra_body=extra,
+            extra_body=extra if extra else None,
         )
+        in_unparsed_think = False
         for chunk in response:
             if not chunk.choices:
                 continue
@@ -149,19 +154,48 @@ class InferenceEngine:
             diffusion = getattr(delta, "diffusion", None)
             if diffusion:
                 yield ("diffusion", diffusion)
-            # generation throughput {completion_tokens, elapsed_ms, tok_per_sec},
-            # updated on each committed block
             stats = getattr(delta, "stats", None)
             if stats:
                 yield ("stats", stats)
             raw = getattr(delta, "raw_text", None)
             if raw is not None:
                 yield ("raw", raw)
-            reasoning = getattr(delta, "reasoning", None)
+            reasoning = getattr(delta, "reasoning", None) or getattr(delta, "reasoning_content", None)
             if reasoning:
                 yield ("thinking", reasoning)
             if delta.content:
-                yield ("content", delta.content)
+                text = delta.content
+                if in_unparsed_think:
+                    if "</think>" in text:
+                        before, after = text.split("</think>", 1)
+                        if before:
+                            yield ("thinking", before)
+                        in_unparsed_think = False
+                        if after:
+                            yield ("content", after)
+                    else:
+                        yield ("thinking", text)
+                elif "</think>" in text:
+                    before, after = text.split("</think>", 1)
+                    if before:
+                        yield ("thinking", before)
+                    if after:
+                        yield ("content", after)
+                elif text.startswith("<think>"):
+                    in_unparsed_think = True
+                    rem = text[7:]
+                    if "</think>" in rem:
+                        before, after = rem.split("</think>", 1)
+                        if before:
+                            yield ("thinking", before)
+                        in_unparsed_think = False
+                        if after:
+                            yield ("content", after)
+                    else:
+                        if rem:
+                            yield ("thinking", rem)
+                else:
+                    yield ("content", text)
             finish = chunk.choices[0].finish_reason
             if finish:
                 yield ("finish", finish)

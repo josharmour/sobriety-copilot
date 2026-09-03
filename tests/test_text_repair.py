@@ -95,5 +95,47 @@ class TestTextRepair(unittest.TestCase):
 
         self.assertEqual(reflow_paragraphs(lines), expected)
 
+    def test_reflow_paragraphs_abbreviations(self):
+        # Abbreviation endings should not falsely terminate paragraphs
+        lines = [
+            "“You know, it never dawned on me until later how long Dr.",
+            "Bob and Bill had been sober. If I’d known it was just a short",
+            "while, I might not have been so sure it was going to work for",
+            "my Bill.” When Bill D. came out of the hospital, Dr. Bob had",
+            "been sober only three weeks. “I thought they’d been sober for",
+            "years. I think my husband thought so, too."
+        ]
+        result = reflow_paragraphs(lines)
+        self.assertEqual(len(result), 1)
+        self.assertTrue(result[0].startswith("“You know, it never dawned on me until later how long Dr. Bob and Bill had been sober."))
+        self.assertTrue(result[0].endswith("I think my husband thought so, too."))
+
+        # Multiple other abbreviations (St., Bill W., A.A., etc.)
+        lines2 = [
+            "We visited St.",
+            "Thomas hospital with Bill W.",
+            "and talked about A.A.",
+            "principles, recovery, etc.",
+            "Next day we met again."
+        ]
+        result2 = reflow_paragraphs(lines2)
+        # Should join all lines within the same paragraph
+        self.assertEqual(result2[0], "We visited St. Thomas hospital with Bill W. and talked about A.A. principles, recovery, etc. Next day we met again.")
+
+        # With explicit paragraph break
+        lines3 = [
+            "We visited St.",
+            "Thomas hospital with Bill W.",
+            "and talked about A.A.",
+            "principles, recovery, etc.",
+            "",
+            "Next day we met again."
+        ]
+        result3 = reflow_paragraphs(lines3)
+        self.assertEqual(len(result3), 2)
+        self.assertEqual(result3[0], "We visited St. Thomas hospital with Bill W. and talked about A.A. principles, recovery, etc.")
+        self.assertEqual(result3[1], "Next day we met again.")
+
+
 if __name__ == '__main__':
     unittest.main()

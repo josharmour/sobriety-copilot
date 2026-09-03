@@ -32,6 +32,9 @@ docker compose down
 # Deploy local changes to production and rebuild app+nginx there. Production is
 # joshu@10.0.0.100 at /home/joshu/docker-stack/sobriety-copilot (the cloudflared
 # tunnel origin for sobrietycopilot.com; runs the full stack incl. ollama:rocm).
+# NOTE (2026-08-03): 10.0.0.100 ("plex") IS blackwell (10.0.0.10) — one machine,
+# hostname blackwell, both IPs on one NIC. Agents already on blackwell can work
+# on production directly without ssh.
 # The Synology NAS (10.0.0.2) copy is a stale, non-serving mirror — never
 # deploy there.
 ./deploy.sh
@@ -112,6 +115,20 @@ To make the app run faster, you can disable the CPU-heavy reranker and/or skip t
 - **`src/server.py`** — FastAPI app. Endpoints: `/api/chat` (SSE streaming with HyDE + hybrid retrieval; accepts `client_context` for device-supplied notes, never persisted), `/api/suggest`, `/api/explain-snippet[s-batch]`, `/api/meetings` (geo search), `/api/meetings/online` (worldwide online directory: OIAA + Virtual NA, live-now sorting), `/api/geocode`, `/api/packs/*` (offline library packs), `/api/doc/{id}` + `/api/render/...` (readers), `/api/index` (Celery), `/api/bugs` (GET requires X-Admin-Token = BUG_ADMIN_TOKEN), `/api/health`.
   There is NO `/api/transcribe` and never was — voice dictation is on-device (sherpa-onnx ASR in the Flutter app).
 - **`src/inference/engine.py`** — OpenAI-compatible streaming client. Splits `thinking` vs `token` chunks for the show-thinking UI.
+- **`src/rag/graph.py` + `graph_taxonomy.py`** — the corpus-wide Knowledge Graph
+  behind `/api/graph/map`, `/api/graph/topic/{id}`, `/api/graph/book/{id}`,
+  `/api/graph/passages`, `/api/graph/search` and the JSON reader window
+  `/api/doc/{id}/window`. ~90 curated recovery topics are matched against every
+  medium-scale chunk via the retriever's BM25 postings (no re-tokenising), giving
+  topic↔topic (NPMI co-occurrence), topic↔book and topic↔chapter edges plus
+  per-passage topic tags (the "hop" junctions). Built once per index in a
+  background thread (~6 s on 1 CPU) and pickled beside the BM25 cache as
+  `graph_cache_<collection>.pkl`; endpoints answer **202 + progress** while it
+  builds. Bump `TAXONOMY_VERSION` whenever `graph_taxonomy.py` changes or the
+  cached graph will be served stale. The legacy per-query `/api/graph?q=` is kept
+  for mobile builds < 1.3.0. Tests: `python -m unittest tests.test_graph`.
+  Flutter side: `mobile_app/lib/features/graph/` (canvas + panels + in-app
+  passage reader).
 - **`src/rag/`** —
   - `retriever.py`: hybrid retrieval (cosine semantic + BM25 keyword + category boosts + scale diversity); optional cross-encoder reranking on the final candidates.
   - `reranker.py`: cross-encoder wrapper (`sentence-transformers`). Lazy-loaded so non-chat paths don't pay for it.

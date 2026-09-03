@@ -32,8 +32,6 @@ from src.meetings.online import search_online_meetings, warmup_online_feeds
 from src.meetings.service import search_meetings, warmup_feeds as warmup_meeting_feeds
 from src.prompts.templates import NO_CONTEXT_TEMPLATE, USER_MESSAGE_TEMPLATE, system_message_for_tone
 from src.rag.chroma_client import find_largest_collection_with_prefix
-from src.rag.deepdive import assemble_deepdive, resolve_manifest_path
-from src.rag.deepdive_gen import DeepdiveGenerationError, generate_deepdive
 from src.rag.embeddings import warmup as warmup_embeddings
 from src.rag.indexer import DEFAULT_COLLECTION
 from src.rag.memory import UserMemoryManager, format_state_note
@@ -808,25 +806,28 @@ def _generate_followups(query: str, answer: str) -> list[str]:
         f"The assistant replied:\n{answer[:1500]}\n\n"
         "Three follow-up questions the person might ask next:"
     )
-    # Thinking OFF (via extra_body) so the model emits the questions directly
-    # instead of burning the budget on reasoning that then leaks into content.
-    # A tight budget is plenty for three short questions.
+    # For GLM-5.3, sending thinking=True with low effort keeps reasoning in the reasoning channel
+    # so clean questions are emitted in content. If any </think> tag is present, strip it.
     response = engine.client.chat.completions.create(
         model=engine.model,
         messages=[
             {"role": "system", "content": _FOLLOWUP_SYS},
             {"role": "user", "content": prompt},
         ],
-        max_tokens=200,
+        max_tokens=400,
         temperature=0.7,
-        extra_body=engine._extra_body(enable_thinking=False),
+        extra_body=engine._extra_body(enable_thinking=True),
     )
     message = response.choices[0].message
-    raw = message.content or getattr(message, "reasoning", "") or ""
+    raw = message.content or getattr(message, "reasoning", "") or getattr(message, "reasoning_content", "") or ""
+    if "</think>" in raw:
+        raw = raw.split("</think>")[-1].strip()
     out: list[str] = []
     for line in (raw or "").splitlines():
         # Strip leading bullets / numbering / quotes that models sometimes add.
         cleaned = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", line).strip().strip('"').strip()
+        if "</think>" in cleaned:
+            cleaned = cleaned.split("</think>")[-1].strip()
         if len(cleaned) < 5 or "?" not in cleaned:
             continue
         out.append(cleaned)
@@ -901,14 +902,6 @@ def _build_chat_sources(results) -> list[dict[str, Any]]:
             "excerpt": excerpt,
             "match_scale": result.match_scale,
             "context_scale": result.scale,
-            # Manifest doc_id (slug) so clients can fetch the assembled section
-            # via /api/deepdive?doc=<doc_id>. Defaults to empty when the chunk
-            # has no manifest doc_id (e.g. legacy indices or non-manifest docs).
-            "doc_id": result.doc_id or "",
-            # Conceptual-citation tag surfaced on the chip. Defaults to [] so
-            # the frontend contract is stable even when the concept layer has
-            # not run (e.g. results built before the field was populated).
-            "concepts": list(getattr(result, "concepts", []) or []),
         })
     return sources
 
@@ -959,6 +952,13 @@ async def _warmup_models() -> None:
     # Warm the BM25 cache last: it depends on the embedding model being loaded.
     try:
         await asyncio.to_thread(_warmup_retriever)
+    except Exception:
+        pass
+    # The knowledge graph derives from the BM25 cache; build (or load) it now
+    # so the first Knowledge Graph open doesn't wait on it.
+    try:
+        from src.rag.graph import graph_service
+        graph_service.ensure_building(_get_retriever(), DOCUMENTS_DIR)
     except Exception:
         pass
 
@@ -1113,18 +1113,16 @@ def _hyde_for_query(question: str) -> str | None:
     if cached:
         return cached
     try:
-        # Thinking OFF: HyDE only needs the hypothetical passage, and leaving
-        # reasoning on let the model's chain-of-thought leak into the passage
-        # (and from there into the retrieval embedding). With no reasoning the
-        # passage comes back directly, so a tight budget is enough.
         passage = engine.generate(
             prompt=HYDE_PROMPT.format(question=question.strip()),
             history=[],
-            max_tokens=400,
+            max_tokens=600,
             system_message=HYDE_SYSTEM_MESSAGE,
-            enable_thinking=False,
+            enable_thinking=True,
         )
         passage = (passage or "").strip()
+        if "</think>" in passage:
+            passage = passage.split("</think>")[-1].strip()
     except Exception as exc:
         print(f"[HYDE-ERR] {type(exc).__name__}: {exc}", flush=True)
         return None
@@ -1292,7 +1290,10 @@ def explain_snippets_batch(payload: ExplainBatchRequest):
         except Exception as exc:
             return {"results": [c or {"why": "", "key": "", "error": str(exc)} for c in cached]}
 
-        parsed = _parse_batch_explanations(out or "", len(pending_excerpts))
+        clean_out = (out or "").strip()
+        if "</think>" in clean_out:
+            clean_out = clean_out.split("</think>")[-1].strip()
+        parsed = _parse_batch_explanations(clean_out, len(pending_excerpts))
         for slot, parsed_item in zip(pending_indices, parsed):
             cached[slot] = parsed_item
             _explain_cache_put(keys[slot], parsed_item)
@@ -1322,9 +1323,13 @@ def explain_snippet(payload: ExplainSnippetRequest):
     except Exception as exc:
         return {"why": "", "key": "", "error": str(exc)}
 
+    clean_out = (out or "").strip()
+    if "</think>" in clean_out:
+        clean_out = clean_out.split("</think>")[-1].strip()
+
     why = ""
     key_phrase = ""
-    for line in (out or "").splitlines():
+    for line in clean_out.splitlines():
         stripped = line.strip()
         upper = stripped.upper()
         if upper.startswith("RELEVANCE:"):
@@ -1333,9 +1338,9 @@ def explain_snippet(payload: ExplainSnippetRequest):
             key_phrase = stripped.split(":", 1)[1].strip().strip('"\'')
 
     # Some thinking-models prepend their chain-of-thought; strip framing if found.
-    if not why and out:
+    if not why and clean_out:
         # Last non-empty line as fallback
-        lines = [ln.strip() for ln in out.splitlines() if ln.strip()]
+        lines = [ln.strip() for ln in clean_out.splitlines() if ln.strip()]
         if lines:
             why = lines[-1][:200]
 
@@ -1711,37 +1716,114 @@ def suggest(
 
 @app.get("/api/graph")
 def graph(q: str = Query(default="The Twelve Steps")):
+    """Legacy per-query graph, kept for mobile builds older than 1.3.0."""
     from src.rag.graph import build_knowledge_graph
     retriever_instance = _safe_get_retriever()
-    ontology = _get_ontology()
-    return build_knowledge_graph(q, retriever=retriever_instance, ontology=ontology)
+    return build_knowledge_graph(q, retriever=retriever_instance)
 
 
-# Ontology cache: the manifest corpus is a slow SMB mount, so we build it at
-# most once per short TTL window and fall back to the hand-authored graph
-# (ontology=None) on any failure — the endpoint shape never changes.
-_ontology_cache: dict[str, Any] = {"at": 0.0, "ontology": None}
-_ONTOLOGY_TTL_SECONDS = 300.0
+# ── Corpus knowledge graph ────────────────────────────────────────────────
+#
+# The graph is built once per index (a few seconds over the BM25 cache) in a
+# background thread and pickled beside that cache. While it is building, the
+# read endpoints answer 202 with a progress payload so the client can poll.
 
 
-def _get_ontology() -> dict[str, Any] | None:
-    """Return the data-driven ontology, or ``None`` if unavailable/stale-safe build fails."""
-    now = time.time()
-    cached = _ontology_cache.get("ontology")
-    if cached is not None and (now - _ontology_cache.get("at", 0.0)) < _ONTOLOGY_TTL_SECONDS:
-        return cached
+def _graph_or_202():
+    from src.rag.graph import graph_service
+    retriever_instance = _safe_get_retriever()
+    g = graph_service.get(retriever_instance, DOCUMENTS_DIR)
+    if g is None:
+        return None, retriever_instance, JSONResponse(status_code=202, content=graph_service.status())
+    return g, retriever_instance, None
+
+
+@app.get("/api/graph/status")
+def graph_status():
+    from src.rag.graph import graph_service
     try:
-        from src.rag.ontology import build_ontology
-        ontology = build_ontology()
-        _ontology_cache["at"] = now
-        _ontology_cache["ontology"] = ontology
-        return ontology
-    except Exception:
-        # Corpus missing / unreadable / slow mount — keep graph working with the
-        # hand-authored (ontology=None) path.
-        _ontology_cache["at"] = now
-        _ontology_cache["ontology"] = None
-        return None
+        retriever_instance = _get_retriever()
+        graph_service.get(retriever_instance, DOCUMENTS_DIR)
+    except Exception as exc:  # retriever not ready yet
+        return {"status": "waiting", "progress": 0, "error": str(exc)}
+    return graph_service.status()
+
+
+@app.get("/api/graph/map")
+def graph_map_endpoint():
+    from src.rag.graph import graph_map
+    g, _r, pending = _graph_or_202()
+    if pending is not None:
+        return pending
+    return graph_map(g)
+
+
+@app.get("/api/graph/topic/{topic_id}")
+def graph_topic(topic_id: str, books: int = Query(default=14, ge=1, le=80),
+                per_book: int = Query(default=3, ge=1, le=10)):
+    from src.rag.graph import topic_detail
+    g, r, pending = _graph_or_202()
+    if pending is not None:
+        return pending
+    payload = topic_detail(g, r, topic_id, max_books=books, passages_per_book=per_book)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Unknown topic")
+    return payload
+
+
+@app.get("/api/graph/book/{book_id}")
+def graph_book(book_id: str):
+    from src.rag.graph import book_detail
+    g, _r, pending = _graph_or_202()
+    if pending is not None:
+        return pending
+    payload = book_detail(g, book_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Unknown book")
+    return payload
+
+
+@app.get("/api/graph/passages")
+def graph_passages(topic: str, book: str | None = Query(default=None),
+                   section: int | None = Query(default=None),
+                   sort: str = Query(default="score", pattern="^(score|position)$"),
+                   offset: int = Query(default=0, ge=0), limit: int = Query(default=20, ge=1, le=100)):
+    from src.rag.graph import topic_passages
+    g, r, pending = _graph_or_202()
+    if pending is not None:
+        return pending
+    payload = topic_passages(g, r, topic, book, sort=sort, offset=offset, limit=limit, section=section)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Unknown topic")
+    return payload
+
+
+@app.get("/api/graph/search")
+def graph_search(q: str = Query(default=""), top_k: int = Query(default=10, ge=1, le=30)):
+    from src.rag.graph import search
+    g, r, pending = _graph_or_202()
+    if pending is not None:
+        return pending
+    return search(g, r, q, top_k=top_k)
+
+
+@app.get("/api/doc/{doc_id}/window")
+def doc_window_endpoint(doc_id: str, blocks: str = Query(default=""),
+                        radius: int = Query(default=10, ge=0, le=60),
+                        q: str = Query(default="", max_length=600)):
+    """JSON reading window around the given block ids (the in-app passage reader).
+
+    `q` is the passage text; it locates the spot when the block ids come from
+    an index built against an older extraction of the book.
+    """
+    from src.rag.graph import doc_window
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", doc_id):
+        raise HTTPException(status_code=400, detail="Bad document id")
+    block_ids = [b.strip() for b in blocks.split(",") if b.strip()]
+    payload = doc_window(DOCUMENTS_DIR, doc_id, block_ids, radius=radius, anchor_text=q or None)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Document manifest not found")
+    return payload
 
 
 _geocode_cache: dict[str, dict[str, Any] | None] = {}
@@ -2084,8 +2166,15 @@ p {{ margin: 0.75em 0; }}
 }}
 .hl-block {{
   background-color: #d4f5e9 !important;
+  color: #064e3b !important;
   padding: 4px 8px;
   border-radius: 4px;
+}}
+.hl-seg {{
+  background-color: #d4f5e9 !important;
+  color: #064e3b !important;
+  padding: 2px 4px;
+  border-radius: 3px;
 }}
 .epigraph {{
   font-style: italic;
@@ -2102,8 +2191,9 @@ p {{ margin: 0.75em 0; }}
 @media (prefers-color-scheme: dark) {{
   body {{ background: #161b22; color: #e8eaed; }}
   h1,h2,h3,h4 {{ color: #4ec3b1; }}
-  #hl {{ background: #1f4a3e !important; }}
-  .hl-block {{ background-color: #1f4a3e !important; }}
+  #hl {{ background: #1f4a3e !important; color: #a7f3d0 !important; }}
+  .hl-block {{ background-color: #1f4a3e !important; color: #a7f3d0 !important; }}
+  .hl-seg {{ background-color: #1f4a3e !important; color: #a7f3d0 !important; }}
   .purchase-notice {{
     background: linear-gradient(135deg, #2d1b0e 0%, #432818 100%);
     color: #fef3c7;
@@ -2130,117 +2220,6 @@ p {{ margin: 0.75em 0; }}
 </script>
 </body></html>"""
     return HTMLResponse(page)
-
-
-@app.get("/api/deepdive")
-def deepdive_doc(
-    topic: str = Query(
-        default="", description="Reserved for the deep-dive generation layer; not used for assembly."
-    ),
-    doc: str = Query(
-        ..., description="Manifest doc_id or source-filename stem (e.g. twelve-steps-and-twelve-traditions)."
-    ),
-    section: str | None = Query(
-        default=None,
-        description="Optional section to return in full (e.g. '5', 'step five', 'tradition one').",
-    ),
-):
-    """Assemble whole literature sections from the real manifest for deep grounding.
-
-    Returns the assembled literature text only (no LLM call). When ``section``
-    is supplied, that one section's full ``content_text`` is returned for
-    long-context grounding; otherwise all sections are returned as a listing
-    (title, order, word_count, 500-char preview).
-    """
-    manifest_path = resolve_manifest_path(doc)
-    if manifest_path is None:
-        raise HTTPException(
-            status_code=404, detail=f"Document manifest not found for doc_id: {doc}"
-        )
-
-    try:
-        payload = assemble_deepdive(manifest_path, section=section)
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=404, detail=f"Document manifest not found on disk: {manifest_path}"
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to assemble deepdive: {exc}")
-
-    if section is not None and not payload.get("sections"):
-        raise HTTPException(status_code=404, detail=f"No section matched: {section}")
-
-    return payload
-
-
-@app.post("/api/deepdive/generate")
-def deepdive_generate(
-    doc: str = Query(
-        ..., description="Manifest doc_id or source-filename stem (e.g. twelve-steps-and-twelve-traditions)."
-    ),
-    section: str | None = Query(
-        default=None,
-        description="Optional specific section to deep-dive ('5', 'step five', 'tradition one').",
-    ),
-    tone: str = Query(default="warm", description="Tone variant: warm/factual/reflective/brief."),
-    summary_only: bool = Query(
-        default=False,
-        description="When section is omitted, return a summarized ordered overview of all sections.",
-    ),
-    block_ids: str | None = Query(
-        default=None,
-        description="Comma-separated block_ids of the retrieved passage; scopes the deep dive to that passage's section when section is omitted.",
-    ),
-    page: int | None = Query(
-        default=None,
-        description="Printed page of the retrieved passage; scopes the deep dive to that section when section is omitted.",
-    ),
-    max_tokens: int = Query(default=2048, ge=64, le=8192, description="Max tokens for the generated deep-dive."),
-):
-    """Generate a grounded prose deep-dive via the local LLM engine.
-
-    Mirrors the existing ``/api/deepdive`` assembly route but adds the
-    generation layer: it resolves the manifest, assembles the requested section
-    (or the whole listing), and drives the shared ``InferenceEngine`` (the same
-    global constructed from LLM_BASE_URL / LLM_MODEL / LLM_API_KEY) to produce
-    grounded prose.
-
-    Distinguishes failure modes cleanly:
-    - 404 when the doc or requested section is not found (assembly layer);
-    - 502 when the engine itself fails or returns empty (generation layer).
-    """
-    manifest_path = resolve_manifest_path(doc)
-    if manifest_path is None:
-        raise HTTPException(
-            status_code=404, detail=f"Document manifest not found for doc_id: {doc}"
-        )
-
-    try:
-        # Parse the comma-separated block_ids query param (if present) so the
-        # deep dive can scope to the passage's actual section.
-        parsed_block_ids = None
-        if block_ids and block_ids.strip():
-            parsed_block_ids = [b.strip() for b in block_ids.split(",") if b.strip()]
-        result = generate_deepdive(
-            engine,
-            manifest_path,
-            section=section,
-            tone=tone,
-            summary_only=summary_only,
-            max_tokens=max_tokens,
-            block_ids=parsed_block_ids,
-            printed_page=page,
-        )
-    except DeepdiveGenerationError as exc:
-        raise HTTPException(status_code=502, detail=f"Deep-dive generation failed: {exc}")
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=404, detail=f"Document manifest not found on disk: {manifest_path}"
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to generate deepdive: {exc}")
-
-    return result
 
 
 @app.get("/api/private/embedder/{part}")
@@ -2369,9 +2348,13 @@ def render_document(
         if highlight:
             match_idx = _find_best_render_match(normalized_sections, highlight, normalized=True)
             if match_idx is not None:
-                start = max(0, match_idx - context_pages)
-                end = min(len(all_sections), match_idx + context_pages + 1)
+                start = max(0, match_idx - 1)
+                end = min(len(all_sections), match_idx + 2)
                 all_sections = all_sections[start:end]
+            else:
+                all_sections = all_sections[:2]
+        else:
+            all_sections = all_sections[:2]
 
         content = '<hr style="border:none;border-top:1px solid #e5e7eb;margin:2rem 0;">'.join(all_sections)
 
@@ -2396,34 +2379,24 @@ def render_document(
                 # No "Page N of M" label — the embedded reference viewer shows the
                 # passage text only; page numbers belong in the chat prose, not here.
                 pages.append(
-                    f'<div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid #e5e7eb;">'
-                    f'<div>{escaped_text}</div></div>'
+                    f'<div class="page-body">{escaped_text}</div>'
                 )
-        content = "\n".join(pages)
+        content = '<div class="page-marker">···</div>'.join(pages)
 
     if highlight:
         match_span = _locate_highlight_span(highlight, content)
-        if debug:
-            span_words = 0
-            if match_span:
-                span_words = len(re.sub(r"<[^>]+>", " ", content[match_span[0]:match_span[1]]).split())
-            return JSONResponse({
-                "hl_len": len(highlight),
-                "hl_head": highlight[:60],
-                "hl_tail": highlight[-60:],
-                "content_len": len(content),
-                "span": list(match_span) if match_span else None,
-                "span_words": span_words,
-            })
         if match_span is not None:
             start, end = match_span
-            # If the matched span starts with a run of ALL-CAPS title words
-            # (Daily Reflections, A.A. Service Manual, etc embed the page
-            # title at the top of each chunk), advance past them so the
-            # highlight opens on the body prose instead of the page-top
-            # banner. Only skip when there's substantial body text after.
-            # Trailing separator tolerates whitespace and the <br> tags
-            # injected when rendering line breaks from PDF text.
+            if debug == "1":
+                return JSONResponse({
+                    "hl_len": len(highlight),
+                    "hl_head": highlight[:60],
+                    "hl_tail": highlight[-60:],
+                    "span": [start, end],
+                    "span_words": len(content[start:end].split()),
+                    "content_len": len(content),
+                })
+            # Skip page headers / chapter titles that matched the snippet head
             span_text = content[start:end]
             title_prefix = re.match(
                 r"^[A-Z][A-Z0-9]+(?:\s+[A-Z][A-Z0-9]+){0,7}",
@@ -2437,12 +2410,6 @@ def render_document(
                 if pos < len(span_text) - 20:
                     start += pos
             snippet = content[start:end]
-            # The matched range can cross block elements (</p><p> in epub
-            # sections, page divs in PDFs). A single wrapping <span> is invalid
-            # HTML there — browsers auto-close it at the first block boundary,
-            # which visually truncates the highlight to one paragraph. Wrap
-            # each text run between tags individually instead; the first run
-            # carries id="hl" as the scroll anchor.
             first_seg = [True]
 
             def _wrap_seg(m: "re.Match[str]") -> str:
@@ -2453,10 +2420,7 @@ def render_document(
                     return seg
                 anchor = ' id="hl"' if first_seg[0] else ""
                 first_seg[0] = False
-                return (
-                    f'<span{anchor} class="hl-seg" '
-                    f'style="background:#d4f5e9;padding:2px 0;border-radius:3px;">{seg}</span>'
-                )
+                return f'<span{anchor} class="hl-seg">{seg}</span>'
 
             highlighted = re.sub(r"<[^>]*>|[^<>]+", _wrap_seg, snippet)
             content = content[:start] + highlighted + content[end:]
@@ -2485,6 +2449,12 @@ body {{
 h1,h2,h3,h4 {{ font-family: -apple-system, sans-serif; color: #264653; margin-top: 1.5em; }}
 p {{ margin: 0.75em 0; }}
 #hl {{ scroll-margin-top: 100px; }}
+.hl-seg {{
+  background-color: #d4f5e9 !important;
+  color: #064e3b !important;
+  padding: 2px 4px;
+  border-radius: 3px;
+}}
 .purchase-notice {{
   background: linear-gradient(135deg, #fff7ed 0%, #fde68a 100%);
   color: #7c2d12;
@@ -2510,7 +2480,11 @@ p {{ margin: 0.75em 0; }}
 @media (prefers-color-scheme: dark) {{
   body {{ background: #161b22; color: #e8eaed; }}
   h1,h2,h3,h4 {{ color: #4ec3b1; }}
-  #hl {{ background: #1f4a3e !important; }}
+  #hl {{ background-color: #1f4a3e !important; color: #a7f3d0 !important; }}
+  .hl-seg {{
+    background-color: #1f4a3e !important;
+    color: #a7f3d0 !important;
+  }}
   .purchase-notice {{
     background: linear-gradient(135deg, #2d1b0e 0%, #432818 100%);
     color: #fef3c7;

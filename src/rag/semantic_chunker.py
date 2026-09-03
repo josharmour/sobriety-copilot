@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import re
 
+from .text_repair import is_abbreviation_ending, is_terminal_sentence_ending
+
 PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n+")
-SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"\u201C])")
 
 # Scale boundaries (word counts)
 SMALL_MIN = 4
@@ -33,8 +34,26 @@ class SemanticChunker:
         return [paragraph.strip() for paragraph in paragraphs if paragraph.strip()]
 
     def _split_sentences(self, text: str) -> list[str]:
-        sentences = SENTENCE_SPLIT_RE.split(text)
-        return [sentence.strip() for sentence in sentences if sentence.strip()]
+        if not text:
+            return []
+        pattern = r"([.!?][\x22\x27\u201d\u201c\u2019\u2018)]?)\s+([A-Z\x22\u201c\u2018])"
+        sentences = []
+        start = 0
+        for match in re.finditer(pattern, text):
+            split_pos = match.start(1) + len(match.group(1))
+            prefix = text[start:split_pos]
+            words = prefix.strip().split()
+            if words:
+                last_word = words[-1]
+                if is_abbreviation_ending(last_word):
+                    continue
+            sentences.append(text[start:split_pos].strip())
+            start = match.start(2)
+
+        remainder = text[start:].strip()
+        if remainder:
+            sentences.append(remainder)
+        return [s for s in sentences if s]
 
     def _word_count(self, text: str) -> int:
         return len(text.split())
@@ -394,13 +413,16 @@ class SemanticChunker:
 
         small_chunks = []
         for entry in paragraph_entries:
+            text = entry["text"].strip()
+            # Only create small chunks if the block is a complete, self-contained thought
             if SMALL_MIN <= entry["words"] <= SMALL_MAX:
-                small_chunks.append(
-                    self._make_chunk_from_entries(
-                        [entry],
-                        "small"
+                if entry["words"] >= 8 and (text[0].isupper() or text[0] in ('"', '“', '‘', "'", '1', '2', '3', '4', '5', '6', '7', '8', '9')) and is_terminal_sentence_ending(text):
+                    small_chunks.append(
+                        self._make_chunk_from_entries(
+                            [entry],
+                            "small"
+                        )
                     )
-                )
 
         medium_chunks = []
         accumulator = []

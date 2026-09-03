@@ -14,7 +14,5 @@ bool get supportsCameraAndOcr => _isMobile;
 /// Mic dictation (record plugin + on-device sherpa-onnx transcription).
 bool get supportsMicInput => _isMobile;
 
-/// Home-screen widget (home_widget) — Android only; there is no iOS widget
-/// extension target, so widget wording must stay off iOS.
-bool get supportsHomeWidget =>
-    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+/// Home-screen widget (home_widget & WidgetKit) — available on Android and iOS.
+bool get supportsHomeWidget => _isMobile;
