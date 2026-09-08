@@ -48,6 +48,7 @@ A handful of market facts shape everything below:
 | **FR7** | Sober companions / accountability partners | ❌ Rejected | — |
 | **FR8** | Multi-substance + moderation mode | ❌ Rejected | — |
 | **FR9** | Meditation / breathing / grounding library | ✅ Approved | [`docs/plans/FR9-meditation.md`](docs/plans/FR9-meditation.md) |
+| **FR11** | Personal companion memory (remembers you across conversations) | ✅ Approved | [`docs/plans/FR11-personal-memory.md`](docs/plans/FR11-personal-memory.md) |
 | **FR10** | Audio Big Book + read-along | ❌ Rejected | — |
 
 ### <a id="fr1"></a> FR1. Relapse tracking with a shame-free day-reset
@@ -83,8 +84,21 @@ SC is strictly **AA-style alcohol abstinence.** Competitors track alcohol *and* 
 Reframe ships meditations and games; most wellness-first competitors have guided breathing/grounding. SC has neural **TTS for chat but no structured meditation/breathing sessions** — the exact tool needed *during* a craving or at bedtime. Like #2, this can run fully on-device, reinforcing the privacy story.
 
 ### <a id="fr10"></a> 10. ❌ REJECTED — Audio Big Book + read-along for the literature library
+
 > *Rejected 2026-08-01: continuous narration of full texts is functionally an audiobook — outside the "study aide, not publisher" excerpt stance; copyright must be licensed first. Revisit only with licensing in hand.*
 Everything AA (free, official) and Sober Me provide **full audio Big Book + 12&12 + audio readings**. SC's reader is text-only (TTS reads *chat*, not the literature). Giving the **actual library an audiobook layer with synchronized read-along highlighting** extends the one true moat (the literature) — and it's the one place a paid/premium value prop could live (competitors sell or gate audio; the official AA app gives it away free, so format-quality + read-along is how to compete).
+
+### <a id="fr11"></a> FR11. Personal companion memory — the AI remembers you across conversations
+> *Approved 2026-09-07 (Owner): fully on-device (SharedPreferences, same pattern as FR1/FR4); no message bodies ever leave the device in normal mode, so no privacy-policy or liability change. One Flutter implementation covers Android, iPhone, and web (all three build from the same source).*
+Every turn today is a stranger's turn: the assistant has no durable memory of the person — no triggers, no home group, no "we talked about Step 4 resentment inventory last week, how did that go." Competitors personalize shallowly (name + streak), but nobody offers a **transparent, user-editable memory** ("what I want my copilot to know") plus **cross-conversation continuation** ("pick up where we left off"). Design:
+
+- **Profile** — static facts the user curates in a "What Copilot knows about me" sheet: sobriety date (already tracked locally), current step, triggers, key people (sponsor), home group, goals.
+- **Durable facts** — after a chat ends, a one-shot **distillation** extracts reusable facts ("afraid of driving past the old bar", "Deciding whether to tell his wife about Step 8") into a local, editable, deletable list. Facts only; **never message bodies**.
+- **Open threads** — the same distillation writes "unfinished topics" (e.g. *Step 8 amends list*) so the next new chat can offer **"Continue where we left off"** with a one-tap resume prompt that seeds retrieval and the first message.
+- **Prompt plumbing** — the personal snapshot rides the existing `client_context`/`localUserMessage` "About this person" channel into both server chat and Private Mode local prompts, reusing the existing don't-recite-unprompted guardrails.
+- **Controls** — per-fact edit/delete, "Forget everything," and a visible Personal Memory toggle. Privately stored, never uploaded.
+
+Cheap to ship (no server change required), deepens every other feature, and strengthens rather than threatens the privacy moat.
 
 ---
 
@@ -101,6 +115,7 @@ Everything AA (free, official) and Sober Me provide **full audio Big Book + 12&1
 ## 5. Suggested build sequence
 
 **Approved build order (post-triage, 2026-08-01):** FR1 relapse reset → FR4 mood/journal → FR5 streaks (depends on FR1 + FR4 hooks) → FR9 meditation (optional FR5 hook).
+**Follow-on (added 2026-09-07):** FR11 personal memory — approved (Owner): fully on-device, no new liability surface; ships alongside rather than in that sequence (touches chat, not tracker).
 
 <details><summary>Original (pre-triage) sequence</summary>
 
