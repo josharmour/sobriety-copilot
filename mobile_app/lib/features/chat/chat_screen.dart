@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sobriety_copilot_mobile/features/personal_memory/memory_snapshot.dart';
 import 'package:sobriety_copilot_mobile/features/tts/tts_service.dart';
 import 'package:sobriety_copilot_mobile/features/chat/ocr_scanner.dart';
 import 'package:image_picker/image_picker.dart';
@@ -32,6 +33,8 @@ import 'package:sobriety_copilot_mobile/features/meditation/meditation_sheet.dar
 import 'package:sobriety_copilot_mobile/features/daily/today_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
 import 'package:sobriety_copilot_mobile/features/graph/rag_graph_view.dart';
+import 'package:sobriety_copilot_mobile/features/personal_memory/memory_sheet.dart';
+import 'package:sobriety_copilot_mobile/features/personal_memory/personal_memory.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/widgets.dart';
@@ -535,6 +538,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final config = ref.watch(appConfigProvider);
     final chat = ref.watch(chatNotifierProvider);
+    final memoryEnabled = ref.watch(memoryEnabledProvider);
+    final memory = ref.watch(personalMemoryProvider);
 
     // Auto-scroll + auto-read on new content.
     ref.listen<ChatState>(chatNotifierProvider, (prev, next) {
@@ -710,10 +715,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         key: ValueKey(_starterGeneration),
                         onPick: _send,
                         studySuggestions: ref.watch(studySuggestionsProvider),
+                        resumeThread: _resumeChipCandidate(memoryEnabled,
+                            memory, chat.resumedThread),
+                        onResume: _resumeFromThread,
                       )
                     : _buildMessageList(chat, config),
               ),
               if (_suggestVisible) _buildSuggestions(config),
+              _buildMemoryHint(
+                memoryEnabled: memoryEnabled,
+                memory: memory,
+              ),
               _buildInputBar(chat, config),
             ],
           ),
@@ -760,6 +772,97 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         const SnackBar(content: Text('Copied')),
       );
     }
+  }
+
+  // ── FR11 Wave C: memory resume chip + inline memory hint ────────────────────
+
+  /// The MOST-RECENT unresolved thread, when the chip should show: memory
+  /// enabled, no thread already resumed in this chat, and at least one open
+  /// thread. Returns exactly one thread or null (chip hidden).
+  MemoryThread? _resumeChipCandidate(
+    bool memoryEnabled,
+    PersonalMemory memory,
+    ThreadRef? resumedThread,
+  ) {
+    if (!memoryEnabled) return null;
+    if (resumedThread != null) return null;
+    MemoryThread? best;
+    for (final t in memory.threads) {
+      if (t.resolved || t.title.trim().isEmpty) continue;
+      if (best == null || t.updatedAt.isAfter(best.updatedAt)) best = t;
+    }
+    return best;
+  }
+
+  /// Chip / card resume action: seed a NEW chat that carries the thread
+  /// (startNew -> resumeThread -> send the resume prompt as message #1).
+  void _resumeFromThread(MemoryThread thread) {
+    final notifier = ref.read(chatNotifierProvider.notifier);
+    notifier.startNew();
+    notifier.resumeThread(thread);
+    // Fire and forget, mirroring _send().
+    unawaited(notifier.sendMessage(resumePromptFor(
+      ThreadRef(
+        title: thread.title,
+        lastDetail: thread.lastDetail,
+        updatedAt: thread.updatedAt,
+        resolved: thread.resolved,
+      ),
+    )));
+    _input.clear();
+    _hideSuggestions();
+    _scrollToBottomSoon();
+  }
+
+  /// Subtle one-line hint above the input when there is anything to inject:
+  /// "Personal memory on · (n) things remembered · manage".
+  /// Renders NOTHING when memory is off OR has nothing meaningful.
+  Widget _buildMemoryHint({
+    required bool memoryEnabled,
+    required PersonalMemory memory,
+  }) {
+    if (!memoryEnabled) return const SizedBox.shrink();
+    final threadCount =
+        memory.threads.where((t) => !t.resolved && t.title.trim().isNotEmpty).length;
+    final n = memory.profile.triggers.length +
+        (memory.profile.goal?.trim().isEmpty ?? true ? 0 : 1) +
+        memory.facts.length +
+        threadCount;
+    if (n == 0) return const SizedBox.shrink(); // no visual noise
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surface,
+      child: InkWell(
+        onTap: () => showAppSheet(context, const MemorySheet()),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: 2,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.memory,
+                size: 12,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Flexible(
+                child: Text(
+                  'Personal memory on · $n things remembered · manage',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildSuggestions(AppConfig config) {
@@ -985,10 +1088,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 class _StarterView extends ConsumerStatefulWidget {
   final void Function(String prompt) onPick;
   final List<StudySuggestion> studySuggestions;
+
+  /// FR11 Wave C — when personal memory is enabled and there is an open
+  /// thread (and none already resumed), the MOST-RECENT unresolved thread
+  /// renders as a single "Continue: <title>" chip above the starters.
+  final MemoryThread? resumeThread;
+  final void Function(MemoryThread thread) onResume;
   const _StarterView({
     super.key,
     required this.onPick,
     this.studySuggestions = const [],
+    this.resumeThread,
+    required this.onResume,
   });
 
   @override
@@ -1122,6 +1233,46 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                     const SizedBox(height: AppSpacing.md),
                     const MilestoneCard(),
                     const SizedBox(height: AppSpacing.xl),
+                    if (widget.resumeThread != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints:
+                                const BoxConstraints(maxWidth: 600),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  alignment: Alignment.centerLeft,
+                                  foregroundColor: btnFgColor,
+                                  side: BorderSide(color: btnBorderColor),
+                                  backgroundColor: btnBgColor,
+                                  padding: const EdgeInsets.all(AppSpacing.lg),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(AppSpacing.radius),
+                                  ),
+                                  elevation: isLight ? 1 : 0,
+                                ),
+                                icon: Icon(
+                                  Icons.history,
+                                  size: 18,
+                                  color: AppColors.accent,
+                                ),
+                                label: Text(
+                                  'Continue: ${widget.resumeThread!.title}',
+                                  textAlign: TextAlign.left,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                onPressed: () =>
+                                    widget.onResume(widget.resumeThread!),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ...prompts.map(
                       (p) => Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),

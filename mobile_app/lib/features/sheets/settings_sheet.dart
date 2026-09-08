@@ -6,6 +6,7 @@ import 'package:sobriety_copilot_mobile/config/app_config.dart';
 import 'package:sobriety_copilot_mobile/config/capabilities.dart';
 import 'package:sobriety_copilot_mobile/data/models/meeting_models.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
+import 'package:sobriety_copilot_mobile/features/personal_memory/memory_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/private_mode_section.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
 import 'package:sobriety_copilot_mobile/features/tts/neural_voices.dart';
@@ -183,6 +184,20 @@ class SettingsSheet extends ConsumerWidget {
                         onTap: () => showTrackerEditor(context, ref),
                       );
                     }),
+                    const SizedBox(height: AppSpacing.xl),
+
+                    const SectionHeader('Personal memory'),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.psychology_outlined),
+                      title: const Text('What Copilot knows about me'),
+                      subtitle: const Text(
+                        'Profile, remembered details, and open topics — '
+                        'stored only on this device.',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => showAppSheet(context, const MemorySheet()),
+                    ),
                     const SizedBox(height: AppSpacing.xl),
 
                     const SectionHeader('Reading & voice'),
