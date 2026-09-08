@@ -1275,6 +1275,34 @@ DISTILL_INSTRUCTION = (
     "fact or thread already recorded there."
 )
 
+# Suggest-mode variant for the "Remember this" button (FR11.2): proposes the
+# ONE most memory-worthy fact from the recent conversation as a prefilled
+# suggestion the user confirms/edits. Kept in lockstep with the Flutter
+# constant kMemorySuggestPrompt (memory_distiller.dart). Same caps/sync rules
+# as DISTILL_INSTRUCTION above.
+DISTILL_SUGGEST_INSTRUCTION = (
+    "You are reading the recent turns of an ongoing recovery-support chat\n"
+    "between a person and their sober-companion assistant. The person just\n"
+    "tapped \"Remember this\" — propose the SINGLE fact from this conversation\n"
+    "they most plausibly want remembered for future chats. Keep the person's\n"
+    "dignity; never use judgment phrasing about them or their recovery.\n"
+    "\n"
+    "Reply with STRICT JSON only — no markdown fences, no prose, no commentary —\n"
+    "matching EXACTLY this schema:\n"
+    '{"new_facts": ["..."], "threads": []}\n'
+    "\n"
+    "Rules:\n"
+    "- new_facts contains EXACTLY ONE string: the best candidate, written in\n"
+    '  the THIRD person (e.g. "Got sober on September 21, 2001"), max 120\n'
+    "  chars. Prefer durable personal facts the user stated (dates, people,\n"
+    "  triggers, plans, preferences) over literature content the assistant\n"
+    "  said. NEVER copy a message body verbatim. No medical or diagnostic\n"
+    "  claims.\n"
+    "- threads is ALWAYS an empty array.\n"
+    '- If nothing personal is memory-worthy, return {"new_facts": [],\n'
+    '  "threads": []} and the UI will fall back to an empty editable field.\n'
+)
+
 
 class DistillRequest(BaseModel):
     """FR11 memory-distillation passthrough payload.
@@ -1285,10 +1313,13 @@ class DistillRequest(BaseModel):
     dropped defensively; a transcript with zero usable turns is a 422.
     existing: optional {"facts": [titles], "threads": [titles]} digest of what
     the app already remembers, folded into the prompt so the model dedupes.
+    suggest_mode: switches the prompt to the single-fact suggestion variant
+    used by the "Remember this" prefill flow (same caps, same parsing).
     """
 
     transcript: list[dict[str, str]] = Field(default_factory=list)
     existing: dict[str, Any] | None = None
+    suggest_mode: bool = False
 
 
 def _distill_existing_titles(existing: dict[str, Any] | None, key: str) -> str:
@@ -1304,12 +1335,15 @@ def _distill_existing_titles(existing: dict[str, Any] | None, key: str) -> str:
 
 
 def _build_distill_prompt(
-    turns: list[tuple[str, str]], existing: dict[str, Any] | None
+    turns: list[tuple[str, str]],
+    existing: dict[str, Any] | None,
+    suggest_mode: bool = False,
 ) -> str:
     """Mirrors MemoryDistiller._buildPrompt on the Flutter side: instruction +
-    known-memory digest lines + the conversation tail rendered with roles."""
+    known-memory digest lines + the conversation tail rendered with roles.
+    suggest_mode swaps in the single-fact suggestion instruction."""
     lines = [
-        DISTILL_INSTRUCTION,
+        DISTILL_SUGGEST_INSTRUCTION if suggest_mode else DISTILL_INSTRUCTION,
         "",
         f"Existing memory — facts: {_distill_existing_titles(existing, 'facts')}",
         f"Existing memory — open threads: {_distill_existing_titles(existing, 'threads')}",
@@ -1557,7 +1591,7 @@ def distill(payload: DistillRequest):
             detail="transcript must contain at least one {role, content} turn",
         )
 
-    prompt = _build_distill_prompt(cleaned, payload.existing)
+    prompt = _build_distill_prompt(cleaned, payload.existing, payload.suggest_mode)
     try:
         raw = engine.generate(
             prompt=prompt,

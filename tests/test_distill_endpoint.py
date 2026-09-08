@@ -178,6 +178,26 @@ def test_valid_transcript_returns_parsed_json(env):
     assert "Assistant: msg-02-content" in prompt
 
 
+def test_suggest_mode_uses_single_fact_instruction(env):
+    client, engine, _ = env
+    res = client.post(
+        "/api/distill",
+        json={
+            "transcript": _transcript(6),
+            "suggest_mode": True,
+            "existing": {"facts": ["Got sober on September 21, 2001"]},
+        },
+    )
+    assert res.status_code == 200, res.text
+    prompt = engine.prompts[0]
+    # The suggest-mode instruction replaces the standard distill instruction.
+    assert "propose the SINGLE fact" in prompt
+    assert "You are reading the last 12 turns" not in prompt
+    # Digest still folds in for dedupe; window/turns still capped the same.
+    assert "Existing memory — facts: [Got sober on September 21, 2001]" in prompt
+    assert "Conversation (last 6 turns):" in prompt
+
+
 def test_more_than_12_turns_truncated_to_last_12(env):
     client, engine, _ = env
     res = client.post("/api/distill", json={"transcript": _transcript(15)})

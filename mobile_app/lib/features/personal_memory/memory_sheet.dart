@@ -37,17 +37,44 @@ String agoFor(DateTime d) {
 ///
 /// Returns the trimmed text on Save, null on Cancel/dismiss. The CALLER owns
 /// all memory mutations — the dialog only gathers and validates text.
+/// FR11.2 "Remember this" edit dialog. [suggester], when provided, runs
+/// concurrently with the dialog open: while it works the field shows a
+/// "Reading the conversation…" hint with a spinner; when it lands the field
+/// is prefilled with the proposed fact (skipping null/empty suggestions).
+/// The user can edit the suggestion freely or type from scratch either way.
 Future<String?> promptRememberFact(
   BuildContext context, {
   required String prefilled,
+  Future<String?> Function()? suggester,
 }) {
   final controller = TextEditingController(text: prefilled);
   bool saveEnabled = prefilled.trim().isNotEmpty;
+  bool suggesting = suggester != null;
   return showDialog<String>(
     context: context,
     builder:
         (dialogContext) => StatefulBuilder(
           builder: (dialogContext, setDialogState) {
+            if (suggesting) {
+              () async {
+                String? suggestion;
+                try {
+                  suggestion = await suggester!();
+                } catch (_) {
+                  suggestion = null; // suggestion is best-effort only
+                }
+                if (!dialogContext.mounted) return;
+                setDialogState(() {
+                  suggesting = false;
+                  if (suggestion != null &&
+                      suggestion.trim().isNotEmpty &&
+                      controller.text.trim().isEmpty) {
+                    controller.text = suggestion.trim();
+                    saveEnabled = true;
+                  }
+                });
+              }();
+            }
             return AlertDialog(
               title: const Text('Remember this'),
               content: Column(
@@ -66,14 +93,30 @@ Future<String?> promptRememberFact(
                     },
                     onSubmitted:
                         (v) => Navigator.of(dialogContext).pop(v.trim()),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'What should Copilot remember?',
+                      hintText: suggesting ? 'Reading the conversation…' : null,
+                      suffixIcon: suggesting
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : null,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Saved on this device. Copilot will use it as context in '
-                    'future chats.',
+                    suggesting
+                        ? 'Copilot is reading this conversation for something '
+                            'worth remembering. You can also type it yourself.'
+                        : 'Saved on this device. Copilot will use it as context '
+                            'in future chats.',
                     style: Theme.of(
                       dialogContext,
                     ).textTheme.bodySmall?.copyWith(

@@ -1,7 +1,7 @@
 name: sobriety_copilot_mobile
 description: "Sobriety Copilot — a recovery-support chat app (Flutter port of the web app)."
 publish_to: "none"
-version: 1.4.0+26
+version: 1.4.0+27
 
 environment:
   sdk: ^3.7.0

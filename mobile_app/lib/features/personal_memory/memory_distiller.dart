@@ -131,11 +131,15 @@ class ServerDistillTransport implements DistillTransport {
   /// response body verbatim — a JSON string of `{new_facts, threads}` that
   /// the shared [MemoryDistiller] parser re-parses (and re-caps) unchanged.
   ///
+  /// [suggestMode] switches the server's prompt to the single-fact variant
+  /// used by the "Remember this" suggestion flow.
+  ///
   /// Non-200 and unparseable responses throw [MemoryDistillError], keeping
   /// the failure semantics identical to the legacy path.
   Future<String> completeProduct({
     required List<ChatMessage> transcript,
     Map<String, dynamic>? existingMemoryDigest,
+    bool suggestMode = false,
   }) async {
     final normalized = baseUrl.endsWith('/')
         ? baseUrl.substring(0, baseUrl.length - 1)
@@ -151,6 +155,7 @@ class ServerDistillTransport implements DistillTransport {
     ];
     final body = <String, dynamic>{
       'transcript': turns,
+      if (suggestMode) 'suggest_mode': true,
       if (existingMemoryDigest != null) 'existing': existingMemoryDigest,
     };
     try {
@@ -255,6 +260,33 @@ Existing memory is listed below ONLY to prevent duplicates — never re-issue a
 fact or thread already recorded there.
 ''';
 
+/// Suggest-mode variant for the "Remember this" button (FR11.2): the model
+/// proposes the ONE most memory-worthy fact from the recent conversation as a
+/// prefilled suggestion for the user to confirm/edit. Threads are not wanted
+/// here. Same JSON schema so the shared parser works unchanged — the button
+/// displays new_facts[0] and discards the rest.
+const String kMemorySuggestPrompt = '''
+You are reading the recent turns of an ongoing recovery-support chat between a
+person and their sober-companion assistant. The person just tapped "Remember
+this" — propose the SINGLE fact from this conversation they most plausibly want
+remembered for future chats. Keep their dignity; no judgment phrasing.
+
+Reply with STRICT JSON only — no markdown fences, no prose, no commentary —
+matching EXACTLY this schema:
+{"new_facts": ["..."], "threads": []}
+
+Rules:
+- new_facts contains EXACTLY ONE string: the best candidate, written in the
+  THIRD person (e.g. "Got sober on September 21, 2001"), max
+  $kDistillMaxFactChars chars. Prefer durable personal facts the user stated
+  (dates, people, triggers, plans, preferences) over literature content the
+  assistant said. NEVER copy a message body verbatim. No medical or
+  diagnostic claims.
+- threads is ALWAYS an empty array.
+- If nothing personal is memory-worthy, return {"new_facts": [], "threads": []}
+  and the UI will fall back to an empty editable field.
+''';
+
 // ---------------------------------------------------------------------------
 // MemoryDistiller
 // ---------------------------------------------------------------------------
@@ -285,6 +317,7 @@ class MemoryDistiller {
   Future<DistillResult> distill(
     List<ChatMessage> transcript, {
     Map<String, dynamic>? existingMemoryDigest,
+    bool suggestMode = false,
   }) async {
     final turns = transcript.where((m) => !m.isError).toList();
     final window = turns.length <= kDistillWindowTurns
@@ -297,18 +330,24 @@ class MemoryDistiller {
       raw = await t.completeProduct(
         transcript: window,
         existingMemoryDigest: existingMemoryDigest,
+        suggestMode: suggestMode,
       );
     } else {
-      raw = await t.complete(_buildPrompt(window, existingMemoryDigest));
+      raw = await t.complete(
+        _buildPrompt(window, existingMemoryDigest, suggestMode: suggestMode),
+      );
     }
     return _parseResult(raw);
   }
 
   String _buildPrompt(
     List<ChatMessage> window,
-    Map<String, dynamic>? existingMemoryDigest,
-  ) {
-    final buf = StringBuffer(kMemoryDistillPrompt);
+    Map<String, dynamic>? existingMemoryDigest, {
+    bool suggestMode = false,
+  }) {
+    final buf = StringBuffer(
+      suggestMode ? kMemorySuggestPrompt : kMemoryDistillPrompt,
+    );
 
     final knownFacts = _digestTitles(existingMemoryDigest, 'facts');
     final knownThreads = _digestTitles(existingMemoryDigest, 'threads');

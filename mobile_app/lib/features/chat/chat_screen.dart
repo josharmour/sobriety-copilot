@@ -34,6 +34,8 @@ import 'package:sobriety_copilot_mobile/features/meditation/meditation_sheet.dar
 import 'package:sobriety_copilot_mobile/features/daily/today_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
 import 'package:sobriety_copilot_mobile/features/graph/rag_graph_view.dart';
+import 'package:sobriety_copilot_mobile/features/personal_memory/memory_distiller.dart'
+    show distillerProvider, kDistillWindowTurns;
 import 'package:sobriety_copilot_mobile/features/personal_memory/memory_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/personal_memory/personal_memory.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
@@ -1164,11 +1166,59 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ),
                   onPressed: () async {
                     HapticFeedback.selectionClick();
-                    final prefilled = normalizeRememberPrefill(_input.text);
+                    // FR11.2: suggestion mode — prefill from what the model
+                    // thinks this conversation is worth remembering, falling
+                    // back to the composer text. Best-effort: any failure ->
+                    // the plain empty editable field.
+                    final convState = ref.read(chatNotifierProvider);
+                    final inputText = normalizeRememberPrefill(_input.text);
+                    Future<String?> Function()? suggester;
+                    final turns = <ChatMessage>[
+                      for (final m in convState.messages)
+                        if ((m.isUser || m.isAssistant) &&
+                            !m.isError &&
+                            m.text.trim().isNotEmpty)
+                          m,
+                    ];
+                    if (turns.length >= 2) {
+                      final transcript = turns.length <= kDistillWindowTurns
+                          ? turns
+                          : turns.sublist(turns.length - kDistillWindowTurns);
+                      final memory = ref.read(personalMemoryProvider);
+                      final digest = <String, dynamic>{
+                        'facts': [
+                          for (final f in memory.facts.reversed.take(20)) f.text,
+                        ],
+                        'threads': [
+                          for (final t in memory.threads)
+                            if (!t.resolved) t.title,
+                        ],
+                      };
+                      // Runs CONCURRENTLY with the open dialog (the dialog
+                      // awaits it internally); the call site never awaits it.
+                      Future<String?> suggest() async {
+                        try {
+                          final result = await ref
+                              .read(distillerProvider)
+                              .distill(
+                                transcript,
+                                existingMemoryDigest: digest,
+                                suggestMode: true,
+                              );
+                          if (result.newFacts.isEmpty) return null;
+                          return result.newFacts.first;
+                        } catch (_) {
+                          return null; // suggestion is best-effort only
+                        }
+                      }
+
+                      suggester = suggest;
+                    }
                     final messenger = ScaffoldMessenger.of(context);
                     final text = await promptRememberFact(
                       context,
-                      prefilled: prefilled,
+                      prefilled: inputText,
+                      suggester: suggester,
                     );
                     if (text == null || text.isEmpty || !mounted) return;
                     final convId =
@@ -1204,7 +1254,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       // Clear the composer only when its current text is
                       // exactly what was saved (the common flow: type it,
                       // remember, send later or not at all).
-                      if (_input.text.trim() == prefilled) {
+                      if (_input.text.trim() == inputText) {
                         _input.clear();
                       }
                     }

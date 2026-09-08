@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sobriety_copilot_mobile/data/models/chat_models.dart';
 import 'package:sobriety_copilot_mobile/data/repositories/chat_repository_interface.dart';
 import 'package:sobriety_copilot_mobile/features/chat/chat_screen.dart';
+import 'package:sobriety_copilot_mobile/features/personal_memory/memory_distiller.dart';
 import 'package:sobriety_copilot_mobile/features/personal_memory/personal_memory.dart';
 import 'package:sobriety_copilot_mobile/features/tts/tts_service.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
@@ -61,7 +62,9 @@ class _Harness {
   final FakeChatRepository repo;
 }
 
-Future<_Harness> _harness() async {
+Future<_Harness> _harness({
+  List<Override> overrides = const [],
+}) async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
   final prefs = await SharedPreferences.getInstance();
   final repo = FakeChatRepository();
@@ -70,6 +73,7 @@ Future<_Harness> _harness() async {
       sharedPreferencesProvider.overrideWithValue(prefs),
       chatRepositoryProvider.overrideWithValue(repo),
       appTtsProvider.overrideWithValue(_FakeAppTts()),
+      ...overrides,
     ],
   );
   addTearDown(container.dispose);
@@ -96,6 +100,16 @@ Future<void> _pumpChat(WidgetTester tester, _Harness h) async {
   await tester.pump(const Duration(milliseconds: 50));
   await tester.pump(const Duration(milliseconds: 50));
   await tester.pump(const Duration(milliseconds: 50));
+}
+
+/// The suggester runs the REAL distiller, so this seam fakes the transport
+/// the distiller reads its completion from (tests stay fully offline).
+class _FakeSuggestTransport implements DistillTransport {
+  String? reply;
+
+  @override
+  Future<String> complete(String prompt) async =>
+      reply ?? '{"new_facts": [], "threads": []}';
 }
 
 void main() {
@@ -304,6 +318,41 @@ void main() {
       final facts = h.container.read(personalMemoryProvider).facts;
       expect(facts, hasLength(1));
       expect(facts.single.text, contains('Medicaid transportation'));
+    });
+  });
+
+  group('Remember this: conversation-aware prefill (FR11.2)', () {
+    testWidgets('dialog opens empty, then prefills from the distiller '
+        'suggestion once it lands', (tester) async {
+      final transport = _FakeSuggestTransport()
+        ..reply =
+            '{"new_facts": ["Got sober on September 21, 2001"], '
+            '"threads": []}';
+      final h = await _harness(overrides: [
+        distillerProvider.overrideWith(
+          (ref) => MemoryDistiller(transport: transport),
+        ),
+      ]);
+      await _pumpChat(tester, h);
+
+      final bottomBtn = find.widgetWithText(TextButton, 'Remember this');
+      expect(bottomBtn, findsOneWidget);
+      await tester.tap(bottomBtn);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // While the suggestion is in flight the dialog shows the reading hint.
+      expect(find.textContaining('Reading the conversation'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // The suggestion landed and pre-filled the field.
+      final dialogField = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      );
+      final tf = tester.widget<TextField>(dialogField);
+      expect(tf.controller!.text, 'Got sober on September 21, 2001');
     });
   });
 }

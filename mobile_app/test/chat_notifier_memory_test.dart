@@ -59,6 +59,7 @@ class RecordingDistiller implements MemoryDistiller {
   int calls = 0;
   List<ChatMessage>? lastTranscript;
   Map<String, dynamic>? lastDigest;
+  bool? lastSuggestMode;
   DistillResult result = const DistillResult(newFacts: [], threads: []);
   Object? error;
 
@@ -70,10 +71,12 @@ class RecordingDistiller implements MemoryDistiller {
   Future<DistillResult> distill(
     List<ChatMessage> transcript, {
     Map<String, dynamic>? existingMemoryDigest,
+    bool suggestMode = false,
   }) async {
     calls++;
     lastTranscript = List<ChatMessage>.from(transcript);
     lastDigest = existingMemoryDigest;
+    lastSuggestMode = suggestMode;
     final e = error;
     if (e != null) throw e;
     return result;
