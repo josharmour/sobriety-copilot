@@ -30,6 +30,80 @@ String agoFor(DateTime d) {
   return '${(diff.inDays / 30).truncate()}mo ago';
 }
 
+/// FR11.1 'Remember this': shared single-field edit dialog, mirroring the
+/// MemorySheet `_prompt` visual language (AlertDialog + TextField + Cancel /
+/// FilledButton Save) but with the memory-specific helper caption and a
+/// Save that stays disabled while the text is blank/whitespace.
+///
+/// Returns the trimmed text on Save, null on Cancel/dismiss. The CALLER owns
+/// all memory mutations — the dialog only gathers and validates text.
+Future<String?> promptRememberFact(
+  BuildContext context, {
+  required String prefilled,
+}) {
+  final controller = TextEditingController(text: prefilled);
+  bool saveEnabled = prefilled.trim().isNotEmpty;
+  return showDialog<String>(
+    context: context,
+    builder:
+        (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('Remember this'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    maxLines: 3,
+                    minLines: 1,
+                    onChanged: (v) {
+                      final enabled = v.trim().isNotEmpty;
+                      if (enabled != saveEnabled) {
+                        setDialogState(() => saveEnabled = enabled);
+                      }
+                    },
+                    onSubmitted:
+                        (v) => Navigator.of(dialogContext).pop(v.trim()),
+                    decoration: const InputDecoration(
+                      labelText: 'What should Copilot remember?',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Saved on this device. Copilot will use it as context in '
+                    'future chats.',
+                    style: Theme.of(
+                      dialogContext,
+                    ).textTheme.bodySmall?.copyWith(
+                      color:
+                          Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(null),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed:
+                      saveEnabled
+                          ? () => Navigator.of(
+                            dialogContext,
+                          ).pop(controller.text.trim())
+                          : null,
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        ),
+  );
+}
+
 /// FR11 — the personal-memory management bottom sheet.
 class MemorySheet extends ConsumerWidget {
   const MemorySheet({super.key});
@@ -45,26 +119,29 @@ class MemorySheet extends ConsumerWidget {
     try {
       return await showDialog<String>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(title),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: InputDecoration(labelText: label),
-            onSubmitted: (v) => Navigator.of(dialogContext).pop(v.trim()),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(null),
-              child: const Text('Cancel'),
+        builder:
+            (dialogContext) => AlertDialog(
+              title: Text(title),
+              content: TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: InputDecoration(labelText: label),
+                onSubmitted: (v) => Navigator.of(dialogContext).pop(v.trim()),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(null),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed:
+                      () => Navigator.of(
+                        dialogContext,
+                      ).pop(controller.text.trim()),
+                  child: const Text('Save'),
+                ),
+              ],
             ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(controller.text.trim()),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
       );
     } finally {
       controller.dispose();
@@ -79,23 +156,24 @@ class MemorySheet extends ConsumerWidget {
   }) {
     return showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(title),
+            content: Text(body),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  onConfirm();
+                },
+                child: const Text('Confirm'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              onConfirm();
-            },
-            child: const Text('Confirm'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -130,10 +208,12 @@ class MemorySheet extends ConsumerWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    final openThreads = memory.threads.where((t) => !t.resolved).toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    final resolvedThreads = memory.threads.where((t) => t.resolved).toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final openThreads =
+        memory.threads.where((t) => !t.resolved).toList()
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final resolvedThreads =
+        memory.threads.where((t) => t.resolved).toList()
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
     return SafeArea(
       top: false,
@@ -279,7 +359,8 @@ class MemorySheet extends ConsumerWidget {
                     const SectionHeader('Things Copilot remembers'),
                     if (memory.facts.isEmpty)
                       _EmptyHint(
-                        text: 'Nothing yet. After a few conversations, '
+                        text:
+                            'Nothing yet. After a few conversations, '
                             'Copilot will start remembering durable things '
                             'here.',
                       )
@@ -340,8 +421,9 @@ class MemorySheet extends ConsumerWidget {
                             color: cs.onSurfaceVariant,
                           ),
                         ),
-                        childrenPadding:
-                            const EdgeInsets.only(bottom: AppSpacing.sm),
+                        childrenPadding: const EdgeInsets.only(
+                          bottom: AppSpacing.sm,
+                        ),
                         children: [
                           for (final t in resolvedThreads)
                             ListTile(
@@ -352,9 +434,10 @@ class MemorySheet extends ConsumerWidget {
                                 size: 20,
                               ),
                               title: Text(t.title),
-                              subtitle: t.lastDetail.isEmpty
-                                  ? null
-                                  : Text(t.lastDetail),
+                              subtitle:
+                                  t.lastDetail.isEmpty
+                                      ? null
+                                      : Text(t.lastDetail),
                               trailing: Text(
                                 agoFor(t.updatedAt),
                                 style: theme.textTheme.bodySmall?.copyWith(
@@ -374,7 +457,8 @@ class MemorySheet extends ConsumerWidget {
                           _confirm(
                             context,
                             title: 'Forget everything?',
-                            body: 'This erases everything Copilot remembers '
+                            body:
+                                'This erases everything Copilot remembers '
                                 'about you on this device.',
                             onConfirm: () async {
                               await memoryNotifier.forgetAll();

@@ -63,6 +63,27 @@ enum _MenuAction {
   about,
 }
 
+/// FR11.1 'Remember this': target length for the dialog's prefilled text
+/// (under [kFactTextMax] so the word-boundary cut, not a hard cap, does the
+/// trimming).
+const int _rememberPrefillTarget = 110;
+
+/// FR11.1 'Remember this': normalizes a message into the dialog's prefilled
+/// suggestion — collapsed whitespace, ideally <=_rememberPrefillTarget
+/// chars, cut at a word boundary so no fact text ever ends mid-word.
+String normalizeRememberPrefill(String raw) {
+  final flat = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (flat.length <= _rememberPrefillTarget) return flat;
+  var cut = flat.substring(0, _rememberPrefillTarget);
+  final lastSpace = cut.lastIndexOf(' ');
+  if (lastSpace > 0) cut = cut.substring(0, lastSpace);
+  // A degenerate single-word blob (no space to cut at) hard-caps at 120;
+  // withFactAdded would do the same anyway.
+  var out = cut.trimRight();
+  if (out.length > kFactTextMax) out = out.substring(0, kFactTextMax);
+  return out;
+}
+
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
@@ -133,9 +154,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     FocusScope.of(context).unfocus();
 
     // Fire and forget; the notifier folds the SSE stream into state.
-    unawaited(ref
-        .read(chatNotifierProvider.notifier)
-        .sendMessage(value, images: images));
+    unawaited(
+      ref
+          .read(chatNotifierProvider.notifier)
+          .sendMessage(value, images: images),
+    );
     _scrollToBottomSoon();
   }
 
@@ -206,16 +229,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } on PlatformException catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.code.contains('access_denied')
-              ? 'Camera access is turned off for Sobriety Copilot. You can '
-                  'enable it in your device Settings.'
-              : 'Could not scan text — please try again.'),
+          content: Text(
+            e.code.contains('access_denied')
+                ? 'Camera access is turned off for Sobriety Copilot. You can '
+                    'enable it in your device Settings.'
+                : 'Could not scan text — please try again.',
+          ),
         ),
       );
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(
-            content: Text('Could not scan text — please try again.')),
+          content: Text('Could not scan text — please try again.'),
+        ),
       );
     }
   }
@@ -227,32 +253,33 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _showAttachSheet() async {
     final action = await showModalBottomSheet<String>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (supportsCameraAndOcr)
-              ListTile(
-                leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Take a photo'),
-                subtitle: const Text('Ask about what the photo shows'),
-                onTap: () => Navigator.pop(ctx, 'camera'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose a photo'),
-              onTap: () => Navigator.pop(ctx, 'gallery'),
+      builder:
+          (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (supportsCameraAndOcr)
+                  ListTile(
+                    leading: const Icon(Icons.photo_camera_outlined),
+                    title: const Text('Take a photo'),
+                    subtitle: const Text('Ask about what the photo shows'),
+                    onTap: () => Navigator.pop(ctx, 'camera'),
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: const Text('Choose a photo'),
+                  onTap: () => Navigator.pop(ctx, 'gallery'),
+                ),
+                if (supportsCameraAndOcr)
+                  ListTile(
+                    leading: const Icon(Icons.document_scanner_outlined),
+                    title: const Text('Scan text'),
+                    subtitle: const Text('Read text from a page into the box'),
+                    onTap: () => Navigator.pop(ctx, 'scan'),
+                  ),
+              ],
             ),
-            if (supportsCameraAndOcr)
-              ListTile(
-                leading: const Icon(Icons.document_scanner_outlined),
-                title: const Text('Scan text'),
-                subtitle: const Text('Read text from a page into the box'),
-                onTap: () => Navigator.pop(ctx, 'scan'),
-              ),
-          ],
-        ),
-      ),
+          ),
     );
     switch (action) {
       case 'camera':
@@ -292,16 +319,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } on PlatformException catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.code.contains('access_denied')
-              ? 'Camera or photo access is turned off for Sobriety Copilot. '
-                  'You can enable it in your device Settings.'
-              : 'Could not attach photo — please try again.'),
+          content: Text(
+            e.code.contains('access_denied')
+                ? 'Camera or photo access is turned off for Sobriety Copilot. '
+                    'You can enable it in your device Settings.'
+                : 'Could not attach photo — please try again.',
+          ),
         ),
       );
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(
-            content: Text('Could not attach photo — please try again.')),
+          content: Text('Could not attach photo — please try again.'),
+        ),
       );
     }
   }
@@ -356,7 +386,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(
-            content: Text('Could not start recording — please try again.')),
+          content: Text('Could not start recording — please try again.'),
+        ),
       );
     }
   }
@@ -391,8 +422,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (text.isNotEmpty) {
         final existing = _input.text.trim();
         _input.text = existing.isEmpty ? text : '$existing $text';
-        _input.selection =
-            TextSelection.collapsed(offset: _input.text.length);
+        _input.selection = TextSelection.collapsed(offset: _input.text.length);
         _inputFocus.requestFocus();
         _onInputChanged(_input.text);
       } else {
@@ -403,7 +433,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(
-            content: Text('Could not transcribe that — please try again.')),
+          content: Text('Could not transcribe that — please try again.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isTranscribing = false);
@@ -418,10 +449,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     out = out.replaceAll(RegExp(r'```[\s\S]*?```'), ' ');
     out = out.replaceAllMapped(RegExp(r'`([^`]+)`'), (m) => m[1]!);
     out = out.replaceAll(RegExp(r'!\[[^\]]*\]\([^)]*\)'), ' ');
-    out = out.replaceAllMapped(
-      RegExp(r'\[([^\]]+)\]\([^)]+\)'),
-      (m) => m[1]!,
-    );
+    out = out.replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^)]+\)'), (m) => m[1]!);
     out = out.replaceAll(RegExp(r'(\*\*\*|___|\*\*|__|\*|_|~~)'), '');
     out = out.replaceAll(RegExp(r'^\s{0,3}#{1,6}\s+', multiLine: true), '');
     out = out.replaceAll(RegExp(r'^\s{0,3}>\s?', multiLine: true), '');
@@ -471,10 +499,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       case _MenuAction.graph:
         await Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => RagGraphScreen(
-              initialQuery: '',
-              onSelectPrompt: (prompt) => _send(prompt),
-            ),
+            builder:
+                (_) => RagGraphScreen(
+                  initialQuery: '',
+                  onSelectPrompt: (prompt) => _send(prompt),
+                ),
           ),
         );
       case _MenuAction.meetings:
@@ -578,14 +607,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       decoration: BoxDecoration(
                         color: AppColors.accent.withValues(alpha: 0.15),
                         border: Border.all(color: AppColors.accent),
-                        borderRadius:
-                            BorderRadius.circular(AppSpacing.radiusLg),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusLg,
+                        ),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.shield_outlined,
-                              size: 13, color: AppColors.accent),
+                          Icon(
+                            Icons.shield_outlined,
+                            size: 13,
+                            color: AppColors.accent,
+                          ),
                           SizedBox(width: 3),
                           Text(
                             'Private',
@@ -615,7 +648,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             child: IconButton(
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              icon: const Icon(Icons.bubble_chart, color: AppColors.accent, size: 20),
+              icon: const Icon(
+                Icons.bubble_chart,
+                color: AppColors.accent,
+                size: 20,
+              ),
               tooltip: 'Knowledge Graph',
               onPressed: () => _openMenu(_MenuAction.graph),
             ),
@@ -627,80 +664,81 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           PopupMenuButton<_MenuAction>(
             onSelected: _openMenu,
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: _MenuAction.today,
-                child: ListTile(
-                  leading: Icon(Icons.wb_twilight_outlined),
-                  title: Text('Today'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.meditation,
-                child: ListTile(
-                  leading: Icon(Icons.self_improvement_outlined),
-                  title: Text('Meditation'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.saved,
-                child: ListTile(
-                  leading: Icon(Icons.bookmark_outline),
-                  title: Text('Saved passages'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.graph,
-                child: ListTile(
-                  leading: Icon(Icons.hub_outlined),
-                  title: Text('Knowledge Graph'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.meetings,
-                child: ListTile(
-                  leading: Icon(Icons.groups_outlined),
-                  title: Text('Find meetings'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.crisis,
-                child: ListTile(
-                  leading: Icon(Icons.health_and_safety_outlined),
-                  title: Text('Crisis resources'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.altRecovery,
-                child: ListTile(
-                  leading: Icon(Icons.alt_route_outlined),
-                  title: Text('Other recovery paths'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.settings,
-                child: ListTile(
-                  leading: Icon(Icons.settings_outlined),
-                  title: Text('Settings'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.about,
-                child: ListTile(
-                  leading: Icon(Icons.info_outline),
-                  title: Text('About'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ],
+            itemBuilder:
+                (context) => const [
+                  PopupMenuItem(
+                    value: _MenuAction.today,
+                    child: ListTile(
+                      leading: Icon(Icons.wb_twilight_outlined),
+                      title: Text('Today'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _MenuAction.meditation,
+                    child: ListTile(
+                      leading: Icon(Icons.self_improvement_outlined),
+                      title: Text('Meditation'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _MenuAction.saved,
+                    child: ListTile(
+                      leading: Icon(Icons.bookmark_outline),
+                      title: Text('Saved passages'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _MenuAction.graph,
+                    child: ListTile(
+                      leading: Icon(Icons.hub_outlined),
+                      title: Text('Knowledge Graph'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _MenuAction.meetings,
+                    child: ListTile(
+                      leading: Icon(Icons.groups_outlined),
+                      title: Text('Find meetings'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _MenuAction.crisis,
+                    child: ListTile(
+                      leading: Icon(Icons.health_and_safety_outlined),
+                      title: Text('Crisis resources'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _MenuAction.altRecovery,
+                    child: ListTile(
+                      leading: Icon(Icons.alt_route_outlined),
+                      title: Text('Other recovery paths'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _MenuAction.settings,
+                    child: ListTile(
+                      leading: Icon(Icons.settings_outlined),
+                      title: Text('Settings'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _MenuAction.about,
+                    child: ListTile(
+                      leading: Icon(Icons.info_outline),
+                      title: Text('About'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
           ),
         ],
       ),
@@ -710,22 +748,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           child: Column(
             children: [
               Expanded(
-                child: chat.isEmpty
-                    ? _StarterView(
-                        key: ValueKey(_starterGeneration),
-                        onPick: _send,
-                        studySuggestions: ref.watch(studySuggestionsProvider),
-                        resumeThread: _resumeChipCandidate(memoryEnabled,
-                            memory, chat.resumedThread),
-                        onResume: _resumeFromThread,
-                      )
-                    : _buildMessageList(chat, config),
+                child:
+                    chat.isEmpty
+                        ? _StarterView(
+                          key: ValueKey(_starterGeneration),
+                          onPick: _send,
+                          studySuggestions: ref.watch(studySuggestionsProvider),
+                          resumeThread: _resumeChipCandidate(
+                            memoryEnabled,
+                            memory,
+                            chat.resumedThread,
+                          ),
+                          onResume: _resumeFromThread,
+                        )
+                        : _buildMessageList(chat, config),
               ),
               if (_suggestVisible) _buildSuggestions(config),
-              _buildMemoryHint(
-                memoryEnabled: memoryEnabled,
-                memory: memory,
-              ),
+              _buildMemoryHint(memoryEnabled: memoryEnabled, memory: memory),
               _buildInputBar(chat, config),
             ],
           ),
@@ -754,10 +793,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           showRetry: isLast && m.isAssistant && m.isError,
           onSpeak: () => _toggleSpeak(m),
           onCopy: () => _copy(m.text),
-          onRetry: () =>
-              ref.read(chatNotifierProvider.notifier).retryLast(),
-          onSourceTap: (source, allSources) =>
-              _showSourceDetail(source, allSources),
+          onRetry: () => ref.read(chatNotifierProvider.notifier).retryLast(),
+          onRemember: (normalized) => _remember(m.text, normalized),
+          onSourceTap:
+              (source, allSources) => _showSourceDetail(source, allSources),
           onFollowup: _send,
           onLinkTap: _openUrl,
         );
@@ -768,10 +807,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _copy(String text) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Copied')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Copied')));
     }
+  }
+
+  Future<void> _remember(String rawText, String normalized) async {
+    HapticFeedback.selectionClick();
+    final messenger = ScaffoldMessenger.of(context);
+    final text = await promptRememberFact(context, prefilled: normalized);
+    if (text == null || text.isEmpty || !mounted) return;
+    final convId = ref.read(chatNotifierProvider).conversationId ?? 'manual';
+    final added = await ref
+        .read(personalMemoryProvider.notifier)
+        .addFact(text, convId);
+    if (!mounted) return;
+    if (added == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Already in your memory')),
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('Saved to your memory'),
+        action: SnackBarAction(
+          label: 'UNDO',
+          onPressed: () async {
+            await ref
+                .read(personalMemoryProvider.notifier)
+                .removeFact(added.id);
+          },
+        ),
+      ),
+    );
   }
 
   // ── FR11 Wave C: memory resume chip + inline memory hint ────────────────────
@@ -801,14 +871,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     notifier.startNew();
     notifier.resumeThread(thread);
     // Fire and forget, mirroring _send().
-    unawaited(notifier.sendMessage(resumePromptFor(
-      ThreadRef(
-        title: thread.title,
-        lastDetail: thread.lastDetail,
-        updatedAt: thread.updatedAt,
-        resolved: thread.resolved,
+    unawaited(
+      notifier.sendMessage(
+        resumePromptFor(
+          ThreadRef(
+            title: thread.title,
+            lastDetail: thread.lastDetail,
+            updatedAt: thread.updatedAt,
+            resolved: thread.resolved,
+          ),
+        ),
       ),
-    )));
+    );
     _input.clear();
     _hideSuggestions();
     _scrollToBottomSoon();
@@ -823,8 +897,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }) {
     if (!memoryEnabled) return const SizedBox.shrink();
     final threadCount =
-        memory.threads.where((t) => !t.resolved && t.title.trim().isNotEmpty).length;
-    final n = memory.profile.triggers.length +
+        memory.threads
+            .where((t) => !t.resolved && t.title.trim().isNotEmpty)
+            .length;
+    final n =
+        memory.profile.triggers.length +
         (memory.profile.goal?.trim().isEmpty ?? true ? 0 : 1) +
         memory.facts.length +
         threadCount;
@@ -885,14 +962,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               dense: true,
               leading: const Icon(Icons.north_west, size: 16),
               title: Text(s.text, maxLines: 2, overflow: TextOverflow.ellipsis),
-              subtitle: s.source.isEmpty
-                  ? null
-                  : Text(
-                      s.source,
-                      style: theme.textTheme.bodySmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+              subtitle:
+                  s.source.isEmpty
+                      ? null
+                      : Text(
+                        s.source,
+                        style: theme.textTheme.bodySmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
               onTap: () => _applySuggestion(s),
             );
           },
@@ -935,22 +1013,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 if (supportsMicInput)
                   _isTranscribing
                       ? const IconButton(
-                          onPressed: null,
-                          icon: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : IconButton(
-                          icon:
-                              Icon(_isRecording ? Icons.stop : Icons.mic_none),
-                          color:
-                              _isRecording ? theme.colorScheme.error : null,
-                          tooltip:
-                              _isRecording ? 'Stop recording' : 'Voice input',
-                          onPressed: _toggleMic,
+                        onPressed: null,
+                        icon: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
+                      )
+                      : IconButton(
+                        icon: Icon(_isRecording ? Icons.stop : Icons.mic_none),
+                        color: _isRecording ? theme.colorScheme.error : null,
+                        tooltip:
+                            _isRecording ? 'Stop recording' : 'Voice input',
+                        onPressed: _toggleMic,
+                      ),
                 Expanded(
                   child: TextField(
                     controller: _input,
@@ -960,15 +1036,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     textInputAction: TextInputAction.newline,
                     onChanged: _onInputChanged,
                     decoration: InputDecoration(
-                      hintText: _isRecording
-                          ? 'Listening…'
-                          : 'Ask about recovery, share what is going on...',
+                      hintText:
+                          _isRecording
+                              ? 'Listening…'
+                              : 'Ask about recovery, share what is going on...',
                       filled: true,
                       fillColor: theme.colorScheme.surfaceContainerHighest
                           .withValues(alpha: 0.5),
                       border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppSpacing.radiusLg),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusLg,
+                        ),
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(
@@ -981,16 +1059,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 const SizedBox(width: AppSpacing.xs),
                 chat.isSending
                     ? IconButton.filled(
-                        icon: const Icon(Icons.stop),
-                        tooltip: 'Stop',
-                        onPressed: () =>
-                            ref.read(chatNotifierProvider.notifier).stop(),
-                      )
+                      icon: const Icon(Icons.stop),
+                      tooltip: 'Stop',
+                      onPressed:
+                          () => ref.read(chatNotifierProvider.notifier).stop(),
+                    )
                     : IconButton.filled(
-                        icon: const Icon(Icons.send),
-                        tooltip: 'Send',
-                        onPressed: canSend ? () => _send() : null,
-                      ),
+                      icon: const Icon(Icons.send),
+                      tooltip: 'Send',
+                      onPressed: canSend ? () => _send() : null,
+                    ),
               ],
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -1003,8 +1081,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   style: TextButton.styleFrom(
                     foregroundColor: theme.colorScheme.onSurfaceVariant,
                     minimumSize: Size.zero,
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 8,
+                    ),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     textStyle: theme.textTheme.bodySmall,
                   ),
@@ -1016,8 +1096,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   style: TextButton.styleFrom(
                     foregroundColor: theme.colorScheme.onSurfaceVariant,
                     minimumSize: Size.zero,
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 8,
+                    ),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     textStyle: theme.textTheme.bodySmall,
                   ),
@@ -1068,8 +1150,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     icon: const Icon(Icons.cancel),
                     color: theme.colorScheme.error,
                     tooltip: 'Remove',
-                    onPressed: () =>
-                        setState(() => _pendingImages.removeAt(i)),
+                    onPressed: () => setState(() => _pendingImages.removeAt(i)),
                   ),
                 ),
               ],
@@ -1124,47 +1205,54 @@ class _StarterViewState extends ConsumerState<_StarterView> {
     final prompts = _prompts;
     final reflection = reflectionForToday();
 
-    final bgDecoration = isLight
-        ? BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                theme.colorScheme.surface,
-                theme.colorScheme.surfaceContainerHighest.withAlpha(180),
-              ],
-            ),
-          )
-        : const BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage('assets/icon/app_icon.jpg'),
-              fit: BoxFit.cover,
-              alignment: Alignment.center,
-            ),
-          );
+    final bgDecoration =
+        isLight
+            ? BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  theme.colorScheme.surface,
+                  theme.colorScheme.surfaceContainerHighest.withAlpha(180),
+                ],
+              ),
+            )
+            : const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/icon/app_icon.jpg'),
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+              ),
+            );
 
-    final overlayDecoration = isLight
-        ? const BoxDecoration(color: Colors.transparent)
-        : BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black.withAlpha(20),
-                Colors.black.withAlpha(160),
-                Colors.black.withAlpha(240),
-              ],
-              stops: const [0.0, 0.5, 1.0],
-            ),
-          );
+    final overlayDecoration =
+        isLight
+            ? const BoxDecoration(color: Colors.transparent)
+            : BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withAlpha(20),
+                  Colors.black.withAlpha(160),
+                  Colors.black.withAlpha(240),
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+            );
 
     final titleColor = isLight ? theme.colorScheme.onSurface : Colors.white;
-    final cardBg = isLight ? theme.colorScheme.surface : Colors.black.withAlpha(120);
-    final cardBorder = isLight ? theme.colorScheme.outlineVariant : Colors.white24;
-    final reflectionTextColor = isLight ? theme.colorScheme.onSurface : Colors.white;
+    final cardBg =
+        isLight ? theme.colorScheme.surface : Colors.black.withAlpha(120);
+    final cardBorder =
+        isLight ? theme.colorScheme.outlineVariant : Colors.white24;
+    final reflectionTextColor =
+        isLight ? theme.colorScheme.onSurface : Colors.white;
     final btnFgColor = isLight ? theme.colorScheme.onSurface : Colors.white;
-    final btnBorderColor = isLight ? theme.colorScheme.outlineVariant : Colors.white54;
-    final btnBgColor = isLight ? theme.colorScheme.surface : Colors.black.withAlpha(120);
+    final btnBorderColor =
+        isLight ? theme.colorScheme.outlineVariant : Colors.white54;
+    final btnBgColor =
+        isLight ? theme.colorScheme.surface : Colors.black.withAlpha(120);
 
     return Container(
       decoration: bgDecoration,
@@ -1176,7 +1264,10 @@ class _StarterViewState extends ConsumerState<_StarterView> {
               padding: const EdgeInsets.all(AppSpacing.xl),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight > 80 ? constraints.maxHeight - 80 : 0,
+                  minHeight:
+                      constraints.maxHeight > 80
+                          ? constraints.maxHeight - 80
+                          : 0,
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -1188,15 +1279,16 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                       style: theme.textTheme.headlineMedium?.copyWith(
                         color: titleColor,
                         fontWeight: FontWeight.bold,
-                        shadows: isLight
-                            ? null
-                            : [
-                                const Shadow(
-                                  color: Colors.black87,
-                                  blurRadius: 8,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
+                        shadows:
+                            isLight
+                                ? null
+                                : [
+                                  const Shadow(
+                                    color: Colors.black87,
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -1207,17 +1299,20 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                           padding: const EdgeInsets.all(AppSpacing.lg),
                           decoration: BoxDecoration(
                             color: cardBg,
-                            borderRadius: BorderRadius.circular(AppSpacing.radius),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.radius,
+                            ),
                             border: Border.all(color: cardBorder),
-                            boxShadow: isLight
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black.withAlpha(12),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ]
-                                : null,
+                            boxShadow:
+                                isLight
+                                    ? [
+                                      BoxShadow(
+                                        color: Colors.black.withAlpha(12),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                    : null,
                           ),
                           child: Text(
                             reflection,
@@ -1238,8 +1333,7 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                         padding: const EdgeInsets.only(bottom: AppSpacing.md),
                         child: Center(
                           child: ConstrainedBox(
-                            constraints:
-                                const BoxConstraints(maxWidth: 600),
+                            constraints: const BoxConstraints(maxWidth: 600),
                             child: SizedBox(
                               width: double.infinity,
                               child: OutlinedButton.icon(
@@ -1250,8 +1344,9 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                                   backgroundColor: btnBgColor,
                                   padding: const EdgeInsets.all(AppSpacing.lg),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(AppSpacing.radius),
+                                    borderRadius: BorderRadius.circular(
+                                      AppSpacing.radius,
+                                    ),
                                   ),
                                   elevation: isLight ? 1 : 0,
                                 ),
@@ -1266,8 +1361,8 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                onPressed: () =>
-                                    widget.onResume(widget.resumeThread!),
+                                onPressed:
+                                    () => widget.onResume(widget.resumeThread!),
                               ),
                             ),
                           ),
@@ -1289,7 +1384,9 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                                   backgroundColor: btnBgColor,
                                   padding: const EdgeInsets.all(AppSpacing.lg),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(AppSpacing.radius),
+                                    borderRadius: BorderRadius.circular(
+                                      AppSpacing.radius,
+                                    ),
                                   ),
                                   elevation: isLight ? 1 : 0,
                                 ),
@@ -1305,7 +1402,7 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                 ),
               ),
             );
-          }
+          },
         ),
       ),
     );
@@ -1331,11 +1428,7 @@ class _DenoisingProgress extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.auto_awesome,
-                size: 14,
-                color: AppColors.accent,
-              ),
+              const Icon(Icons.auto_awesome, size: 14, color: AppColors.accent),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 'denoising — pass ${step + 1}/$total',
@@ -1375,6 +1468,11 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback onSpeak;
   final VoidCallback onCopy;
   final VoidCallback onRetry;
+
+  /// FR11.1 'Remember this': long-press-to-save affordance, available on
+  /// BOTH user and assistant bubbles ([onRemember] receives the
+  /// whitespace-normalized prefill; the handler opens the edit dialog).
+  final void Function(String normalizedPrefill) onRemember;
   final void Function(Source, List<Source>) onSourceTap;
   final void Function(String) onFollowup;
   final void Function(String) onLinkTap;
@@ -1389,6 +1487,7 @@ class _MessageBubble extends StatelessWidget {
     required this.onSpeak,
     required this.onCopy,
     required this.onRetry,
+    required this.onRemember,
     required this.onSourceTap,
     required this.onFollowup,
     required this.onLinkTap,
@@ -1407,50 +1506,64 @@ class _MessageBubble extends StatelessWidget {
     final hasText = message.text.trim().isNotEmpty;
     return Align(
       alignment: Alignment.centerRight,
-      child: Container(
-        margin: const EdgeInsets.only(
-          bottom: AppSpacing.md,
-          left: AppSpacing.xxl,
-        ),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.md,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.accent,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (hasImages)
-              Padding(
-                padding: EdgeInsets.only(bottom: hasText ? AppSpacing.sm : 0),
-                child: Wrap(
-                  spacing: AppSpacing.xs,
-                  runSpacing: AppSpacing.xs,
-                  alignment: WrapAlignment.end,
-                  children: [
-                    for (final url in message.imageThumbs)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(AppSpacing.radius),
-                        child: Image.memory(
-                          base64Decode(url.split(',').last),
-                          width: 140,
-                          height: 140,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            if (hasText)
-              Text(
-                message.text,
-                style: const TextStyle(color: Colors.white),
-              ),
-          ],
+      child: Tooltip(
+        message: 'Remember this',
+        triggerMode: TooltipTriggerMode.longPress,
+        child: GestureDetector(
+          onLongPress:
+              hasText
+                  ? () => onRemember(normalizeRememberPrefill(message.text))
+                  : null,
+          child: Container(
+            margin: const EdgeInsets.only(
+              bottom: AppSpacing.md,
+              left: AppSpacing.xxl,
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.accent,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasImages)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: hasText ? AppSpacing.sm : 0,
+                    ),
+                    child: Wrap(
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xs,
+                      alignment: WrapAlignment.end,
+                      children: [
+                        for (final url in message.imageThumbs)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.radius,
+                            ),
+                            child: Image.memory(
+                              base64Decode(url.split(',').last),
+                              width: 140,
+                              height: 140,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                if (hasText)
+                  Text(
+                    message.text,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1458,52 +1571,66 @@ class _MessageBubble extends StatelessWidget {
 
   Widget _assistantBubble(BuildContext context) {
     final hasText = message.text.trim().isNotEmpty;
-    final hasDiffusion = message.isDenoising && message.diffusionContent != null && message.diffusionContent!.trim().isNotEmpty;
+    final hasDiffusion =
+        message.isDenoising &&
+        message.diffusionContent != null &&
+        message.diffusionContent!.trim().isNotEmpty;
     final streamingEmpty = message.isStreaming && !hasText && !hasDiffusion;
 
     return Align(
       alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(
-          bottom: AppSpacing.lg,
-          right: AppSpacing.xl,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (showThinking && message.thinking.trim().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: ThinkingPanel(
-                  thinking: message.thinking,
-                  initiallyExpanded: streamingEmpty,
-                ),
-              ),
-            if (message.isDenoising && message.diffusionStep != null && message.diffusionTotal != null)
-              _DenoisingProgress(
-                step: message.diffusionStep!,
-                total: message.diffusionTotal!,
-              ),
-            if (streamingEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                child: LoadingDots(),
-              )
-            else if (hasDiffusion)
-              _diffusionBody(context)
-            else if (hasText)
-              _markdown(context),
-            if (message.sources.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              _sourceChips(context),
-            ],
-            if (!message.isStreaming && hasText)
-              _actions(context),
-            if (message.followups.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              _followups(context),
-            ],
-          ],
+      child: Tooltip(
+        message: 'Remember this',
+        triggerMode: TooltipTriggerMode.longPress,
+        child: GestureDetector(
+          onLongPress:
+              hasText
+                  ? () => onRemember(normalizeRememberPrefill(message.text))
+                  : null,
+          child: Container(
+            margin: const EdgeInsets.only(
+              bottom: AppSpacing.lg,
+              right: AppSpacing.xl,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (showThinking && message.thinking.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: ThinkingPanel(
+                      thinking: message.thinking,
+                      initiallyExpanded: streamingEmpty,
+                    ),
+                  ),
+                if (message.isDenoising &&
+                    message.diffusionStep != null &&
+                    message.diffusionTotal != null)
+                  _DenoisingProgress(
+                    step: message.diffusionStep!,
+                    total: message.diffusionTotal!,
+                  ),
+                if (streamingEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                    child: LoadingDots(),
+                  )
+                else if (hasDiffusion)
+                  _diffusionBody(context)
+                else if (hasText)
+                  _markdown(context),
+                if (message.sources.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _sourceChips(context),
+                ],
+                if (!message.isStreaming && hasText) _actions(context),
+                if (message.followups.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _followups(context),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1536,8 +1663,8 @@ class _MessageBubble extends StatelessWidget {
       }
     }
 
-    final sortedTitles = unique.keys.toList()
-      ..sort((a, b) => b.length.compareTo(a.length));
+    final sortedTitles =
+        unique.keys.toList()..sort((a, b) => b.length.compareTo(a.length));
 
     for (final title in sortedTitles) {
       final source = unique[title]!;
@@ -1578,7 +1705,10 @@ class _MessageBubble extends StatelessWidget {
         ),
       );
     }
-    final enrichedData = _enrichTextWithSourceLinks(message.text, message.sources);
+    final enrichedData = _enrichTextWithSourceLinks(
+      message.text,
+      message.sources,
+    );
     return MarkdownBody(
       data: enrichedData,
       selectable: true,
@@ -1591,7 +1721,9 @@ class _MessageBubble extends StatelessWidget {
       ),
       onTapLink: (text, href, title) {
         if (href != null && href.startsWith('source://')) {
-          final docKey = Uri.decodeComponent(href.replaceFirst('source://', ''));
+          final docKey = Uri.decodeComponent(
+            href.replaceFirst('source://', ''),
+          );
           final seen = <String>{};
           final unique = <Source>[];
           for (final s in message.sources) {
@@ -1711,7 +1843,9 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
   @override
   void initState() {
     super.initState();
-    final idx = widget.allSources.indexWhere((s) => s.documentKey == widget.initialSource.documentKey);
+    final idx = widget.allSources.indexWhere(
+      (s) => s.documentKey == widget.initialSource.documentKey,
+    );
     _currentPage = idx >= 0 ? idx : 0;
     _pageController = PageController(initialPage: _currentPage);
     for (var i = 0; i < widget.allSources.length; i++) {
@@ -1749,21 +1883,19 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => OfflineReaderScreen(
-              docId: s.docId!,
-              title: s.title,
-              highlightBlockIds: s.blockIds,
-            ),
+            builder:
+                (context) => OfflineReaderScreen(
+                  docId: s.docId!,
+                  title: s.title,
+                  highlightBlockIds: s.blockIds,
+                ),
           ),
         );
         return;
       }
     }
 
-    final url = s.renderUrl(
-      widget.baseUrl,
-      highlight: s.excerpt,
-    );
+    final url = s.renderUrl(widget.baseUrl, highlight: s.excerpt);
     final uri = Uri.tryParse(url);
     if (uri != null) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -1789,12 +1921,13 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.chevron_left),
-                      onPressed: _currentPage > 0
-                          ? () => _pageController.previousPage(
+                      onPressed:
+                          _currentPage > 0
+                              ? () => _pageController.previousPage(
                                 duration: const Duration(milliseconds: 300),
                                 curve: Curves.easeInOut,
                               )
-                          : null,
+                              : null,
                     ),
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1806,7 +1939,10 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                           width: isCurrent ? 12 : 8,
                           height: 8,
                           decoration: BoxDecoration(
-                            color: isCurrent ? AppColors.accent : theme.colorScheme.outlineVariant,
+                            color:
+                                isCurrent
+                                    ? AppColors.accent
+                                    : theme.colorScheme.outlineVariant,
                             borderRadius: BorderRadius.circular(4),
                           ),
                         );
@@ -1814,12 +1950,13 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.chevron_right),
-                      onPressed: _currentPage < total - 1
-                          ? () => _pageController.nextPage(
+                      onPressed:
+                          _currentPage < total - 1
+                              ? () => _pageController.nextPage(
                                 duration: const Duration(milliseconds: 300),
                                 curve: Curves.easeInOut,
                               )
-                          : null,
+                              : null,
                     ),
                   ],
                 ),
@@ -1835,7 +1972,9 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                   final s = widget.allSources[index];
                   final isSaved = _savedMap[index] ?? false;
                   return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1855,7 +1994,9 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                           child: SingleChildScrollView(
                             child: Text(
                               s.excerpt,
-                              style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                height: 1.4,
+                              ),
                             ),
                           ),
                         ),
@@ -1866,7 +2007,9 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                               child: OutlinedButton.icon(
                                 onPressed: () => _toggleSave(index),
                                 icon: Icon(
-                                  isSaved ? Icons.bookmark : Icons.bookmark_outline,
+                                  isSaved
+                                      ? Icons.bookmark
+                                      : Icons.bookmark_outline,
                                 ),
                                 label: Text(isSaved ? 'Saved' : 'Save passage'),
                               ),

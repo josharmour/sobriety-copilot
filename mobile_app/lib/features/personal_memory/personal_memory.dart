@@ -222,32 +222,35 @@ class PersonalMemory {
 
   /// Adds a distilled fact: trims, caps at 120 chars, then rejects it as a
   /// duplicate when any existing fact's normalized token-set Jaccard
-  /// similarity is >= [kFactDedupeThreshold]. A duplicate (or blank text)
-  /// returns this instance unchanged.
-  PersonalMemory withFactAdded(
+  /// similarity is >= [kFactDedupeThreshold].
+  ///
+  /// Returns the NEW [PersonalMemory] and, when a fact was actually added,
+  /// its [MemoryFact]; `(same instance, null)` means a no-op (duplicate,
+  /// blank, or punctuation-only text) so callers can distinguish "stored"
+  /// from "already knew that" without re-deriving the id.
+  (PersonalMemory, MemoryFact?) withFactAdded(
     String text, {
     required String sourceConversationId,
   }) {
     final trimmed = text.trim();
-    if (trimmed.isEmpty) return this;
+    if (trimmed.isEmpty) return (this, null);
     final capped = _cap(trimmed, kFactTextMax);
     final tokens = _normalizedTokens(capped);
-    if (tokens.isEmpty) return this;
+    if (tokens.isEmpty) return (this, null);
     for (final f in facts) {
       if (_tokenJaccard(tokens, _normalizedTokens(f.text)) >=
           kFactDedupeThreshold) {
-        return this;
+        return (this, null);
       }
     }
-    final next = List<MemoryFact>.of(facts)..add(
-      MemoryFact(
-        id: _nextId('fact'),
-        text: capped,
-        createdAt: DateTime.now(),
-        sourceConversationId: sourceConversationId,
-      ),
+    final fact = MemoryFact(
+      id: _nextId('fact'),
+      text: capped,
+      createdAt: DateTime.now(),
+      sourceConversationId: sourceConversationId,
     );
-    return _withFacts(next);
+    final next = List<MemoryFact>.of(facts)..add(fact);
+    return (_withFacts(next), fact);
   }
 
   /// Upsert a thread: an existing [id] updates its title (when non-empty),
@@ -394,10 +397,17 @@ class PersonalMemoryNotifier extends Notifier<PersonalMemory> {
     }
   }
 
-  Future<void> addFact(String text, String sourceConversationId) =>
-      _mutate(
-        state.withFactAdded(text, sourceConversationId: sourceConversationId),
-      );
+  /// Adds a fact and persists. Returns the added [MemoryFact], or null for a
+  /// no-op (duplicate or blank — state unchanged, nothing written to prefs).
+  Future<MemoryFact?> addFact(String text, String sourceConversationId) async {
+    final (next, added) = state.withFactAdded(
+      text,
+      sourceConversationId: sourceConversationId,
+    );
+    if (added == null) return null;
+    await _mutate(next);
+    return added;
+  }
 
   Future<void> upsertThread(String id, String title, String? detail) =>
       _mutate(state.withThreadUpdated(id, title, detail));

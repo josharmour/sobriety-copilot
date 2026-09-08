@@ -121,10 +121,13 @@ void main() {
     test('profile + facts + threads survive toJson/fromJson', () {
       var m = const PersonalMemory();
       m = m.withProfile(sponsor: 'Mike', goal: 'Stay sober today');
-      m = m.withFactAdded(
-        'Prefers morning meetings',
-        sourceConversationId: 'conv-1',
-      );
+      m =
+          m
+              .withFactAdded(
+                'Prefers morning meetings',
+                sourceConversationId: 'conv-1',
+              )
+              .$1;
       m = m.withThreadUpdated('step-4', 'Step 4 inventory', 'Moral inventory');
       final r = PersonalMemory.fromJson(m.toJson());
       expect(r.profile.sponsor, 'Mike');
@@ -147,10 +150,13 @@ void main() {
 
   group('withFactAdded: trimming, capping, dedupe', () {
     test('trims whitespace and stores the source conversation', () {
-      final m = const PersonalMemory().withFactAdded(
-        '  Caffeine free for a month  ',
-        sourceConversationId: 'conv-7',
-      );
+      final m =
+          const PersonalMemory()
+              .withFactAdded(
+                '  Caffeine free for a month  ',
+                sourceConversationId: 'conv-7',
+              )
+              .$1;
       expect(m.facts.single.text, 'Caffeine free for a month');
       expect(m.facts.single.sourceConversationId, 'conv-7');
       expect(m.facts.single.id, isNotEmpty);
@@ -158,18 +164,18 @@ void main() {
 
     test('caps fact text at 120 characters', () {
       final long = 'x' * 200;
-      final m = const PersonalMemory().withFactAdded(
-        long,
-        sourceConversationId: 'conv-1',
-      );
+      final m =
+          const PersonalMemory()
+              .withFactAdded(long, sourceConversationId: 'conv-1')
+              .$1;
       expect(m.facts.single.text.length, 120);
     });
 
     test('blank text is not added', () {
-      final m = const PersonalMemory().withFactAdded(
-        '   ',
-        sourceConversationId: 'conv-1',
-      );
+      final m =
+          const PersonalMemory()
+              .withFactAdded('   ', sourceConversationId: 'conv-1')
+              .$1;
       expect(m.facts, isEmpty);
     });
 
@@ -177,15 +183,21 @@ void main() {
       'duplicate (case + punctuation variant) returns the same instance',
       () {
         var m = const PersonalMemory();
-        m = m.withFactAdded(
-          'Talks about missing his old driving route past the bar',
-          sourceConversationId: 'conv-1',
-        );
+        m =
+            m
+                .withFactAdded(
+                  'Talks about missing his old driving route past the bar',
+                  sourceConversationId: 'conv-1',
+                )
+                .$1;
         final before = m;
-        final after = m.withFactAdded(
-          'talks about missing his OLD driving route past the BAR!!',
-          sourceConversationId: 'conv-2',
-        );
+        final after =
+            m
+                .withFactAdded(
+                  'talks about missing his OLD driving route past the BAR!!',
+                  sourceConversationId: 'conv-2',
+                )
+                .$1;
         expect(identical(after, before), isTrue);
         expect(after.facts.length, 1);
         expect(after.facts.single.sourceConversationId, 'conv-1');
@@ -194,28 +206,40 @@ void main() {
 
     test('duplicate with words reordered is rejected', () {
       var m = const PersonalMemory();
-      m = m.withFactAdded(
-        'missing his old driving route past the bar talks about',
-        sourceConversationId: 'conv-1',
-      );
-      final after = m.withFactAdded(
-        'Talks about missing his old driving route past the bar',
-        sourceConversationId: 'conv-2',
-      );
+      m =
+          m
+              .withFactAdded(
+                'missing his old driving route past the bar talks about',
+                sourceConversationId: 'conv-1',
+              )
+              .$1;
+      final after =
+          m
+              .withFactAdded(
+                'Talks about missing his old driving route past the bar',
+                sourceConversationId: 'conv-2',
+              )
+              .$1;
       expect(identical(after, m), isTrue);
       expect(after.facts.length, 1);
     });
 
     test('a genuinely different fact below 0.9 similarity is added', () {
       var m = const PersonalMemory();
-      m = m.withFactAdded(
-        'Meeting with sponsor at seven tomorrow',
-        sourceConversationId: 'conv-1',
-      );
-      final after = m.withFactAdded(
-        'Meeting with sponsor at seven today',
-        sourceConversationId: 'conv-2',
-      );
+      m =
+          m
+              .withFactAdded(
+                'Meeting with sponsor at seven tomorrow',
+                sourceConversationId: 'conv-1',
+              )
+              .$1;
+      final after =
+          m
+              .withFactAdded(
+                'Meeting with sponsor at seven today',
+                sourceConversationId: 'conv-2',
+              )
+              .$1;
       expect(after.facts.length, 2);
     });
 
@@ -228,8 +252,8 @@ void main() {
           'one two three four five six seven eight nine ten eleven twelve '
           'thirteen fourteen fifteen sixteen seventeen eighteen bananas';
       var m = const PersonalMemory();
-      m = m.withFactAdded(base, sourceConversationId: 'conv-1');
-      final after = m.withFactAdded(variant, sourceConversationId: 'conv-2');
+      m = m.withFactAdded(base, sourceConversationId: 'conv-1').$1;
+      final after = m.withFactAdded(variant, sourceConversationId: 'conv-2').$1;
       expect(after.facts.length, 1);
     });
   });
@@ -238,7 +262,13 @@ void main() {
     test('101 facts -> 100 with the oldest dropped', () {
       var m = const PersonalMemory();
       for (var i = 0; i < 101; i++) {
-        m = m.withFactAdded('fact number $i', sourceConversationId: 'conv-$i');
+        m =
+            m
+                .withFactAdded(
+                  'fact number $i',
+                  sourceConversationId: 'conv-$i',
+                )
+                .$1;
       }
       expect(m.facts.length, 100);
       expect(m.facts.any((f) => f.text == 'fact number 0'), isFalse);
@@ -356,8 +386,8 @@ void main() {
 
     test('withFactRemoved and withThreadRemoved delete by id', () {
       var m = const PersonalMemory();
-      m = m.withFactAdded('first fact', sourceConversationId: 'c1');
-      m = m.withFactAdded('second fact', sourceConversationId: 'c2');
+      m = m.withFactAdded('first fact', sourceConversationId: 'c1').$1;
+      m = m.withFactAdded('second fact', sourceConversationId: 'c2').$1;
       m = m.withThreadUpdated('t1', 'Thread one', 'd1');
       m = m.withThreadUpdated('t2', 'Thread two', 'd2');
       final id = m.facts.first.id;
@@ -370,10 +400,10 @@ void main() {
     });
 
     test('removing an unknown id returns the same instance', () {
-      final m = const PersonalMemory().withFactAdded(
-        'a fact',
-        sourceConversationId: 'c1',
-      );
+      final m =
+          const PersonalMemory()
+              .withFactAdded('a fact', sourceConversationId: 'c1')
+              .$1;
       final a = m.withFactRemoved('nope');
       final b = m.withThreadRemoved('nope');
       expect(identical(a, m), isTrue);
@@ -383,7 +413,7 @@ void main() {
     test('withAllCleared resets facts, threads, and profile', () {
       var m = const PersonalMemory();
       m = m.withProfile(sponsor: 'Mike', goal: 'Stay sober');
-      m = m.withFactAdded('a fact', sourceConversationId: 'c1');
+      m = m.withFactAdded('a fact', sourceConversationId: 'c1').$1;
       m = m.withThreadUpdated('t1', 'Thread', 'detail');
       final cleared = m.withAllCleared();
       expect(cleared.facts, isEmpty);
