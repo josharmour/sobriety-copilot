@@ -17,6 +17,7 @@ import 'package:sobriety_copilot_mobile/features/chat/saved_passages.dart';
 import 'package:sobriety_copilot_mobile/features/daily/mood_log.dart';
 import 'package:sobriety_copilot_mobile/features/meditation/player.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/streak.dart';
+import 'package:sobriety_copilot_mobile/features/personal_memory/memory_enabled.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/local_chat_repository.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/model_manager.dart';
 import 'package:sobriety_copilot_mobile/features/tts/tts_service.dart';
@@ -177,3 +178,9 @@ final meditationPlayerProvider =
 final streakProvider = NotifierProvider<StreakNotifier, StreakState>(
   StreakNotifier.new,
 );
+
+/// FR11 — master switch for the on-device personal memory feature. Gates ALL
+/// UI injection (resume chip, "Personal memory on" hint) and the distiller
+/// cost. Persisted under [MemoryEnabledNotifier.prefsKey]; default true.
+final memoryEnabledProvider = MemoryEnabledProvider.provider;
+
