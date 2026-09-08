@@ -116,13 +116,21 @@ void main() {
       final pins = find.byTooltip('Remember this');
       expect(pins, findsNWidgets(2));
 
-      // Long-press the USER bubble's pin.
+      // Long-press the USER bubble's affordance.
       final container = h.container.read(personalMemoryProvider);
       expect(container.facts, isEmpty);
       await tester.longPress(pins.first);
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Remember this'), findsOneWidget);
+      // The dialog title "Remember this" appears ON TOP of the two bubble
+      // tooltips with the same text — rescope to the AlertDialog.
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Remember this'),
+        ),
+        findsOneWidget,
+      );
       final dialogField = find.descendant(
         of: find.byType(AlertDialog),
         matching: find.byType(TextField),
@@ -258,6 +266,44 @@ void main() {
 
       expect(find.textContaining('Saved to your memory'), findsNothing);
       expect(h.container.read(personalMemoryProvider).facts, isEmpty);
+    });
+
+    testWidgets('bottom "Remember this" button: taps open the dialog and '
+        'save works; composer cleared when it held exactly the saved text',
+        (tester) async {
+      final h = await _harness();
+      await _pumpChat(tester, h);
+
+      // The compact action row carries the always-visible button.
+      final bottomBtn = find.widgetWithText(TextButton, 'Remember this');
+      expect(bottomBtn, findsOneWidget);
+
+      // Type something in the composer first: the dialog prefills from it.
+      await tester.enterText(
+        find.byType(TextField).last,
+        'Medicaid transportation is free for treatment visits here.',
+      );
+      await tester.pump();
+
+      await tester.tap(bottomBtn);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final dialogField = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      );
+      expect(dialogField, findsOneWidget);
+      final tf = tester.widget<TextField>(dialogField);
+      expect(tf.controller!.text, contains('Medicaid transportation'));
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.textContaining('Saved to your memory'), findsOneWidget);
+      final facts = h.container.read(personalMemoryProvider).facts;
+      expect(facts, hasLength(1));
+      expect(facts.single.text, contains('Medicaid transportation'));
     });
   });
 }

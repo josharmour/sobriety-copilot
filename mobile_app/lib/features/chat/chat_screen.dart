@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -88,6 +89,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final FocusNode _inputFocus = FocusNode();
+
+  /// Bare focus node consumed by the composer's KeyboardListener. It does not
+  /// steal focus — KeyboardListener nodes are transparent pass-throughs — it
+  /// just says "forward key events here while the text field (a child of it
+  /// in the focus tree) is focused".
+  final FocusNode _keyboardFocus = FocusNode();
   late final AppTts _tts;
 
   Timer? _debounce;
@@ -129,6 +136,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _input.dispose();
     _scroll.dispose();
     _inputFocus.dispose();
+    _keyboardFocus.dispose();
     _recorder.dispose();
     _tts.onDone = null;
     _tts.stop();
@@ -140,6 +148,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   // ── Sending ───────────────────────────────────────────────────────────────
+
+  /// Composer key handling: Enter (and numpad Enter) sends on web/desktop,
+  /// Shift+Enter inserts a newline. IME-composition input (e.g. Asian
+  /// keyboards' candidates) is left alone so Enter can confirm a candidate.
+  void _composerKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return;
+    if (!kIsWeb) {
+      // Touch keyboards: key events from soft keyboards are unreliable;
+      // the newline action + send button is the contract there.
+      return;
+    }
+    // Enter during IME composition must not send (candidate confirmation).
+    if (_input.value.composing != TextRange.empty) return;
+    final key = event.physicalKey;
+    if (key == PhysicalKeyboardKey.enter ||
+        key == PhysicalKeyboardKey.numpadEnter) {
+      final isShift =
+          HardwareKeyboard.instance.isShiftPressed ||
+          HardwareKeyboard.instance.isControlPressed ||
+          HardwareKeyboard.instance.isAltPressed ||
+          HardwareKeyboard.instance.isMetaPressed;
+      if (!isShift) {
+        _send();
+      }
+    }
+  }
 
   Future<void> _send([String? text]) async {
     final value = (text ?? _input.text).trim();
@@ -1028,12 +1062,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         onPressed: _toggleMic,
                       ),
                 Expanded(
-                  child: TextField(
+                  // Enter sends on desktop/web (Shift+Enter = newline), as
+                  // expected for a desktop chat composer. Touch keyboards
+                  // keep the default newline action (their key events are
+                  // unreliable); mobile users send via the send button.
+                  child: KeyboardListener(
+                    focusNode: _keyboardFocus,
+                    onKeyEvent: _composerKeyEvent,
+                    child: TextField(
                     controller: _input,
                     focusNode: _inputFocus,
                     minLines: 1,
                     maxLines: 5,
-                    textInputAction: TextInputAction.newline,
+                    textInputAction: kIsWeb
+                        ? TextInputAction.done
+                        : TextInputAction.newline,
                     onChanged: _onInputChanged,
                     decoration: InputDecoration(
                       hintText:
@@ -1054,6 +1097,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         vertical: AppSpacing.md,
                       ),
                     ),
+                  ),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
@@ -1104,6 +1148,67 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     textStyle: theme.textTheme.bodySmall,
                   ),
                   onPressed: () => _openMenu(_MenuAction.today),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.bookmark_add_outlined, size: 14),
+                  label: const Text('Remember this'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.onSurfaceVariant,
+                    minimumSize: Size.zero,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 8,
+                    ),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: theme.textTheme.bodySmall,
+                  ),
+                  onPressed: () async {
+                    HapticFeedback.selectionClick();
+                    final prefilled = normalizeRememberPrefill(_input.text);
+                    final messenger = ScaffoldMessenger.of(context);
+                    final text = await promptRememberFact(
+                      context,
+                      prefilled: prefilled,
+                    );
+                    if (text == null || text.isEmpty || !mounted) return;
+                    final convId =
+                        ref.read(chatNotifierProvider).conversationId ??
+                        'manual';
+                    final added = await ref
+                        .read(personalMemoryProvider.notifier)
+                        .addFact(text, convId);
+                    if (!mounted) return;
+                    if (added == null) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Already in your memory'),
+                        ),
+                      );
+                    } else {
+                      var undone = false;
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: const Text('Saved to your memory'),
+                          action: SnackBarAction(
+                            label: 'UNDO',
+                            onPressed: () {
+                              undone = true;
+                              ref
+                                  .read(personalMemoryProvider.notifier)
+                                  .removeFact(added.id);
+                            },
+                          ),
+                        ),
+                      );
+                      if (undone) return;
+                      // Clear the composer only when its current text is
+                      // exactly what was saved (the common flow: type it,
+                      // remember, send later or not at all).
+                      if (_input.text.trim() == prefilled) {
+                        _input.clear();
+                      }
+                    }
+                  },
                 ),
               ],
             ),
