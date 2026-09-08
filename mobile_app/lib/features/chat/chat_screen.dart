@@ -1514,6 +1514,14 @@ class _MessageBubble extends StatelessWidget {
               hasText
                   ? () => onRemember(normalizeRememberPrefill(message.text))
                   : null,
+          onDoubleTap:
+              hasText
+                  ? () => onRemember(normalizeRememberPrefill(message.text))
+                  : null,
+          onSecondaryTapUp:
+              hasText
+                  ? (_) => onRemember(normalizeRememberPrefill(message.text))
+                  : null,
           child: Container(
             margin: const EdgeInsets.only(
               bottom: AppSpacing.md,
@@ -1586,6 +1594,14 @@ class _MessageBubble extends StatelessWidget {
           onLongPress:
               hasText
                   ? () => onRemember(normalizeRememberPrefill(message.text))
+                  : null,
+          onDoubleTap:
+              hasText
+                  ? () => onRemember(normalizeRememberPrefill(message.text))
+                  : null,
+          onSecondaryTapUp:
+              hasText
+                  ? (_) => onRemember(normalizeRememberPrefill(message.text))
                   : null,
           child: Container(
             margin: const EdgeInsets.only(
