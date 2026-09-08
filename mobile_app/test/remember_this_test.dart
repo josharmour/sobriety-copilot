@@ -319,6 +319,44 @@ void main() {
       expect(facts, hasLength(1));
       expect(facts.single.text, contains('Medicaid transportation'));
     });
+
+    testWidgets('FR11.4: tapping Remember again while a stale confirmation '
+        'bar is showing dismisses it (bar no longer blocks the button)',
+        (tester) async {
+      final h = await _harness();
+      await _pumpChat(tester, h);
+
+      final bottomBtn = find.widgetWithText(TextButton, 'Remember this');
+      expect(bottomBtn, findsOneWidget);
+
+      // Save once -> confirmation bar appears.
+      await tester.enterText(
+        find.byType(TextField).last,
+        'First fact to remember.',
+      );
+      await tester.pump();
+      await tester.tap(bottomBtn);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.textContaining('Saved to your memory'), findsOneWidget);
+
+      // Advance past the 4s duration but DO NOT hover the bar: stepped pumps
+      // advance both animation and timer time (pumpAndSettle exits as soon as
+      // no frames are pending, i.e. before the dismiss timer fires).
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(find.textContaining('Saved to your memory'), findsNothing);
+
+      // A stale bar (e.g. kept alive by pointer hover on web) must not queue:
+      // re-tapping Remember clears it before the dialog opens.
+      await tester.tap(bottomBtn);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.textContaining('Saved to your memory'), findsNothing);
+    });
   });
 
   group('Remember this: conversation-aware prefill (FR11.2)', () {

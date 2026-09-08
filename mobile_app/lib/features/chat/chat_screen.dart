@@ -852,6 +852,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _remember(String rawText, String normalized) async {
     HapticFeedback.selectionClick();
     final messenger = ScaffoldMessenger.of(context);
+    // FR11.4: a lingering confirmation bar can block the long-press menu in
+    // a lane it overlays — start every Remember flow fresh.
+    messenger.clearSnackBars();
     final text = await promptRememberFact(context, prefilled: normalized);
     if (text == null || text.isEmpty || !mounted) return;
     final convId = ref.read(chatNotifierProvider).conversationId ?? 'manual';
@@ -859,15 +862,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         .read(personalMemoryProvider.notifier)
         .addFact(text, convId);
     if (!mounted) return;
+    // FR11.4: dismiss-before-show so a repeat save REPLACES the old bar
+    // instead of queueing behind it, and give it a fixed 4s window (Flutter's
+    // auto-dismiss pauses while the pointer hovers the bar, which on web sits
+    // right over the composer row's Remember button).
+    messenger.clearSnackBars();
     if (added == null) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Already in your memory')),
+        const SnackBar(
+          content: Text('Already in your memory'),
+          duration: Duration(seconds: 4),
+          persist: false,
+        ),
       );
       return;
     }
     messenger.showSnackBar(
       SnackBar(
         content: const Text('Saved to your memory'),
+        duration: const Duration(seconds: 4),
+        // Vendored Flutter defaults persist to TRUE when an action is set,
+        // which stranded this bar over the composer's Remember button on web
+        // (no close icon, no swipe) — FR11.4.
+        persist: false,
         action: SnackBarAction(
           label: 'UNDO',
           onPressed: () async {
@@ -1215,6 +1232,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       suggester = suggest;
                     }
                     final messenger = ScaffoldMessenger.of(context);
+                    // FR11.4: a stale "Saved to your memory" bar parks over
+                    // this button (fixed bottom lane, no swipe on desktop)
+                    // and both eats the tap targets and queues behind future
+                    // bars — dismiss it as soon as the user acts again.
+                    messenger.clearSnackBars();
                     final text = await promptRememberFact(
                       context,
                       prefilled: inputText,
@@ -1228,10 +1250,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         .read(personalMemoryProvider.notifier)
                         .addFact(text, convId);
                     if (!mounted) return;
+                    // FR11.4: replace-not-queue on repeat saves, fixed 4s
+                    // window (hover pauses the auto-dismiss on web).
+                    messenger.clearSnackBars();
                     if (added == null) {
                       messenger.showSnackBar(
                         const SnackBar(
                           content: Text('Already in your memory'),
+                          duration: Duration(seconds: 4),
+                          persist: false,
                         ),
                       );
                     } else {
@@ -1239,6 +1266,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       messenger.showSnackBar(
                         SnackBar(
                           content: const Text('Saved to your memory'),
+                          duration: const Duration(seconds: 4),
+                          // Vendored Flutter: persist defaults to true with an
+                          // action -> bar stranded over the Remember button
+                          // (FR11.4).
+                          persist: false,
                           action: SnackBarAction(
                             label: 'UNDO',
                             onPressed: () {
