@@ -35,12 +35,15 @@ docker compose down
 # NOTE (2026-08-03): 10.0.0.100 ("plex") IS blackwell (10.0.0.10) — one machine,
 # hostname blackwell, both IPs on one NIC. Agents already on blackwell can work
 # on production directly without ssh.
-# The Synology NAS (10.0.0.2) copy is a stale, non-serving mirror — never
-# deploy there.
 ./deploy.sh
 
 # Watch files and auto-deploy to production on save
 ./watch_and_deploy.sh
+
+# Release mobile app to App Store Connect / TestFlight & Google Play:
+# Automatically bumps build number, syncs Xcode targets, builds & uploads
+# iOS archive directly to TestFlight, builds signed release AAB, and pushes to git.
+./scripts/release_mobile.sh
 ```
 
 **What `deploy.sh` does and does *not* do.** It tars `src static nginx
