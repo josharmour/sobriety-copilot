@@ -135,7 +135,7 @@ class _MoodDayTile extends StatelessWidget {
     final dim = theme.colorScheme.surfaceContainerHighest;
     final fill = entry == null ? dim : moodColor(context, entry!.mood);
     final border = isToday
-        ? Border.all(color: AppColors.accent, width: 2)
+        ? Border.all(color: theme.colorScheme.primary, width: 2)
         : Border.all(color: theme.colorScheme.outlineVariant);
     final dayNum = date.day.toString();
     // Accessible foreground that contrasts with the fill (the mid-ramp golds
@@ -189,29 +189,15 @@ class _MoodDayDetail extends ConsumerWidget {
   const _MoodDayDetail({required this.entry});
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    final doDelete = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete this entry?'),
-        content: const Text(
-            'This permanently removes this mood and journal text from this '
-            'device. This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-            ),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final doDelete = await confirmDialog(
+      context,
+      title: 'Delete this entry?',
+      message: 'This permanently removes this mood and journal text from '
+          'this device. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
-    if (doDelete == true) {
+    if (doDelete) {
       // A malformed dateIso must be a no-op, never a fallback that would
       // silently delete today's entry instead.
       final date = DateTime.tryParse(entry.dateIso);

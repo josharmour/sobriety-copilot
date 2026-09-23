@@ -94,17 +94,14 @@ class SourceChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final pct = (source.similarity * 100).clamp(0, 100).round();
-    final isDark = theme.brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
-    final borderCol = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
-    final textColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
 
     return Container(
       decoration: BoxDecoration(
-        color: bg,
+        color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(AppSpacing.radius),
-        border: Border.all(color: borderCol),
+        border: Border.all(color: cs.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
       child: IntrinsicHeight(
@@ -114,7 +111,7 @@ class SourceChip extends StatelessWidget {
           children: [
             Container(
               width: 4,
-              color: AppColors.accent,
+              color: cs.primary,
             ),
             Material(
               color: Colors.transparent,
@@ -128,18 +125,14 @@ class SourceChip extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
-                        Icons.menu_book_outlined,
-                        size: 14,
-                        color: AppColors.accent,
-                      ),
+                      Icon(AppIcons.source, size: 14, color: cs.primary),
                       const SizedBox(width: AppSpacing.xs),
                       Flexible(
                         child: Text(
                           source.title,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: textColor,
+                            color: cs.onSurface,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -149,7 +142,7 @@ class SourceChip extends StatelessWidget {
                         Text(
                           '$pct%',
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: AppColors.accent,
+                            color: cs.primary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -325,7 +318,7 @@ class _ThinkingPanelState extends State<ThinkingPanel> {
               child: Row(
                 children: [
                   Icon(
-                    Icons.psychology_outlined,
+                    Icons.lightbulb_outline,
                     size: 16,
                     color: cs.onSurfaceVariant,
                   ),
@@ -369,26 +362,43 @@ class _ThinkingPanelState extends State<ThinkingPanel> {
   }
 }
 
-/// Bottom-sheet helper used by the app bar menu.
+/// The single way the app opens a bottom sheet, so every sheet shares one
+/// shape, drag handle, color and keyboard handling (see the theme's
+/// `bottomSheetTheme`).
 ///
-/// [initialSize] is the fraction of the screen the sheet opens at (it stays
-/// user-draggable between 0.4 and 0.95 regardless).
+/// By default the sheet is draggable: [initialSize] is the fraction of the
+/// screen it opens at (user-draggable between 0.4 and 0.95), and the body's
+/// scroll view drives the drag through [PrimaryScrollController] — build the
+/// body with [AppSheet], or pass `PrimaryScrollController.maybeOf(context)`
+/// to your own scroll view. Don't nest another [DraggableScrollableSheet].
+///
+/// [fitContent] sizes the sheet to its content instead (capped at 90% of the
+/// screen) — for short sheets like action lists and editors.
 Future<T?> showAppSheet<T>(
   BuildContext context,
   Widget child, {
   double initialSize = 0.7,
+  bool fitContent = false,
 }) {
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(
-        top: Radius.circular(AppSpacing.radiusLg),
-      ),
-    ),
     builder: (context) {
+      if (fitContent) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+            ),
+            child: _FitContentScope(child: child),
+          ),
+        );
+      }
       return DraggableScrollableSheet(
         expand: false,
         initialChildSize: initialSize.clamp(0.4, 0.95),
@@ -397,7 +407,7 @@ Future<T?> showAppSheet<T>(
         builder: (context, scrollController) {
           return Padding(
             padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
             ),
             child: PrimaryScrollController(
               controller: scrollController,
@@ -408,4 +418,368 @@ Future<T?> showAppSheet<T>(
       );
     },
   );
+}
+
+/// Standard sheet layout: a fixed [header] (usually a [SheetHeader]) over a
+/// scrolling body. The body uses the sheet's [PrimaryScrollController], so
+/// scrolling it also drags a [showAppSheet] sheet between its sizes.
+class AppSheet extends StatelessWidget {
+  final Widget header;
+  final List<Widget> children;
+
+  /// Pinned below the scrolling body (e.g. a primary action).
+  final Widget? footer;
+  final EdgeInsetsGeometry padding;
+
+  const AppSheet({
+    super.key,
+    required this.header,
+    required this.children,
+    this.footer,
+    this.padding = const EdgeInsets.fromLTRB(
+      AppSpacing.lg,
+      AppSpacing.md,
+      AppSpacing.lg,
+      AppSpacing.xxl,
+    ),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Content-sized sheets shrink-wrap their list; draggable (and standalone)
+    // sheets fill the height they're given and build rows lazily.
+    final fit =
+        context.getInheritedWidgetOfExactType<_FitContentScope>() != null;
+    final list = ListView(
+      controller: PrimaryScrollController.maybeOf(context),
+      shrinkWrap: fit,
+      padding: padding,
+      children: children,
+    );
+    return SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          if (fit) Flexible(child: list) else Expanded(child: list),
+          if (footer != null) footer!,
+        ],
+      ),
+    );
+  }
+}
+
+/// Marks a [showAppSheet] opened with `fitContent: true`.
+class _FitContentScope extends InheritedWidget {
+  const _FitContentScope({required super.child});
+
+  @override
+  bool updateShouldNotify(_FitContentScope oldWidget) => false;
+}
+
+/// Header shared by every sheet: tinted feature icon, title, optional
+/// subtitle, optional [actions], and a close button, over a divider.
+class SheetHeader extends StatelessWidget {
+  final IconData? icon;
+  final String title;
+  final String? subtitle;
+  final List<Widget> actions;
+  final bool showClose;
+
+  /// Replaces the default close behavior (pop the sheet).
+  final VoidCallback? onClose;
+
+  /// Extra content between the title row and the divider (filters, tabs).
+  final Widget? bottom;
+  final bool divider;
+  final int titleMaxLines;
+
+  const SheetHeader({
+    super.key,
+    required this.title,
+    this.icon,
+    this.subtitle,
+    this.actions = const [],
+    this.showClose = true,
+    this.onClose,
+    this.bottom,
+    this.divider = true,
+    this.titleMaxLines = 1,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final trailingPad =
+        showClose || actions.isNotEmpty ? AppSpacing.xs : AppSpacing.lg;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            0,
+            trailingPad,
+            AppSpacing.md,
+          ),
+          child: Row(
+            children: [
+              if (icon != null) ...[
+                ToneIcon(icon!),
+                const SizedBox(width: AppSpacing.md),
+              ],
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: titleMaxLines,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleLarge,
+                    ),
+                    if (subtitle != null && subtitle!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          subtitle!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              ...actions,
+              if (showClose)
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Close',
+                  onPressed:
+                      onClose ?? () => Navigator.of(context).maybePop(),
+                ),
+            ],
+          ),
+        ),
+        if (bottom != null) bottom!,
+        if (divider) const Divider(height: 1),
+      ],
+    );
+  }
+}
+
+/// A feature icon on a tinted rounded square — sheet headers, action cards.
+class ToneIcon extends StatelessWidget {
+  final IconData icon;
+  final AppTone tone;
+  final double size;
+  const ToneIcon(
+    this.icon, {
+    super.key,
+    this.tone = AppTone.info,
+    this.size = 40,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = toneColors(Theme.of(context).colorScheme, tone);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: c.container,
+        borderRadius: BorderRadius.circular(AppSpacing.radius),
+      ),
+      child: Icon(icon, size: size * 0.55, color: c.onContainer),
+    );
+  }
+}
+
+/// Tappable card row: tinted icon, title, optional subtitle, trailing
+/// affordance (defaults to a chevron). The standard "go somewhere" tile.
+class ActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final AppTone tone;
+
+  const ActionCard({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+    this.tone = AppTone.info,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              ToneIcon(icon, tone: tone),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: theme.textTheme.titleSmall),
+                    if (subtitle != null && subtitle!.isNotEmpty)
+                      Text(subtitle!, style: theme.textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              trailing ??
+                  Icon(
+                    Icons.chevron_right,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Softly tinted callout (disclaimer, privacy note, support pointer).
+class NoticeCard extends StatelessWidget {
+  final IconData icon;
+  final AppTone tone;
+  final Widget child;
+
+  /// Optional trailing action (e.g. a "Get support" button).
+  final Widget? action;
+
+  const NoticeCard({
+    super.key,
+    required this.icon,
+    required this.child,
+    this.tone = AppTone.info,
+    this.action,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final accent = toneColors(cs, tone).accent;
+    final isDark = theme.brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.radius),
+        border: Border.all(color: accent.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: accent, size: 20),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: DefaultTextStyle.merge(
+              style: theme.textTheme.bodyMedium,
+              child: child,
+            ),
+          ),
+          if (action != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            action!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Small solid status pill ("Live now", "Online", "Private").
+class StatusTag extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final AppTone tone;
+
+  const StatusTag(
+    this.label, {
+    super.key,
+    this.icon,
+    this.tone = AppTone.neutral,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final c = toneColors(theme.colorScheme, tone);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 3),
+      decoration: ShapeDecoration(color: c.container, shape: const StadiumBorder()),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: c.onContainer),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(color: c.onContainer),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Filled-button style for destructive confirmations (delete, erase, clear).
+ButtonStyle destructiveButtonStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+  return FilledButton.styleFrom(
+    backgroundColor: cs.error,
+    foregroundColor: cs.onError,
+  );
+}
+
+/// Standard yes/no confirmation: Cancel (text) + [confirmLabel] (filled;
+/// error-colored when [destructive]). Resolves true only on confirm.
+Future<bool> confirmDialog(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required String confirmLabel,
+  String cancelLabel = 'Cancel',
+  bool destructive = false,
+}) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: Text(cancelLabel),
+        ),
+        FilledButton(
+          style: destructive ? destructiveButtonStyle(dialogContext) : null,
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: Text(confirmLabel),
+        ),
+      ],
+    ),
+  );
+  return ok ?? false;
 }

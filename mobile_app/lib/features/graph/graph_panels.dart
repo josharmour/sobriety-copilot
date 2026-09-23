@@ -186,7 +186,7 @@ class PassageCard extends StatelessWidget {
                   ),
                   if (p.similarity != null)
                     Text('${(p.similarity! * 100).round()}%',
-                        style: theme.textTheme.labelSmall?.copyWith(color: AppColors.accent)),
+                        style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary)),
                   const SizedBox(width: 4),
                   Icon(Icons.chevron_right, size: 18, color: theme.colorScheme.onSurfaceVariant),
                 ],
@@ -240,7 +240,7 @@ class BuildingView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(building ? Icons.hub_outlined : Icons.cloud_off_outlined, size: 44, color: AppColors.accent),
+            Icon(building ? Icons.hub_outlined : Icons.cloud_off_outlined, size: 44, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: AppSpacing.md),
             Text(
               building ? 'Mapping the library…' : 'The knowledge graph is unavailable',
@@ -304,7 +304,7 @@ class OverviewPanel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
       children: [
         PanelHeader(
-          leading: const Icon(Icons.hub, color: AppColors.accent),
+          leading: Icon(AppIcons.graph, color: Theme.of(context).colorScheme.primary),
           title: 'The whole library, mapped',
           subtitle:
               '${map.topics.length} topics · ${map.books.length} books · ${_n(map.passageCount)} passages. '
@@ -400,7 +400,7 @@ class TopicPanel extends StatelessWidget {
             if (actions.ask != null)
               IconButton(
                 tooltip: 'Ask about ${t.label}',
-                icon: const Icon(Icons.auto_awesome, color: AppColors.accent),
+                icon: Icon(Icons.auto_awesome, color: Theme.of(context).colorScheme.primary),
                 onPressed: () => actions.ask!('What does the recovery literature teach about ${t.label.toLowerCase()}?'),
               ),
           ],
@@ -512,7 +512,7 @@ class BookPanel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
       children: [
         PanelHeader(
-          leading: const Icon(Icons.menu_book, color: AppColors.gold),
+          leading: Icon(Icons.menu_book, color: Theme.of(context).colorScheme.tertiary),
           title: b.title,
           subtitle: [if (b.author.isNotEmpty) b.author, '${_n(b.passages)} passages'].join(' · '),
           actions: [
@@ -692,7 +692,7 @@ class SearchPanel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
       children: [
         PanelHeader(
-          leading: const Icon(Icons.search, color: AppColors.accent),
+          leading: Icon(Icons.search, color: Theme.of(context).colorScheme.primary),
           title: '“${result.query}”',
           subtitle: '${result.passages.length} passages · ${result.topics.length + result.suggestedTopics.length} topics',
           actions: [

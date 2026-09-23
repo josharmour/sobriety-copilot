@@ -280,6 +280,10 @@ void main() {
         await _scrollTo(tester, forgetBtn);
         scrolls++;
       }
+      // Built is not the same as on screen (lazy lists build past the
+      // viewport edge) — bring it fully into view before tapping.
+      await tester.ensureVisible(forgetBtn);
+      await tester.pump(const Duration(milliseconds: 120));
       await tester.tap(forgetBtn);
       await tester.tap(find.text('Forget everything'));
       await tester.pump(const Duration(milliseconds: 200)); // dialog in
@@ -315,6 +319,10 @@ void main() {
         await _scrollTo(tester, forgetBtn);
         scrolls++;
       }
+      // Built is not the same as on screen (lazy lists build past the
+      // viewport edge) — bring it fully into view before tapping.
+      await tester.ensureVisible(forgetBtn);
+      await tester.pump(const Duration(milliseconds: 120));
       await tester.tap(forgetBtn);
       await tester.tap(find.text('Forget everything'));
       await tester.pump(const Duration(milliseconds: 200));

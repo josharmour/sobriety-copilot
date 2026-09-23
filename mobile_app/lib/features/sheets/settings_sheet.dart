@@ -27,237 +27,181 @@ class SettingsSheet extends ConsumerWidget {
     final config = ref.watch(appConfigProvider);
     final notifier = ref.read(appConfigProvider.notifier);
 
-    return SafeArea(
-      top: false,
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.settings_outlined),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      'Settings',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.check),
-                      tooltip: 'Done',
-                      onPressed: () => Navigator.of(context).maybePop(),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.md,
-                    AppSpacing.lg,
-                    AppSpacing.xxl,
-                  ),
-                  children: [
-                    const _ServerStatusCard(),
-                    const SizedBox(height: AppSpacing.lg),
-
-                    const PrivateModeSection(),
-
-                    const _CitationsPackTile(),
-                    const SizedBox(height: AppSpacing.xl),
-
-                    const SectionHeader('Appearance & Theme'),
-                    const SizedBox(height: AppSpacing.xs),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ChoiceChip(
-                            avatar: const Icon(Icons.dark_mode_outlined, size: 16),
-                            label: const Text('Dark'),
-                            selected: config.themeMode == ThemeMode.dark,
-                            onSelected: (_) => notifier.setThemeMode(ThemeMode.dark),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Expanded(
-                          child: ChoiceChip(
-                            avatar: const Icon(Icons.light_mode_outlined, size: 16),
-                            label: const Text('Light'),
-                            selected: config.themeMode == ThemeMode.light,
-                            onSelected: (_) => notifier.setThemeMode(ThemeMode.light),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Expanded(
-                          child: ChoiceChip(
-                            avatar: const Icon(Icons.brightness_auto_outlined, size: 16),
-                            label: const Text('System'),
-                            selected: config.themeMode == ThemeMode.system,
-                            onSelected: (_) => notifier.setThemeMode(ThemeMode.system),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-
-                    const SectionHeader('Response tone'),
-                    const SizedBox(height: AppSpacing.xs),
-                    ...kTones.map(
-                      (t) => _ToneTile(
-                        tone: t,
-                        selected: config.tone == t.id,
-                        onTap: () => notifier.setTone(t.id),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-
-                    const SectionHeader('Literature sources'),
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        top: AppSpacing.xs,
-                        bottom: AppSpacing.sm,
-                      ),
-                      child: Text(
-                        'By default, all literature sources are enabled. To limit '
-                        'search results to conference-approved literature only, '
-                        'uncheck the other sources.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                      ),
-                    ),
-                    _CategoryActions(
-                      allEnabled:
-                          config.enabledCategories.length == kAllCategories.length,
-                      onSelectAll: () => notifier.setAllCategories(true),
-                      onClear: () => notifier.setAllCategories(false),
-                    ),
-                    ...kAllCategories.map(
-                      (id) => CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        dense: true,
-                        value: config.enabledCategories.contains(id),
-                        title: Text(kCategoryLabels[id] ?? id),
-                        onChanged: (_) => notifier.toggleCategory(id),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-
-                    const SectionHeader('Recovery tracker'),
-                    Builder(builder: (context) {
-                      final tracker = ref.watch(sobrietyProvider);
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.emoji_events_outlined),
-                        title: Text(
-                          tracker.isTracking
-                              ? 'Day ${tracker.daysSober}'
-                              : 'Track your sober time',
-                        ),
-                        subtitle: Text(
-                          tracker.isTracking
-                              ? 'Tap to edit · stored only on this device'
-                              : supportsHomeWidget
-                                  ? 'Day count, milestones, and a home-screen '
-                                      'widget'
-                                  : 'Day count and milestones',
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => showTrackerEditor(context, ref),
-                      );
-                    }),
-                    const SizedBox(height: AppSpacing.xl),
-
-                    const SectionHeader('Personal memory'),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.psychology_outlined),
-                      title: const Text('What Copilot knows about me'),
-                      subtitle: const Text(
-                        'Profile, remembered details, and open topics — '
-                        'stored only on this device.',
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => showAppSheet(context, const MemorySheet()),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-
-                    const SectionHeader('Reading & voice'),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: config.showThinking,
-                      title: const Text('Show thinking'),
-                      subtitle: const Text(
-                        'Display the model\'s reasoning steps for each answer.',
-                      ),
-                      onChanged: (v) => notifier.setShowThinking(v),
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: config.ttsEnabled,
-                      title: const Text('Read answers aloud'),
-                      subtitle: const Text(
-                        'Enable a play button to hear answers (text-to-speech).',
-                      ),
-                      onChanged: (v) => notifier.setTtsEnabled(v),
-                    ),
-                    if (config.ttsEnabled) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      const SectionHeader('Voice'),
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: AppSpacing.xs,
-                          bottom: AppSpacing.sm,
-                        ),
-                        child: Text(
-                          'Natural voices run fully on this device. Each is a '
-                          'one-time download over Wi-Fi.',
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                        ),
-                      ),
-                      const _VoicePicker(),
-                    ],
-                    const SizedBox(height: AppSpacing.lg),
-                    Center(
-                      child: Text(
-                        'Changes save automatically',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
+    return AppSheet(
+      header: const SheetHeader(
+        icon: AppIcons.settings,
+        title: 'Settings',
+        subtitle: 'Changes save automatically',
       ),
+      children: [
+        const _ServerStatusCard(),
+        const SizedBox(height: AppSpacing.lg),
+
+        const PrivateModeSection(),
+
+        const _CitationsPackTile(),
+        const SizedBox(height: AppSpacing.xl),
+
+        const SectionHeader('Appearance & Theme'),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            Expanded(
+              child: ChoiceChip(
+                avatar: const Icon(Icons.dark_mode_outlined, size: 16),
+                label: const Text('Dark'),
+                selected: config.themeMode == ThemeMode.dark,
+                onSelected: (_) => notifier.setThemeMode(ThemeMode.dark),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: ChoiceChip(
+                avatar: const Icon(Icons.light_mode_outlined, size: 16),
+                label: const Text('Light'),
+                selected: config.themeMode == ThemeMode.light,
+                onSelected: (_) => notifier.setThemeMode(ThemeMode.light),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: ChoiceChip(
+                avatar: const Icon(Icons.brightness_auto_outlined, size: 16),
+                label: const Text('System'),
+                selected: config.themeMode == ThemeMode.system,
+                onSelected: (_) => notifier.setThemeMode(ThemeMode.system),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xl),
+
+        const SectionHeader('Response tone'),
+        const SizedBox(height: AppSpacing.xs),
+        ...kTones.map(
+          (t) => _ToneTile(
+            tone: t,
+            selected: config.tone == t.id,
+            onTap: () => notifier.setTone(t.id),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+
+        const SectionHeader('Literature sources'),
+        Padding(
+          padding: const EdgeInsets.only(
+            top: AppSpacing.xs,
+            bottom: AppSpacing.sm,
+          ),
+          child: Text(
+            'By default, all literature sources are enabled. To limit '
+            'search results to conference-approved literature only, '
+            'uncheck the other sources.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant,
+                ),
+          ),
+        ),
+        _CategoryActions(
+          allEnabled:
+              config.enabledCategories.length == kAllCategories.length,
+          onSelectAll: () => notifier.setAllCategories(true),
+          onClear: () => notifier.setAllCategories(false),
+        ),
+        ...kAllCategories.map(
+          (id) => CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            dense: true,
+            value: config.enabledCategories.contains(id),
+            title: Text(kCategoryLabels[id] ?? id),
+            onChanged: (_) => notifier.toggleCategory(id),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+
+        const SectionHeader('Recovery tracker'),
+        Builder(builder: (context) {
+          final tracker = ref.watch(sobrietyProvider);
+          return ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(AppIcons.tracker),
+            title: Text(
+              tracker.isTracking
+                  ? 'Day ${tracker.daysSober}'
+                  : 'Track your sober time',
+            ),
+            subtitle: Text(
+              tracker.isTracking
+                  ? 'Tap to edit · stored only on this device'
+                  : supportsHomeWidget
+                      ? 'Day count, milestones, and a home-screen '
+                          'widget'
+                      : 'Day count and milestones',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => showTrackerEditor(context, ref),
+          );
+        }),
+        const SizedBox(height: AppSpacing.xl),
+
+        const SectionHeader('Personal memory'),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(AppIcons.memory),
+          title: const Text('What Copilot knows about me'),
+          subtitle: const Text(
+            'Profile, remembered details, and open topics — '
+            'stored only on this device.',
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => showAppSheet(context, const MemorySheet(), initialSize: 0.9),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+
+        const SectionHeader('Reading & voice'),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: config.showThinking,
+          title: const Text('Show thinking'),
+          subtitle: const Text(
+            'Display the model\'s reasoning steps for each answer.',
+          ),
+          onChanged: (v) => notifier.setShowThinking(v),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: config.ttsEnabled,
+          title: const Text('Read answers aloud'),
+          subtitle: const Text(
+            'Enable a play button to hear answers (text-to-speech).',
+          ),
+          onChanged: (v) => notifier.setTtsEnabled(v),
+        ),
+        if (config.ttsEnabled) ...[
+          const SizedBox(height: AppSpacing.md),
+          const SectionHeader('Voice'),
+          Padding(
+            padding: const EdgeInsets.only(
+              top: AppSpacing.xs,
+              bottom: AppSpacing.sm,
+            ),
+            child: Text(
+              'Natural voices run fully on this device. Each is a '
+              'one-time download over Wi-Fi.',
+              style:
+                  Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurfaceVariant,
+                      ),
+            ),
+          ),
+          const _VoicePicker(),
+        ],
+      ],
     );
   }
 }
@@ -313,8 +257,8 @@ class _ServerStatusCard extends ConsumerWidget {
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: row(
-            AppColors.accent,
-            Icons.shield_outlined,
+            scheme.primary,
+            AppIcons.privateMode,
             'Private Mode',
             'Answering on this device · nothing leaves this phone',
           ),
@@ -324,7 +268,7 @@ class _ServerStatusCard extends ConsumerWidget {
 
     final child = health.when(
       data: (HealthStatus h) => row(
-        h.isOk ? AppColors.accent : AppColors.error,
+        h.isOk ? scheme.success : scheme.error,
         h.isOk ? Icons.check_circle_outline : Icons.warning_amber_outlined,
         h.isOk ? 'Connected' : 'Server degraded',
         [
@@ -339,7 +283,7 @@ class _ServerStatusCard extends ConsumerWidget {
         null,
       ),
       error: (_, __) => row(
-        AppColors.error,
+        scheme.error,
         Icons.error_outline,
         'Connection error',
         'Check your internet connection, then tap refresh to retry.',
@@ -381,10 +325,10 @@ class _ToneTile extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             border: Border.all(
-              color: selected ? AppColors.accent : scheme.outlineVariant,
+              color: selected ? scheme.primary : scheme.outlineVariant,
               width: selected ? 2 : 1,
             ),
-            color: selected ? AppColors.accentSoft : null,
+            color: selected ? scheme.primaryContainer : null,
             borderRadius: BorderRadius.circular(AppSpacing.radius),
           ),
           child: Row(
@@ -393,7 +337,7 @@ class _ToneTile extends StatelessWidget {
                 selected
                     ? Icons.radio_button_checked
                     : Icons.radio_button_unchecked,
-                color: selected ? AppColors.accent : scheme.onSurfaceVariant,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
                 size: 20,
               ),
               const SizedBox(width: AppSpacing.md),
@@ -405,7 +349,7 @@ class _ToneTile extends StatelessWidget {
                       tone.label,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             fontWeight: FontWeight.w600,
-                            color: selected ? AppColors.brand : null,
+                            color: selected ? scheme.onPrimaryContainer : null,
                           ),
                     ),
                     Text(
@@ -538,10 +482,10 @@ class _VoiceTile extends StatelessWidget {
           ),
           decoration: BoxDecoration(
             border: Border.all(
-              color: selected ? AppColors.accent : scheme.outlineVariant,
+              color: selected ? scheme.primary : scheme.outlineVariant,
               width: selected ? 2 : 1,
             ),
-            color: selected ? AppColors.accentSoft : null,
+            color: selected ? scheme.primaryContainer : null,
             borderRadius: BorderRadius.circular(AppSpacing.radius),
           ),
           child: Row(
@@ -550,7 +494,7 @@ class _VoiceTile extends StatelessWidget {
                 selected
                     ? Icons.radio_button_checked
                     : Icons.radio_button_unchecked,
-                color: selected ? AppColors.accent : scheme.onSurfaceVariant,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
                 size: 20,
               ),
               const SizedBox(width: AppSpacing.md),
@@ -562,7 +506,7 @@ class _VoiceTile extends StatelessWidget {
                       label,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             fontWeight: FontWeight.w600,
-                            color: selected ? AppColors.brand : null,
+                            color: selected ? scheme.onPrimaryContainer : null,
                           ),
                     ),
                     Text(
@@ -710,7 +654,10 @@ class _CitationsPackTileState extends ConsumerState<_CitationsPackTile> {
       return ListTile(
         contentPadding: EdgeInsets.zero,
         dense: true,
-        leading: const Icon(Icons.library_books, color: AppColors.accent),
+        leading: Icon(
+          Icons.library_books,
+          color: Theme.of(context).colorScheme.primary,
+        ),
         title: const Text('Offline citations enabled'),
         subtitle:
             const Text('Answers can cite indexed sources with no connection'),

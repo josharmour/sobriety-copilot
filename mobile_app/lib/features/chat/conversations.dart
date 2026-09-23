@@ -115,121 +115,84 @@ class ConversationsSheet extends ConsumerWidget {
       chatNotifierProvider.select((s) => s.conversationId),
     );
 
-    return SafeArea(
-      top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.sm,
-              AppSpacing.sm,
+    return AppSheet(
+      header: SheetHeader(
+        icon: AppIcons.conversations,
+        title: 'Conversations',
+        subtitle: 'Saved on this device',
+        actions: [
+          if (conversations.isNotEmpty)
+            TextButton.icon(
+              onPressed: () => _confirmClearAll(context, ref),
+              icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+              label: const Text('Clear'),
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+              ),
             ),
-            child: Row(
-              children: [
-                const Expanded(child: SectionHeader('Conversations')),
-                if (conversations.isNotEmpty)
-                  TextButton.icon(
-                    onPressed: () => _confirmClearAll(context, ref),
-                    icon: const Icon(Icons.delete_sweep_outlined, size: 18),
-                    label: const Text('Clear'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: theme.colorScheme.error,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: FilledButton.tonalIcon(
-              onPressed: () {
-                ref.read(chatNotifierProvider.notifier).startNew();
-                Navigator.of(context).maybePop();
-              },
-              icon: const Icon(Icons.add_comment_outlined),
-              label: const Text('New conversation'),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Flexible(
-            child:
-                conversations.isEmpty
-                    ? const Padding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: AppSpacing.xxl,
-                        horizontal: AppSpacing.lg,
-                      ),
-                      child: Center(
-                        child: Text(
-                          'No conversations yet',
-                          style: TextStyle(
-                            color: AppColors.lightTextSecondary,
-                          ),
-                        ),
-                      ),
-                    )
-                    : ListView.builder(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                      itemCount: conversations.length,
-                      itemBuilder: (context, i) {
-                        final conv = conversations[i];
-                        final active = conv.id == activeId;
-                        return _ConversationTile(
-                          conversation: conv,
-                          active: active,
-                          onTap: () {
-                            ref
-                                .read(chatNotifierProvider.notifier)
-                                .loadConversation(conv);
-                            Navigator.of(context).maybePop();
-                          },
-                          onDelete: () async {
-                            if (active) {
-                              ref
-                                  .read(chatNotifierProvider.notifier)
-                                  .startNew();
-                            }
-                            await ref
-                                .read(conversationsProvider.notifier)
-                                .delete(conv.id);
-                          },
-                        );
-                      },
-                    ),
-          ),
         ],
       ),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.xxl,
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+          child: FilledButton.icon(
+            onPressed: () {
+              ref.read(chatNotifierProvider.notifier).startNew();
+              Navigator.of(context).maybePop();
+            },
+            icon: const Icon(Icons.add_comment_outlined),
+            label: const Text('New conversation'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (conversations.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl),
+            child: Center(
+              child: Text(
+                'No conversations yet',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          )
+        else
+          for (final conv in conversations)
+            _ConversationTile(
+              conversation: conv,
+              active: conv.id == activeId,
+              onTap: () {
+                ref.read(chatNotifierProvider.notifier).loadConversation(conv);
+                Navigator.of(context).maybePop();
+              },
+              onDelete: () async {
+                if (conv.id == activeId) {
+                  ref.read(chatNotifierProvider.notifier).startNew();
+                }
+                await ref.read(conversationsProvider.notifier).delete(conv.id);
+              },
+            ),
+      ],
     );
   }
 
   Future<void> _confirmClearAll(BuildContext context, WidgetRef ref) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: const Text('Clear all conversations?'),
-            content: const Text(
-              'This permanently removes your saved chat history on this device. '
-              'It cannot be undone.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Clear all'),
-              ),
-            ],
-          ),
+    final ok = await confirmDialog(
+      context,
+      title: 'Clear all conversations?',
+      message: 'This permanently removes your saved chat history on this '
+          'device. It cannot be undone.',
+      confirmLabel: 'Clear all',
+      destructive: true,
     );
-    if (ok == true) {
+    if (ok) {
       ref.read(chatNotifierProvider.notifier).startNew();
       await ref.read(conversationsProvider.notifier).clearAll();
     }
@@ -255,11 +218,11 @@ class _ConversationTile extends StatelessWidget {
     final count = conversation.messages.length;
     return ListTile(
       selected: active,
-      selectedTileColor: AppColors.accentSoft,
-      leading: Icon(
-        active ? Icons.chat_bubble : Icons.chat_bubble_outline,
-        color: active ? AppColors.accent : theme.colorScheme.onSurfaceVariant,
+      contentPadding: const EdgeInsets.only(
+        left: AppSpacing.md,
+        right: AppSpacing.xs,
       ),
+      leading: Icon(active ? Icons.chat_bubble : Icons.chat_bubble_outline),
       title: Text(
         conversation.title.isEmpty ? 'New conversation' : conversation.title,
         maxLines: 1,

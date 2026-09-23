@@ -689,11 +689,11 @@ class _RagGraphScreenState extends ConsumerState<RagGraphScreen> with SingleTick
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.hub, color: AppColors.accent, size: 22),
-              SizedBox(width: AppSpacing.sm),
-              Text('Knowledge Graph'),
+              Icon(AppIcons.graph, color: theme.colorScheme.primary, size: 22),
+              const SizedBox(width: AppSpacing.sm),
+              const Text('Knowledge Graph'),
             ],
           ),
           actions: [
@@ -704,7 +704,7 @@ class _RagGraphScreenState extends ConsumerState<RagGraphScreen> with SingleTick
             ),
             IconButton(
               tooltip: 'How to use the graph',
-              icon: const Icon(Icons.help_outline),
+              icon: const Icon(AppIcons.help),
               onPressed: () => _showHelp(context),
             ),
           ],
@@ -1110,11 +1110,13 @@ class _RagGraphScreenState extends ConsumerState<RagGraphScreen> with SingleTick
     final theme = Theme.of(context);
     showAppSheet(
       context,
-      ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+      AppSheet(
+        header: const SheetHeader(
+          icon: AppIcons.help,
+          title: 'How to use the graph',
+          subtitle: 'Reading the library as a map',
+        ),
         children: [
-          Text('Reading the library as a map', style: theme.textTheme.titleLarge),
-          const SizedBox(height: AppSpacing.md),
           _help(theme, Icons.circle, 'Topics', 'Every disc is a recovery topic, coloured by theme. Bigger discs are discussed more. Lines join topics that appear together in the same passages.'),
           _help(theme, Icons.touch_app_outlined, 'Focus', 'Tap a topic to centre it: the ring around it holds the topics it leads to, and the outer ring holds the books that discuss it most.'),
           _help(theme, Icons.menu_book_outlined, 'Books', 'Tap a book for its passages on the topic; double-tap (or tap its title) to see everything the book talks about, chapter by chapter.'),
@@ -1132,7 +1134,7 @@ class _RagGraphScreenState extends ConsumerState<RagGraphScreen> with SingleTick
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: AppColors.accent, size: 20),
+            Icon(icon, color: theme.colorScheme.primary, size: 20),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(

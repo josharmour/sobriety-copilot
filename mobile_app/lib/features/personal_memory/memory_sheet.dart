@@ -208,7 +208,9 @@ class MemorySheet extends ConsumerWidget {
                 onPressed: () => Navigator.of(dialogContext).pop(),
                 child: const Text('Cancel'),
               ),
+              // Every caller forgets data, so confirm reads as destructive.
               FilledButton(
+                style: destructiveButtonStyle(dialogContext),
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
                   onConfirm();
@@ -258,279 +260,248 @@ class MemorySheet extends ConsumerWidget {
         memory.threads.where((t) => t.resolved).toList()
           ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
-    return SafeArea(
-      top: false,
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) {
-          return Column(
+    return AppSheet(
+      header: SheetHeader(
+        icon: AppIcons.memory,
+        title: 'What Copilot knows about me',
+        subtitle: 'Stored only on this device. Sent with your messages as '
+            'context; never saved by the server.',
+        titleMaxLines: 2,
+        // The master toggle gets its own labeled row: squeezed in beside the
+        // title it truncated the privacy note on phones.
+        bottom: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            0,
+            AppSpacing.sm,
+            AppSpacing.xs,
+          ),
+          child: Row(
             children: [
-              // ── a. Header row + privacy subtitle + toggle ──────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                  AppSpacing.lg,
-                  AppSpacing.xs,
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.shield_outlined),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'What Copilot knows about me',
-                            style: theme.textTheme.titleLarge,
-                          ),
-                          Text(
-                            'Stored only on this device. Sent with your '
-                            'messages as context; never saved by the server.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: memoryEnabled,
-                      onChanged: (v) {
-                        HapticFeedback.selectionClick();
-                        ref.read(memoryEnabledProvider.notifier).setEnabled(v);
-                      },
-                    ),
-                  ],
+              Expanded(
+                child: Text(
+                  'Remember things about me',
+                  style: theme.textTheme.bodyLarge,
                 ),
               ),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.md,
-                    AppSpacing.lg,
-                    AppSpacing.xxl,
-                  ),
-                  children: [
-                    // ── b. PROFILE ────────────────────────────────────────
-                    const SectionHeader('Profile'),
-                    _ProfileRowTile(
-                      icon: Icons.person_outline,
-                      label: 'Sponsor',
-                      value: memory.profile.sponsor,
-                      onEdit: () async {
-                        HapticFeedback.selectionClick();
-                        final v = await _prompt(
-                          context,
-                          title: 'Sponsor',
-                          label: 'Who is it?',
-                          initial: memory.profile.sponsor ?? '',
-                        );
-                        if (v != null) {
-                          await memoryNotifier.updateProfile(sponsor: v);
-                        }
-                      },
-                    ),
-                    _ProfileRowTile(
-                      icon: Icons.groups_outlined,
-                      label: 'Home group',
-                      value: memory.profile.homeGroup,
-                      onEdit: () async {
-                        HapticFeedback.selectionClick();
-                        final v = await _prompt(
-                          context,
-                          title: 'Home group',
-                          label: 'Which group is home?',
-                          initial: memory.profile.homeGroup ?? '',
-                        );
-                        if (v != null) {
-                          await memoryNotifier.updateProfile(homeGroup: v);
-                        }
-                      },
-                    ),
-                    _ProfileRowTile(
-                      icon: Icons.flag_outlined,
-                      label: 'Goal',
-                      value: memory.profile.goal,
-                      onEdit: () async {
-                        HapticFeedback.selectionClick();
-                        final v = await _prompt(
-                          context,
-                          title: 'Goal',
-                          label: 'What are you working toward?',
-                          initial: memory.profile.goal ?? '',
-                        );
-                        if (v != null) {
-                          await memoryNotifier.updateProfile(goal: v);
-                        }
-                      },
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.sm),
-                      child: _TriggerChips(
-                        triggers: memory.profile.triggers,
-                        onAdd: () async {
-                          HapticFeedback.selectionClick();
-                          final v = await _prompt(
-                            context,
-                            title: 'Add a trigger',
-                            label: 'What situations are risky for you?',
-                          );
-                          if (v != null && v.isNotEmpty) {
-                            await memoryNotifier.updateProfile(
-                              triggers: [...memory.profile.triggers, v],
-                            );
-                          }
-                        },
-                        onDelete: (i) async {
-                          HapticFeedback.selectionClick();
-                          final next = List<String>.of(memory.profile.triggers)
-                            ..removeAt(i);
-                          await memoryNotifier.updateProfile(triggers: next);
-                        },
-                      ),
-                    ),
-
-                    // ── c. FACTS ──────────────────────────────────────────
-                    const SectionHeader('Things Copilot remembers'),
-                    if (memory.facts.isEmpty)
-                      _EmptyHint(
-                        text:
-                            'Nothing yet. After a few conversations, '
-                            'Copilot will start remembering durable things '
-                            'here.',
-                      )
-                    else
-                      ...memory.facts.reversed.map(
-                        (f) => _FactRow(
-                          fact: f,
-                          onEdit: () async {
-                            HapticFeedback.selectionClick();
-                            final v = await _prompt(
-                              context,
-                              title: 'Edit memory',
-                              label: 'How should this read?',
-                              initial: f.text,
-                            );
-                            if (v == null || v.isEmpty) return;
-                            // Edit = replace (remove + re-add keeps the
-                            // dedupe constraint intact).
-                            await memoryNotifier.removeFact(f.id);
-                            await memoryNotifier.addFact(
-                              v,
-                              f.sourceConversationId,
-                            );
-                          },
-                          onDelete: () async {
-                            HapticFeedback.selectionClick();
-                            await _confirm(
-                              context,
-                              title: 'Forget this?',
-                              body: f.text,
-                              onConfirm: () => memoryNotifier.removeFact(f.id),
-                            );
-                          },
-                        ),
-                      ),
-
-                    // ── d. THREADS ────────────────────────────────────────
-                    const SectionHeader('Open topics'),
-                    if (openThreads.isEmpty)
-                      _EmptyHint(text: 'No open topics right now.')
-                    else
-                      ...openThreads.map(
-                        (t) => _ThreadCard(
-                          thread: t,
-                          onResume: () => _resumeThread(context, ref, t),
-                          onMarkHandled: () async {
-                            HapticFeedback.selectionClick();
-                            await memoryNotifier.resolveThread(t.id);
-                          },
-                        ),
-                      ),
-                    if (resolvedThreads.isNotEmpty)
-                      ExpansionTile(
-                        tilePadding: EdgeInsets.zero,
-                        title: Text(
-                          'Handled',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                        childrenPadding: const EdgeInsets.only(
-                          bottom: AppSpacing.sm,
-                        ),
-                        children: [
-                          for (final t in resolvedThreads)
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                              leading: const Icon(
-                                Icons.check_circle_outline,
-                                size: 20,
-                              ),
-                              title: Text(t.title),
-                              subtitle:
-                                  t.lastDetail.isEmpty
-                                      ? null
-                                      : Text(t.lastDetail),
-                              trailing: Text(
-                                agoFor(t.updatedAt),
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: cs.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-
-                    // ── e. DANGER ─────────────────────────────────────────
-                    const SizedBox(height: AppSpacing.xl),
-                    Center(
-                      child: TextButton(
-                        onPressed: () {
-                          HapticFeedback.selectionClick();
-                          _confirm(
-                            context,
-                            title: 'Forget everything?',
-                            body:
-                                'This erases everything Copilot remembers '
-                                'about you on this device.',
-                            onConfirm: () async {
-                              await memoryNotifier.forgetAll();
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Personal memory erased from this '
-                                      'device.',
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-                          );
-                        },
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.error,
-                        ),
-                        child: const Text('Forget everything'),
-                      ),
-                    ),
-                  ],
-                ),
+              Switch(
+                value: memoryEnabled,
+                onChanged: (v) {
+                  HapticFeedback.selectionClick();
+                  ref.read(memoryEnabledProvider.notifier).setEnabled(v);
+                },
               ),
             ],
-          );
-        },
+          ),
+        ),
       ),
+      children: [
+        // ── b. PROFILE ────────────────────────────────────────
+        const SectionHeader('Profile'),
+        _ProfileRowTile(
+          icon: Icons.person_outline,
+          label: 'Sponsor',
+          value: memory.profile.sponsor,
+          onEdit: () async {
+            HapticFeedback.selectionClick();
+            final v = await _prompt(
+              context,
+              title: 'Sponsor',
+              label: 'Who is it?',
+              initial: memory.profile.sponsor ?? '',
+            );
+            if (v != null) {
+              await memoryNotifier.updateProfile(sponsor: v);
+            }
+          },
+        ),
+        _ProfileRowTile(
+          icon: Icons.groups_outlined,
+          label: 'Home group',
+          value: memory.profile.homeGroup,
+          onEdit: () async {
+            HapticFeedback.selectionClick();
+            final v = await _prompt(
+              context,
+              title: 'Home group',
+              label: 'Which group is home?',
+              initial: memory.profile.homeGroup ?? '',
+            );
+            if (v != null) {
+              await memoryNotifier.updateProfile(homeGroup: v);
+            }
+          },
+        ),
+        _ProfileRowTile(
+          icon: Icons.flag_outlined,
+          label: 'Goal',
+          value: memory.profile.goal,
+          onEdit: () async {
+            HapticFeedback.selectionClick();
+            final v = await _prompt(
+              context,
+              title: 'Goal',
+              label: 'What are you working toward?',
+              initial: memory.profile.goal ?? '',
+            );
+            if (v != null) {
+              await memoryNotifier.updateProfile(goal: v);
+            }
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.sm),
+          child: _TriggerChips(
+            triggers: memory.profile.triggers,
+            onAdd: () async {
+              HapticFeedback.selectionClick();
+              final v = await _prompt(
+                context,
+                title: 'Add a trigger',
+                label: 'What situations are risky for you?',
+              );
+              if (v != null && v.isNotEmpty) {
+                await memoryNotifier.updateProfile(
+                  triggers: [...memory.profile.triggers, v],
+                );
+              }
+            },
+            onDelete: (i) async {
+              HapticFeedback.selectionClick();
+              final next = List<String>.of(memory.profile.triggers)
+                ..removeAt(i);
+              await memoryNotifier.updateProfile(triggers: next);
+            },
+          ),
+        ),
+
+        // ── c. FACTS ──────────────────────────────────────────
+        const SectionHeader('Things Copilot remembers'),
+        if (memory.facts.isEmpty)
+          _EmptyHint(
+            text:
+                'Nothing yet. After a few conversations, '
+                'Copilot will start remembering durable things '
+                'here.',
+          )
+        else
+          ...memory.facts.reversed.map(
+            (f) => _FactRow(
+              fact: f,
+              onEdit: () async {
+                HapticFeedback.selectionClick();
+                final v = await _prompt(
+                  context,
+                  title: 'Edit memory',
+                  label: 'How should this read?',
+                  initial: f.text,
+                );
+                if (v == null || v.isEmpty) return;
+                // Edit = replace (remove + re-add keeps the
+                // dedupe constraint intact).
+                await memoryNotifier.removeFact(f.id);
+                await memoryNotifier.addFact(
+                  v,
+                  f.sourceConversationId,
+                );
+              },
+              onDelete: () async {
+                HapticFeedback.selectionClick();
+                await _confirm(
+                  context,
+                  title: 'Forget this?',
+                  body: f.text,
+                  onConfirm: () => memoryNotifier.removeFact(f.id),
+                );
+              },
+            ),
+          ),
+
+        // ── d. THREADS ────────────────────────────────────────
+        const SectionHeader('Open topics'),
+        if (openThreads.isEmpty)
+          _EmptyHint(text: 'No open topics right now.')
+        else
+          ...openThreads.map(
+            (t) => _ThreadCard(
+              thread: t,
+              onResume: () => _resumeThread(context, ref, t),
+              onMarkHandled: () async {
+                HapticFeedback.selectionClick();
+                await memoryNotifier.resolveThread(t.id);
+              },
+            ),
+          ),
+        if (resolvedThreads.isNotEmpty)
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: Text(
+              'Handled',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+            childrenPadding: const EdgeInsets.only(
+              bottom: AppSpacing.sm,
+            ),
+            children: [
+              for (final t in resolvedThreads)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: const Icon(
+                    Icons.check_circle_outline,
+                    size: 20,
+                  ),
+                  title: Text(t.title),
+                  subtitle:
+                      t.lastDetail.isEmpty
+                          ? null
+                          : Text(t.lastDetail),
+                  trailing: Text(
+                    agoFor(t.updatedAt),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+
+        // ── e. DANGER ─────────────────────────────────────────
+        const SizedBox(height: AppSpacing.xl),
+        Center(
+          child: TextButton(
+            onPressed: () {
+              HapticFeedback.selectionClick();
+              _confirm(
+                context,
+                title: 'Forget everything?',
+                body:
+                    'This erases everything Copilot remembers '
+                    'about you on this device.',
+                onConfirm: () async {
+                  await memoryNotifier.forgetAll();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Personal memory erased from this '
+                          'device.',
+                        ),
+                      ),
+                    );
+                  }
+                },
+              );
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Forget everything'),
+          ),
+        ),
+      ],
     );
   }
 }

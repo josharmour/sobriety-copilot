@@ -93,170 +93,127 @@ class _InventorySheetState extends ConsumerState<InventorySheet> {
     final today = DateTime.now();
     final doneToday = entries.containsKey(dateIsoOf(today));
 
-    return SafeArea(
-      top: false,
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.9,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) {
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.nightlight_outlined),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Evening review',
-                              style: theme.textTheme.titleLarge),
-                          Text(
-                            DateFormat.yMMMMd().format(today),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    // The check-in streak card on Today is the app's single
-                    // streak display; a second, divergent count here (with
-                    // gamification iconography) would contradict it.
-                    if (doneToday)
-                      const Chip(
-                        avatar: Icon(Icons.check_circle_outline,
-                            size: 16, color: AppColors.accent),
-                        label: Text('Done today'),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                  ],
-                ),
+    return AppSheet(
+      header: SheetHeader(
+        icon: AppIcons.evening,
+        title: 'Evening review',
+        subtitle: DateFormat.yMMMMd().format(today),
+        // The check-in streak card on Today is the app's single
+        // streak display; a second, divergent count here (with
+        // gamification iconography) would contradict it.
+        actions: [
+          if (doneToday)
+            const Padding(
+              padding: EdgeInsets.only(right: AppSpacing.xs),
+              child: StatusTag(
+                'Done today',
+                icon: Icons.check_circle_outline,
+                tone: AppTone.success,
               ),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.md,
-                    AppSpacing.lg,
-                    AppSpacing.xxl,
-                  ),
-                  children: [
-                    Text(
-                      '"When we retire at night, we constructively review our '
-                      'day." Answer honestly — this stays on your device.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontStyle: FontStyle.italic,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    for (final q in kInventoryQuestions) ...[
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        title: Text(q.text),
-                        value: _answers[q.id] ?? false,
-                        onChanged: (v) => setState(() {
-                          _answers[q.id] = v;
-                        }),
-                      ),
-                      if ((_answers[q.id] ?? false) == q.unfavorableWhenYes)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            left: AppSpacing.md,
-                            bottom: AppSpacing.sm,
-                          ),
-                          child: TextField(
-                            controller: _noteControllers[q.id],
-                            maxLines: null,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              hintText: 'What happened? (optional)',
-                            ),
-                          ),
-                        ),
-                    ],
-                    const SizedBox(height: AppSpacing.md),
-                    const SectionHeader(kInventoryFreeTextPrompt),
-                    const SizedBox(height: AppSpacing.xs),
-                    TextField(
-                      controller: _reflection,
-                      maxLines: null,
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        hintText: 'A sentence or two…',
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    const SectionHeader('Grateful for'),
-                    const SizedBox(height: AppSpacing.xs),
-                    if (_gratitude.isNotEmpty)
-                      Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: [
-                          for (var i = 0; i < _gratitude.length; i++)
-                            Chip(
-                              label: Text(_gratitude[i]),
-                              onDeleted: () => setState(() {
-                                _gratitude.removeAt(i);
-                              }),
-                            ),
-                        ],
-                      ),
-                    TextField(
-                      controller: _gratitudeInput,
-                      onSubmitted: (_) => _addGratitude(),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: 'Add one thing…',
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.add),
-                          onPressed: _addGratitude,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton.icon(
-                            icon: const Icon(Icons.check),
-                            label: const Text('Save review'),
-                            onPressed: _save,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        IconButton(
-                          tooltip: 'Share with your sponsor',
-                          icon: const Icon(Icons.ios_share),
-                          onPressed: () {
-                            SharePlus.instance.share(
-                              ShareParams(text: _buildEntry().toShareText()),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    _HistoryStrip(entries: entries),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
+            ),
+        ],
       ),
+      children: [
+        Text(
+          '"When we retire at night, we constructively review our '
+          'day." Answer honestly — this stays on your device.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontStyle: FontStyle.italic,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        for (final q in kInventoryQuestions) ...[
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(q.text),
+            value: _answers[q.id] ?? false,
+            onChanged: (v) => setState(() {
+              _answers[q.id] = v;
+            }),
+          ),
+          if ((_answers[q.id] ?? false) == q.unfavorableWhenYes)
+            Padding(
+              padding: const EdgeInsets.only(
+                left: AppSpacing.md,
+                bottom: AppSpacing.sm,
+              ),
+              child: TextField(
+                controller: _noteControllers[q.id],
+                maxLines: null,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  hintText: 'What happened? (optional)',
+                ),
+              ),
+            ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        const SectionHeader(kInventoryFreeTextPrompt),
+        const SizedBox(height: AppSpacing.xs),
+        TextField(
+          controller: _reflection,
+          maxLines: null,
+          decoration: const InputDecoration(
+            isDense: true,
+            hintText: 'A sentence or two…',
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        const SectionHeader('Grateful for'),
+        const SizedBox(height: AppSpacing.xs),
+        if (_gratitude.isNotEmpty)
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (var i = 0; i < _gratitude.length; i++)
+                Chip(
+                  label: Text(_gratitude[i]),
+                  onDeleted: () => setState(() {
+                    _gratitude.removeAt(i);
+                  }),
+                ),
+            ],
+          ),
+        TextField(
+          controller: _gratitudeInput,
+          onSubmitted: (_) => _addGratitude(),
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: 'Add one thing…',
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: _addGratitude,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                icon: const Icon(Icons.check),
+                label: const Text('Save review'),
+                onPressed: _save,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            IconButton(
+              tooltip: 'Share with your sponsor',
+              icon: const Icon(Icons.ios_share),
+              onPressed: () {
+                SharePlus.instance.share(
+                  ShareParams(text: _buildEntry().toShareText()),
+                );
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        _HistoryStrip(entries: entries),
+      ],
     );
   }
 }
@@ -292,7 +249,7 @@ class _HistoryStrip extends StatelessWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: entries.containsKey(dateIsoOf(d))
-                          ? AppColors.accent
+                          ? theme.colorScheme.primary
                           : theme.colorScheme.surfaceContainerHighest,
                       border: Border.all(
                         color: theme.colorScheme.outlineVariant,

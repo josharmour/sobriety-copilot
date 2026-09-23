@@ -66,6 +66,36 @@ enum _MenuAction {
   about,
 }
 
+/// Overflow-menu entries, in order. Labels match each sheet's title and the
+/// icons come from [AppIcons], so an entry looks like the sheet it opens.
+const List<({_MenuAction action, IconData icon, String label})> _kMenuItems = [
+  (action: _MenuAction.today, icon: AppIcons.today, label: 'Today'),
+  (
+    action: _MenuAction.meditation,
+    icon: AppIcons.meditation,
+    label: 'Meditation',
+  ),
+  (action: _MenuAction.saved, icon: AppIcons.saved, label: 'Saved passages'),
+  (action: _MenuAction.graph, icon: AppIcons.graph, label: 'Knowledge Graph'),
+  (
+    action: _MenuAction.meetings,
+    icon: AppIcons.meetings,
+    label: 'Find a meeting',
+  ),
+  (
+    action: _MenuAction.crisis,
+    icon: AppIcons.crisis,
+    label: 'Crisis resources',
+  ),
+  (
+    action: _MenuAction.altRecovery,
+    icon: AppIcons.altPaths,
+    label: 'Other recovery paths',
+  ),
+  (action: _MenuAction.settings, icon: AppIcons.settings, label: 'Settings'),
+  (action: _MenuAction.about, icon: AppIcons.about, label: 'About'),
+];
+
 /// FR11.1 'Remember this': target length for the dialog's prefilled text
 /// (under [kFactTextMax] so the word-boundary cut, not a hard cap, does the
 /// trimming).
@@ -287,12 +317,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Attach menu: take/choose a photo (sent to the model), or scan text (OCR
   /// into the input box).
   Future<void> _showAttachSheet() async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      builder:
-          (ctx) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+    final action = await showAppSheet<String>(
+      context,
+      Builder(
+        builder:
+            (ctx) => AppSheet(
+              header: const SheetHeader(
+                icon: AppIcons.attach,
+                title: 'Add to your message',
+              ),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sm,
+                AppSpacing.xs,
+                AppSpacing.sm,
+                AppSpacing.lg,
+              ),
               children: [
                 if (supportsCameraAndOcr)
                   ListTile(
@@ -315,7 +354,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ),
               ],
             ),
-          ),
+      ),
+      fitContent: true,
     );
     switch (action) {
       case 'camera':
@@ -527,7 +567,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _openMenu(_MenuAction action) async {
     switch (action) {
       case _MenuAction.today:
-        await showAppSheet(context, const TodaySheet());
+        await showAppSheet(context, const TodaySheet(), initialSize: 0.9);
       case _MenuAction.meditation:
         await showAppSheet(context, const MeditationSheet());
       case _MenuAction.saved:
@@ -546,11 +586,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         // Map + results want the full screen.
         await showAppSheet(context, const MeetingsSheet(), initialSize: 0.95);
       case _MenuAction.crisis:
-        await showAppSheet(context, const CrisisSheet());
+        await CrisisSheet.show(context);
       case _MenuAction.altRecovery:
-        await showAppSheet(context, const AltRecoverySheet());
+        await showAppSheet(
+          context,
+          const AltRecoverySheet(),
+          fitContent: true,
+        );
       case _MenuAction.settings:
-        await showAppSheet(context, const SettingsSheet());
+        await showAppSheet(context, const SettingsSheet(), initialSize: 0.9);
       case _MenuAction.about:
         await showAppSheet(context, const AboutSheet());
     }
@@ -582,6 +626,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         baseUrl: baseUrl,
         savedNotifier: saved,
       ),
+      fitContent: true,
     );
   }
 
@@ -633,39 +678,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   message:
                       'Private Mode — answering on this phone. Nothing leaves the device.',
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                    customBorder: const StadiumBorder(),
                     onTap: () => _openMenu(_MenuAction.settings),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withValues(alpha: 0.15),
-                        border: Border.all(color: AppColors.accent),
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.radiusLg,
-                        ),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.shield_outlined,
-                            size: 13,
-                            color: AppColors.accent,
-                          ),
-                          SizedBox(width: 3),
-                          Text(
-                            'Private',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.accent,
-                            ),
-                          ),
-                        ],
-                      ),
+                    child: const StatusTag(
+                      'Private',
+                      icon: AppIcons.privateMode,
+                      tone: AppTone.info,
                     ),
                   ),
                 ),
@@ -674,24 +692,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ),
         actions: [
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.25),
-              borderRadius: BorderRadius.circular(AppSpacing.radius),
-              border: Border.all(color: AppColors.accent, width: 1.2),
-            ),
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              icon: const Icon(
-                Icons.bubble_chart,
-                color: AppColors.accent,
-                size: 20,
-              ),
-              tooltip: 'Knowledge Graph',
-              onPressed: () => _openMenu(_MenuAction.graph),
-            ),
+          IconButton.filledTonal(
+            icon: const Icon(AppIcons.graph),
+            tooltip: 'Knowledge Graph',
+            onPressed: () => _openMenu(_MenuAction.graph),
           ),
           IconButton(
             icon: const Icon(Icons.add_comment_outlined),
@@ -700,80 +704,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           PopupMenuButton<_MenuAction>(
             onSelected: _openMenu,
+            tooltip: 'Show menu',
             itemBuilder:
-                (context) => const [
-                  PopupMenuItem(
-                    value: _MenuAction.today,
-                    child: ListTile(
-                      leading: Icon(Icons.wb_twilight_outlined),
-                      title: Text('Today'),
-                      contentPadding: EdgeInsets.zero,
+                (context) => [
+                  for (final item in _kMenuItems)
+                    PopupMenuItem(
+                      value: item.action,
+                      child: ListTile(
+                        leading: Icon(item.icon),
+                        title: Text(item.label),
+                        contentPadding: EdgeInsets.zero,
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.meditation,
-                    child: ListTile(
-                      leading: Icon(Icons.self_improvement_outlined),
-                      title: Text('Meditation'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.saved,
-                    child: ListTile(
-                      leading: Icon(Icons.bookmark_outline),
-                      title: Text('Saved passages'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.graph,
-                    child: ListTile(
-                      leading: Icon(Icons.hub_outlined),
-                      title: Text('Knowledge Graph'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.meetings,
-                    child: ListTile(
-                      leading: Icon(Icons.groups_outlined),
-                      title: Text('Find meetings'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.crisis,
-                    child: ListTile(
-                      leading: Icon(Icons.health_and_safety_outlined),
-                      title: Text('Crisis resources'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.altRecovery,
-                    child: ListTile(
-                      leading: Icon(Icons.alt_route_outlined),
-                      title: Text('Other recovery paths'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.settings,
-                    child: ListTile(
-                      leading: Icon(Icons.settings_outlined),
-                      title: Text('Settings'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.about,
-                    child: ListTile(
-                      leading: Icon(Icons.info_outline),
-                      title: Text('About'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
                 ],
           ),
         ],
@@ -963,7 +905,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Material(
       color: theme.colorScheme.surface,
       child: InkWell(
-        onTap: () => showAppSheet(context, const MemorySheet()),
+        onTap: () => showAppSheet(context, const MemorySheet(), initialSize: 0.9),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg,
@@ -973,7 +915,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.memory,
+                AppIcons.memory,
                 size: 12,
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -1059,7 +1001,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  icon: const Icon(AppIcons.attach),
                   tooltip: 'Attach a photo or scan text',
                   onPressed: _showAttachSheet,
                 ),
@@ -1139,7 +1081,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 TextButton.icon(
-                  icon: const Icon(Icons.groups_outlined, size: 14),
+                  icon: const Icon(AppIcons.meetings, size: 14),
                   label: const Text('Find a meeting'),
                   style: TextButton.styleFrom(
                     foregroundColor: theme.colorScheme.onSurfaceVariant,
@@ -1154,7 +1096,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   onPressed: () => _openMenu(_MenuAction.meetings),
                 ),
                 TextButton.icon(
-                  icon: const Icon(Icons.wb_twilight_outlined, size: 14),
+                  icon: const Icon(AppIcons.today, size: 14),
                   label: const Text('Today'),
                   style: TextButton.styleFrom(
                     foregroundColor: theme.colorScheme.onSurfaceVariant,
@@ -1529,6 +1471,8 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                                   foregroundColor: btnFgColor,
                                   side: BorderSide(color: btnBorderColor),
                                   backgroundColor: btnBgColor,
+                                  // Prompts are content, not button labels.
+                                  textStyle: theme.textTheme.bodyMedium,
                                   padding: const EdgeInsets.all(AppSpacing.lg),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(
@@ -1540,7 +1484,7 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                                 icon: Icon(
                                   Icons.history,
                                   size: 18,
-                                  color: AppColors.accent,
+                                  color: theme.colorScheme.primary,
                                 ),
                                 label: Text(
                                   'Continue: ${widget.resumeThread!.title}',
@@ -1569,6 +1513,8 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                                   foregroundColor: btnFgColor,
                                   side: BorderSide(color: btnBorderColor),
                                   backgroundColor: btnBgColor,
+                                  // Prompts are content, not button labels.
+                                  textStyle: theme.textTheme.bodyMedium,
                                   padding: const EdgeInsets.all(AppSpacing.lg),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(
@@ -1615,12 +1561,16 @@ class _DenoisingProgress extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.auto_awesome, size: 14, color: AppColors.accent),
+              Icon(
+                Icons.auto_awesome,
+                size: 14,
+                color: theme.colorScheme.primary,
+              ),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 'denoising — pass ${step + 1}/$total',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.accent,
+                  color: theme.colorScheme.primary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1633,7 +1583,7 @@ class _DenoisingProgress extends StatelessWidget {
               value: cleanPercent,
               minHeight: 4,
               backgroundColor: theme.colorScheme.outlineVariant,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accent),
+              valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
             ),
           ),
         ],
@@ -1719,7 +1669,7 @@ class _MessageBubble extends StatelessWidget {
               vertical: AppSpacing.md,
             ),
             decoration: BoxDecoration(
-              color: AppColors.accent,
+              color: Theme.of(context).colorScheme.primary,
               borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
             ),
             child: Column(
@@ -1754,7 +1704,9 @@ class _MessageBubble extends StatelessWidget {
                 if (hasText)
                   Text(
                     message.text,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
                   ),
               ],
             ),
@@ -1895,17 +1847,10 @@ class _MessageBubble extends StatelessWidget {
   Widget _markdown(BuildContext context) {
     final theme = Theme.of(context);
     if (message.isError) {
-      return Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.error.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(AppSpacing.radius),
-          border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
-        ),
-        child: Text(
-          message.text,
-          style: const TextStyle(color: AppColors.error),
-        ),
+      return NoticeCard(
+        icon: Icons.error_outline,
+        tone: AppTone.danger,
+        child: Text(message.text),
       );
     }
     final enrichedData = _enrichTextWithSourceLinks(
@@ -1918,7 +1863,7 @@ class _MessageBubble extends StatelessWidget {
       styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
         p: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
         a: TextStyle(
-          color: AppColors.accent,
+          color: theme.colorScheme.primary,
           decoration: TextDecoration.underline,
         ),
       ),
@@ -1980,7 +1925,7 @@ class _MessageBubble extends StatelessWidget {
             IconButton(
               visualDensity: VisualDensity.compact,
               iconSize: 18,
-              color: isSpeaking ? AppColors.accent : color,
+              color: isSpeaking ? theme.colorScheme.primary : color,
               tooltip: isSpeaking ? 'Stop' : 'Read aloud',
               icon: Icon(isSpeaking ? Icons.stop : Icons.volume_up_outlined),
               onPressed: onSpeak,
@@ -2111,60 +2056,71 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
     final total = widget.allSources.length;
 
     return SafeArea(
-      child: Container(
-        height: 450,
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Column(
-          children: [
-            if (total > 1)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left),
-                      onPressed:
-                          _currentPage > 0
-                              ? () => _pageController.previousPage(
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeInOut,
-                              )
-                              : null,
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(total, (index) {
-                        final isCurrent = index == _currentPage;
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          width: isCurrent ? 12 : 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color:
-                                isCurrent
-                                    ? AppColors.accent
-                                    : theme.colorScheme.outlineVariant,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        );
-                      }),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right),
-                      onPressed:
-                          _currentPage < total - 1
-                              ? () => _pageController.nextPage(
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeInOut,
-                              )
-                              : null,
-                    ),
-                  ],
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SheetHeader(
+            icon: AppIcons.source,
+            title: total > 1 ? 'Source ${_currentPage + 1} of $total' : 'Source',
+            actions: [
+              if (total > 1) ...[
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  tooltip: 'Previous source',
+                  onPressed:
+                      _currentPage > 0
+                          ? () => _pageController.previousPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          )
+                          : null,
                 ),
-              ),
-            Expanded(
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  tooltip: 'Next source',
+                  onPressed:
+                      _currentPage < total - 1
+                          ? () => _pageController.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          )
+                          : null,
+                ),
+              ],
+            ],
+            bottom:
+                total > 1
+                    ? Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(total, (index) {
+                          final isCurrent = index == _currentPage;
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: isCurrent ? 12 : 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color:
+                                  isCurrent
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.outlineVariant,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          );
+                        }),
+                      ),
+                    )
+                    : null,
+          ),
+          Flexible(
+            // PageView needs a bounded height; the sheet caps it on short
+            // screens.
+            child: SizedBox(
+              height: 380,
               child: PageView.builder(
                 controller: _pageController,
                 onPageChanged: (page) {
@@ -2189,7 +2145,7 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          'Relevance ${(s.similarity * 100).round()}% | Source ${index + 1} of $total',
+                          'Relevance ${(s.similarity * 100).round()}%',
                           style: theme.textTheme.bodySmall,
                         ),
                         const SizedBox(height: AppSpacing.md),
@@ -2233,8 +2189,8 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                 },
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

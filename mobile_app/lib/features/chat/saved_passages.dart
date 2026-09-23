@@ -113,77 +113,61 @@ class SavedPassagesSheet extends ConsumerWidget {
     final config = ref.watch(appConfigProvider);
     final theme = Theme.of(context);
 
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.md,
-              AppSpacing.sm,
-              AppSpacing.xs,
-            ),
-            child: Row(
-              children: [
-                const Expanded(child: SectionHeader('Saved passages')),
-                if (saved.isNotEmpty)
-                  TextButton.icon(
-                    onPressed: () =>
-                        ref.read(savedPassagesProvider.notifier).clearAll(),
-                    icon: const Icon(Icons.delete_sweep_outlined, size: 18),
-                    label: const Text('Clear all'),
-                  ),
-              ],
-            ),
-          ),
-          if (saved.isEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.xl,
-              ),
-              child: Text(
-                'Star passages from a source to save them here.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.textTheme.bodySmall?.color,
-                ),
-              ),
-            )
-          else
-            Flexible(
-              child: ListView.separated(
-                shrinkWrap: true,
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.xs,
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                ),
-                itemCount: saved.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(height: AppSpacing.sm),
-                itemBuilder: (context, i) {
-                  final s = saved[i];
-                  return _SavedPassageTile(
-                    source: s,
-                    onOpen: s.url.isEmpty
-                        ? null
-                        : () => _open(context, s, config.baseUrl),
-                    onShare: () => SharePlus.instance.share(
-                      ShareParams(text: shareTextFor(s)),
-                    ),
-                    onRemove: () =>
-                        ref.read(savedPassagesProvider.notifier).remove(s),
-                  );
-                },
-              ),
+    return AppSheet(
+      header: SheetHeader(
+        icon: AppIcons.saved,
+        title: 'Saved passages',
+        subtitle: saved.isEmpty
+            ? null
+            : '${saved.length} saved · stored on this device',
+        actions: [
+          if (saved.isNotEmpty)
+            TextButton.icon(
+              onPressed: () async {
+                final ok = await confirmDialog(
+                  context,
+                  title: 'Clear all saved passages?',
+                  message: 'This removes every saved passage from this '
+                      'device. It cannot be undone.',
+                  confirmLabel: 'Clear all',
+                  destructive: true,
+                );
+                if (ok) {
+                  await ref.read(savedPassagesProvider.notifier).clearAll();
+                }
+              },
+              icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+              label: const Text('Clear all'),
             ),
         ],
       ),
+      children: [
+        if (saved.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            child: Text(
+              'Star passages from a source to save them here.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else
+          for (final s in saved) ...[
+            _SavedPassageTile(
+              source: s,
+              onOpen: s.url.isEmpty
+                  ? null
+                  : () => _open(context, s, config.baseUrl),
+              onShare: () => SharePlus.instance.share(
+                ShareParams(text: shareTextFor(s)),
+              ),
+              onRemove: () =>
+                  ref.read(savedPassagesProvider.notifier).remove(s),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+      ],
     );
   }
 }
@@ -207,12 +191,9 @@ class _SavedPassageTile extends StatelessWidget {
     final excerpt = source.excerpt;
     final preview = excerpt.length > 200 ? '${excerpt.substring(0, 200)}…' : excerpt;
 
-    return Material(
-      color: AppColors.accentSoft.withValues(alpha: 0.5),
-      borderRadius: BorderRadius.circular(AppSpacing.radius),
+    return Card(
       child: InkWell(
         onTap: onOpen,
-        borderRadius: BorderRadius.circular(AppSpacing.radius),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: Column(
@@ -231,7 +212,7 @@ class _SavedPassageTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.accent,
+                        color: theme.colorScheme.primary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

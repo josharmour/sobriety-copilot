@@ -86,8 +86,8 @@ class StreakCard extends ConsumerWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.check_circle_outline,
-                          size: 18, color: AppColors.accent),
+                      Icon(Icons.check_circle_outline,
+                          size: 18, color: theme.colorScheme.success),
                       const SizedBox(width: AppSpacing.xs),
                       Text(
                         'Checked in',

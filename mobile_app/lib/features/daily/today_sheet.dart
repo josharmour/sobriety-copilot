@@ -45,254 +45,177 @@ class TodaySheet extends ConsumerWidget {
       }
     }
 
-    return SafeArea(
-      top: false,
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.9,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) {
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.wb_twilight_outlined),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Today', style: theme.textTheme.titleLarge),
-                          Text(
-                            DateFormat.yMMMMEEEEd().format(now),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.check),
-                      tooltip: 'Done',
-                      onPressed: () => Navigator.of(context).maybePop(),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.md,
-                    AppSpacing.lg,
-                    AppSpacing.xxl,
-                  ),
-                  children: [
-                    const StreakCard(),
-                    const SizedBox(height: AppSpacing.md),
-                    readings.when(
-                      loading: () => const Padding(
-                        padding: EdgeInsets.all(AppSpacing.xl),
-                        child: Center(child: CircularProgressIndicator()),
-                      ),
-                      error: (_, __) => const SizedBox.shrink(),
-                      data: (bundle) {
-                        final reading = bundle.forDate(now);
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return AppSheet(
+      header: SheetHeader(
+        icon: AppIcons.today,
+        title: 'Today',
+        subtitle: DateFormat.yMMMMEEEEd().format(now),
+      ),
+      children: [
+        const StreakCard(),
+        const SizedBox(height: AppSpacing.md),
+        readings.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.all(AppSpacing.xl),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (_, __) => const SizedBox.shrink(),
+          data: (bundle) {
+            final reading = bundle.forDate(now);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(AppSpacing.lg),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            reading.title,
-                                            style: theme.textTheme.titleLarge
-                                                ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ),
-                                        IconButton(
-                                          visualDensity:
-                                              VisualDensity.compact,
-                                          tooltip: 'Share',
-                                          icon: const Icon(Icons.ios_share,
-                                              size: 18),
-                                          onPressed: () =>
-                                              SharePlus.instance.share(
-                                            ShareParams(
-                                              text:
-                                                  '${reading.title}\n\n${reading.body}\n\n— ${reading.source}',
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: AppSpacing.sm),
-                                    Text(
-                                      reading.body,
-                                      style: theme.textTheme.bodyMedium,
-                                    ),
-                                    const SizedBox(height: AppSpacing.sm),
-                                    Text(
-                                      '— ${reading.source}',
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
-                                    const SizedBox(height: AppSpacing.sm),
-                                    // Finishing the reading counts as
-                                    // today's check-in (FR5 trigger list).
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: _ReadItButton(),
-                                    ),
-                                  ],
+                            Expanded(
+                              child: Text(
+                                reading.title,
+                                style: theme.textTheme.titleLarge
+                                    ?.copyWith(
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
-                            const SizedBox(height: AppSpacing.md),
-                            _PracticeTile(
-                              icon: Icons.wb_sunny_outlined,
-                              reading: bundle.morningPractice,
-                            ),
-                            _PracticeTile(
-                              icon: Icons.bedtime_outlined,
-                              reading: bundle.eveningPractice,
+                            IconButton(
+                              visualDensity:
+                                  VisualDensity.compact,
+                              tooltip: 'Share',
+                              icon: const Icon(Icons.ios_share,
+                                  size: 18),
+                              onPressed: () =>
+                                  SharePlus.instance.share(
+                                ShareParams(
+                                  text:
+                                      '${reading.title}\n\n${reading.body}\n\n— ${reading.source}',
+                                ),
+                              ),
                             ),
                           ],
-                        );
-                      },
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          reading.body,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          '— ${reading.source}',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        // Finishing the reading counts as
+                        // today's check-in (FR5 trigger list).
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: _ReadItButton(),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    Card(
-                      child: ListTile(
-                        leading: Icon(
-                          doneToday
-                              ? Icons.task_alt
-                              : Icons.nightlight_outlined,
-                          color: doneToday ? AppColors.accent : null,
-                        ),
-                        title: Text(
-                          doneToday
-                              ? 'Evening review — done'
-                              : 'Evening review',
-                        ),
-                        // The unified FR5 check-in streak card (top of this
-                        // sheet) is the single streak display now.
-                        subtitle: Text(
-                          doneToday
-                              ? 'Tap to view or edit'
-                              : 'A few honest minutes before bed',
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => showAppSheet(
-                          context,
-                          const InventorySheet(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Card(
-                      child: ListTile(
-                        leading: Icon(
-                          moodToday != null
-                              ? Icons.emoji_emotions
-                              : Icons.emoji_emotions_outlined,
-                          color: moodToday != null ? AppColors.accent : null,
-                        ),
-                        title: Text(
-                          // Distinct from the streak card's "Check in for
-                          // today" so discreet mode has no two identically
-                          // named controls on this sheet.
-                          discreet ? "How's today?" : 'How are you feeling?',
-                        ),
-                        subtitle: Text(
-                          moodToday != null
-                              // Discreet mode: never surface the emotion or
-                              // score where a shoulder-surfer could see it.
-                              ? discreet
-                                  ? 'Done today · tap to edit'
-                                  : moodToday.label.isNotEmpty
-                                      ? '${moodToday.label} · mood ${moodToday.mood}/5 · tap to edit'
-                                      : 'mood ${moodToday.mood}/5 · tap to edit'
-                              : 'A quick check-in, any time of day',
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => showAppSheet(
-                          context,
-                          const MoodSheet(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.self_improvement_outlined),
-                        title: const Text('Meditation'),
-                        subtitle: const Text(
-                          'Guided breathing & grounding sessions',
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => showAppSheet(
-                          context,
-                          const MeditationSheet(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    if (remindersSupported) ...[
-                      const SectionHeader('Reminders'),
-                      const _ReminderTiles(),
-                      const SizedBox(height: AppSpacing.xl),
-                    ],
-                    const SectionHeader('Official daily readers'),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Daily Reflections and Just for Today are published by '
-                      'A.A. World Services and N.A. World Services — read '
-                      "today's page on their sites.",
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.open_in_new, size: 20),
-                      title: const Text('Daily Reflections (aa.org)'),
-                      onTap: () =>
-                          _open('https://www.aa.org/daily-reflections'),
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.open_in_new, size: 20),
-                      title: const Text('Just for Today (na.org)'),
-                      onTap: () => _open('https://na.org/daily-meditations/'),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+                const SizedBox(height: AppSpacing.md),
+                _PracticeTile(
+                  icon: Icons.wb_sunny_outlined,
+                  reading: bundle.morningPractice,
+                ),
+                _PracticeTile(
+                  icon: Icons.bedtime_outlined,
+                  reading: bundle.eveningPractice,
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: AppSpacing.md),
+        ActionCard(
+          icon: doneToday ? Icons.task_alt : AppIcons.evening,
+          tone: doneToday ? AppTone.success : AppTone.info,
+          title: doneToday ? 'Evening review — done' : 'Evening review',
+          // The unified FR5 check-in streak card (top of this
+          // sheet) is the single streak display now.
+          subtitle: doneToday
+              ? 'Tap to view or edit'
+              : 'A few honest minutes before bed',
+          onTap: () => showAppSheet(
+            context,
+            const InventorySheet(),
+            initialSize: 0.9,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ActionCard(
+          icon: moodToday != null ? Icons.emoji_emotions : AppIcons.mood,
+          tone: moodToday != null ? AppTone.success : AppTone.info,
+          // Distinct from the streak card's "Check in for
+          // today" so discreet mode has no two identically
+          // named controls on this sheet.
+          title: discreet ? "How's today?" : 'How are you feeling?',
+          subtitle: moodToday != null
+              // Discreet mode: never surface the emotion or
+              // score where a shoulder-surfer could see it.
+              ? discreet
+                  ? 'Done today · tap to edit'
+                  : moodToday.label.isNotEmpty
+                      ? '${moodToday.label} · mood ${moodToday.mood}/5 · tap to edit'
+                      : 'mood ${moodToday.mood}/5 · tap to edit'
+              : 'A quick check-in, any time of day',
+          onTap: () => showAppSheet(
+            context,
+            const MoodSheet(),
+            initialSize: 0.9,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ActionCard(
+          icon: AppIcons.meditation,
+          title: 'Meditation',
+          subtitle: 'Guided breathing & grounding sessions',
+          onTap: () => showAppSheet(
+            context,
+            const MeditationSheet(),
+            initialSize: 0.9,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        if (remindersSupported) ...[
+          const SectionHeader('Reminders'),
+          const _ReminderTiles(),
+          const SizedBox(height: AppSpacing.xl),
+        ],
+        const SectionHeader('Official daily readers'),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Daily Reflections and Just for Today are published by '
+          'A.A. World Services and N.A. World Services — read '
+          "today's page on their sites.",
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.open_in_new, size: 20),
+          title: const Text('Daily Reflections (aa.org)'),
+          onTap: () =>
+              _open('https://www.aa.org/daily-reflections'),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.open_in_new, size: 20),
+          title: const Text('Just for Today (na.org)'),
+          onTap: () => _open('https://na.org/daily-meditations/'),
+        ),
+      ],
     );
   }
 }
@@ -310,8 +233,8 @@ class _ReadItButton extends ConsumerWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.check_circle_outline,
-              size: 16, color: AppColors.accent),
+          Icon(Icons.check_circle_outline,
+              size: 16, color: theme.colorScheme.success),
           const SizedBox(width: AppSpacing.xs),
           Text(
             'Checked in today',
