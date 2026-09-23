@@ -113,6 +113,8 @@ class Meeting {
   final String fellowship; // "AA" | "NA" | other fellowship names
   final String region;
   final String location; // venue name
+  final String source; // listing office, e.g. "NY Intergroup"
+  final String sourceHome; // that office's website
   // Online-directory extras (/api/meetings/online); null/false elsewhere.
   final int? startsInMinutes; // minutes until next occurrence (may be < 0)
   final bool isLiveNow; // started within the live window
@@ -139,6 +141,8 @@ class Meeting {
     required this.fellowship,
     required this.region,
     required this.location,
+    this.source = '',
+    this.sourceHome = '',
     this.startsInMinutes,
     this.isLiveNow = false,
   });
@@ -167,6 +171,8 @@ class Meeting {
       fellowship: _asString(json['fellowship']),
       region: _asString(json['region']),
       location: _asString(json['location']),
+      source: _asString(json['source']),
+      sourceHome: _asString(json['source_home']),
       startsInMinutes: _asIntOrNull(json['starts_in_minutes']),
       isLiveNow: _asBool(json['is_live_now']),
     );

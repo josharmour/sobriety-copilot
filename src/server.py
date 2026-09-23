@@ -29,7 +29,7 @@ from src.render_cache import (
 
 from src.inference.engine import InferenceEngine
 from src.meetings.online import search_online_meetings, warmup_online_feeds
-from src.meetings.service import search_meetings, warmup_feeds as warmup_meeting_feeds
+from src.meetings.service import feed_health, run_refresh_loop as run_meeting_refresh_loop, search_meetings
 from src.prompts.templates import NO_CONTEXT_TEMPLATE, USER_MESSAGE_TEMPLATE, system_message_for_tone
 from src.rag.chroma_client import find_largest_collection_with_prefix
 from src.rag.embeddings import warmup as warmup_embeddings
@@ -963,25 +963,29 @@ async def _warmup_models() -> None:
         pass
 
 
-async def _warmup_meetings() -> None:
-    try:
-        await warmup_meeting_feeds()
-    except Exception:
-        pass
-    try:
-        await warmup_online_feeds()
-    except Exception:
-        pass
+async def _refresh_online_meetings_forever() -> None:
+    # Cheap when fresh (cache hit); re-downloads once the 6h TTL lapses, so a
+    # user request never waits on the multi-MB directory feeds.
+    while True:
+        try:
+            await warmup_online_feeds()
+        except Exception:
+            pass
+        await asyncio.sleep(30 * 60)
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(app_: FastAPI):
     try:
         _refresh_retriever(force=True)
     except Exception:
         pass
     asyncio.create_task(_warmup_models())
-    asyncio.create_task(_warmup_meetings())
+    # Keep strong references: the loop only holds weak refs to tasks.
+    app_.state.background_tasks = [
+        asyncio.create_task(run_meeting_refresh_loop()),
+        asyncio.create_task(_refresh_online_meetings_forever()),
+    ]
     yield
 
 
@@ -2162,16 +2166,36 @@ async def meetings(
     lat: float = Query(...),
     lng: float = Query(...),
     radius_mi: float = Query(25.0, ge=1.0, le=200.0),
-    max: int = Query(30, ge=1, le=100),
+    max: int = Query(30, ge=1, le=300),
     day: int | None = Query(None, ge=0, le=6),
     attendance: str | None = Query(None, pattern="^(inperson|online|all)$"),
     fellowship: str | None = Query(None, max_length=40),
+    range_: str | None = Query(None, alias="range", pattern="^(upcoming|today|tonight|tomorrow|week|any)$"),
+    tod: str | None = Query(None, pattern="^(any|morning|afternoon|evening|late)$"),
+    now_day: int | None = Query(None, ge=0, le=6),
+    now_min: int | None = Query(None, ge=0, le=1439),
 ):
+    """In-person/hybrid meetings near a point, from every intergroup feed plus
+    the NA BMLT aggregator.
+
+    `range`/`tod` with the client's local clock (`now_day` 0=Sun, `now_min`)
+    select server-side — soonest first for upcoming/today/tonight/tomorrow —
+    so a dense metro returns the right `max` meetings rather than the nearest.
+    Without them results are nearest-first (what app builds < 1.4.1 expect).
+    """
     return await search_meetings(
         lat=lat, lng=lng,
         radius_mi=radius_mi, max_results=max,
         day=day, attendance=attendance, fellowship=fellowship,
+        range_=range_, time_of_day=tod, now_day=now_day, now_min=now_min,
     )
+
+
+@app.get("/api/meetings/sources")
+async def meetings_sources():
+    """Per-feed health of the meeting catalog (status, meeting count, last
+    error), worst first — the place to spot a feed that stopped answering."""
+    return feed_health()
 
 
 @app.get("/api/meetings/online")
