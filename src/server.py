@@ -1352,8 +1352,22 @@ def explain_snippet(payload: ExplainSnippetRequest):
 @app.post("/api/sms")
 async def incoming_sms(request: Request):
     """Webhook for Twilio SMS interactions with carrier-compliant HELP/STOP handling."""
-    form_data = await request.form()
-    body_text = str(form_data.get("Body", "")).strip()
+    from urllib.parse import parse_qs
+    body_text = ""
+    try:
+        raw_bytes = await request.body()
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            try:
+                json_data = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
+                body_text = str(json_data.get("Body", "")).strip()
+            except Exception:
+                pass
+        if not body_text:
+            parsed = parse_qs(raw_bytes.decode("utf-8", errors="ignore"))
+            body_text = str(parsed.get("Body", [""])[0]).strip()
+    except Exception:
+        body_text = ""
     upper_body = body_text.upper()
 
     if upper_body in {"HELP", "INFO"}:
