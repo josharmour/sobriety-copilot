@@ -14,9 +14,9 @@ from threading import Lock
 from typing import Any
 from uuid import uuid4
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from src.render_cache import (
@@ -1347,6 +1347,63 @@ def explain_snippet(payload: ExplainSnippetRequest):
     result = {"why": why, "key": key_phrase}
     _explain_cache_put(key, result)
     return result
+
+
+@app.post("/api/sms")
+async def incoming_sms(request: Request):
+    """Webhook for Twilio SMS interactions with carrier-compliant HELP/STOP handling."""
+    form_data = await request.form()
+    body_text = str(form_data.get("Body", "")).strip()
+    upper_body = body_text.upper()
+
+    if upper_body in {"HELP", "INFO"}:
+        twiml_reply = (
+            "Sobriety Copilot: For support email support@sobrietycopilot.com or visit "
+            "sobrietycopilot.com. Msg freq varies. Msg & data rates may apply. Reply STOP to cancel."
+        )
+    elif upper_body in {"STOP", "CANCEL", "QUIT", "END", "OPTOUT", "UNSUBSCRIBE", "STOPALL", "REVOKE"}:
+        twiml_reply = (
+            "Sobriety Copilot: You have been unsubscribed and will receive no further messages. "
+            "Reply START to resubscribe. Msg & data rates may apply."
+        )
+    elif upper_body in {"START", "YES", "UNSTOP"}:
+        twiml_reply = (
+            "Sobriety Copilot: Welcome! You are subscribed to recovery support & reflections. "
+            "Msg freq varies. Msg & data rates may apply. Reply HELP for help, STOP to cancel."
+        )
+    else:
+        try:
+            retriever_instance = _safe_get_retriever()
+            context = ""
+            if retriever_instance and body_text:
+                docs = retriever_instance.retrieve(body_text, k=2)
+                context = "\n".join([d.text for d in docs]) if docs else ""
+
+            prompt = (
+                f"You are Sobriety Copilot SMS assistant. A user texted: '{body_text}'.\n"
+                f"Reference Literature Context:\n{context}\n\n"
+                "Give a warm, supportive, literature-grounded recovery answer in under 260 characters. "
+                "Do not use markdown bold, asterisks, or bullet points. Keep it conversational."
+            )
+            raw_response = engine.generate(prompt)
+            clean_resp = re.sub(r'[*_#`]', '', raw_response).strip()
+            if len(clean_resp) > 280:
+                clean_resp = clean_resp[:277] + "..."
+            twiml_reply = f"{clean_resp}\n\n(Sobriety Copilot. Reply STOP to cancel)"
+        except Exception as e:
+            twiml_reply = (
+                "Sobriety Copilot: Thank you for your message. One day at a time! "
+                "For help, reply HELP or email support@sobrietycopilot.com. Reply STOP to cancel."
+            )
+
+    escaped_reply = (
+        twiml_reply.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+    xml_content = f'<?xml version="1.0" encoding="UTF-8"?><Response><Message>{escaped_reply}</Message></Response>'
+    return Response(content=xml_content, media_type="application/xml")
 
 
 @app.post("/api/chat")
