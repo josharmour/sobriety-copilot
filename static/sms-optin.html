@@ -11,56 +11,135 @@
       color: #e6edf3;
       line-height: 1.6;
       margin: 0;
-      padding: 2rem;
+      padding: 2rem 1rem;
     }
     .container {
-      max-width: 650px;
-      margin: 2rem auto;
+      max-width: 680px;
+      margin: 1.5rem auto;
       background: #161b22;
       padding: 2.5rem;
       border-radius: 12px;
       border: 1px solid #30363d;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
     }
     .brand {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
       margin-bottom: 1.5rem;
     }
     .brand-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: 10px;
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
       background: #2a9d8f;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
+      font-size: 26px;
     }
     h1 {
       color: #2a9d8f;
       font-size: 1.75rem;
       margin: 0;
     }
-    p.intro {
+    .subtitle {
+      font-size: 0.9rem;
       color: #8b949e;
-      font-size: 1rem;
-      margin-top: 0.5rem;
-      margin-bottom: 2rem;
+      margin-top: 2px;
     }
-    .card {
+    p.intro {
+      color: #c9d1d9;
+      font-size: 1rem;
+      margin-top: 0.75rem;
+      margin-bottom: 1.75rem;
+    }
+    .method-card {
       background: #0d1117;
       border: 1px solid #30363d;
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 1.5rem;
       margin-bottom: 1.5rem;
+    }
+    .method-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 0;
+      margin-bottom: 0.75rem;
+      color: #58a6ff;
+      font-size: 1.15rem;
+    }
+    .method-badge {
+      background: rgba(88, 166, 255, 0.15);
+      color: #58a6ff;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(88, 166, 255, 0.3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .phone-highlight {
+      display: inline-block;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #2a9d8f;
+      background: rgba(42, 157, 143, 0.15);
+      border: 1px solid rgba(42, 157, 143, 0.35);
+      padding: 4px 12px;
+      border-radius: 6px;
+      margin: 0.25rem 0;
+    }
+    .sms-mockup {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 1rem 0;
+    }
+    .mockup-header {
+      font-size: 0.8rem;
+      color: #8b949e;
+      margin-bottom: 0.75rem;
+      border-bottom: 1px solid #21262d;
+      padding-bottom: 0.4rem;
+      display: flex;
+      justify-content: space-between;
+    }
+    .chat-bubble {
+      max-width: 85%;
+      padding: 8px 14px;
+      border-radius: 14px;
+      font-size: 0.88rem;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .chat-bubble.outbound {
+      background: #1f6feb;
+      color: #fff;
+      margin-left: auto;
+      border-bottom-right-radius: 2px;
+      font-weight: 600;
+    }
+    .chat-bubble.inbound {
+      background: #21262d;
+      color: #e6edf3;
+      border-bottom-left-radius: 2px;
     }
     label {
       display: block;
       font-weight: 600;
       margin-bottom: 0.5rem;
       color: #e6edf3;
+    }
+    .field-hint {
+      font-size: 0.8rem;
+      font-weight: normal;
+      color: #8b949e;
+      margin-left: 6px;
     }
     input[type="tel"] {
       width: 100%;
@@ -111,30 +190,54 @@
     .btn-submit:hover {
       background: #34b3a4;
     }
-    .disclaimer-box {
+    .disclosure-box {
       background: rgba(42, 157, 143, 0.08);
       border: 1px solid rgba(42, 157, 143, 0.25);
-      border-radius: 6px;
-      padding: 1rem;
+      border-radius: 8px;
+      padding: 1.25rem;
       margin-top: 1.5rem;
       font-size: 0.85rem;
-      color: #8b949e;
+      color: #c9d1d9;
+      line-height: 1.55;
     }
-    .disclaimer-box strong {
+    .disclosure-box h4 {
+      margin-top: 0;
+      margin-bottom: 0.5rem;
       color: #2a9d8f;
+      font-size: 0.95rem;
+    }
+    .disclosure-box ul {
+      margin: 0.5rem 0 0 1.25rem;
+      padding: 0;
+    }
+    .disclosure-box li {
+      margin-bottom: 0.35rem;
     }
     .links {
-      margin-top: 1.5rem;
+      margin-top: 1.75rem;
       text-align: center;
-      font-size: 0.85rem;
+      font-size: 0.9rem;
     }
     .links a {
-      color: #2a9d8f;
+      color: #58a6ff;
       text-decoration: none;
-      margin: 0 8px;
+      margin: 0 10px;
     }
     .links a:hover {
       text-decoration: underline;
+    }
+    #form-feedback {
+      display: none;
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    #form-feedback.success {
+      display: block;
+      background: rgba(46, 160, 67, 0.15);
+      border: 1px solid #2ea043;
+      color: #3fb950;
     }
   </style>
 </head>
@@ -144,45 +247,106 @@
       <div class="brand-icon">🌱</div>
       <div>
         <h1>Sobriety Copilot</h1>
-        <div style="font-size: 0.85rem; color: #8b949e;">Recovery Support Assistant</div>
+        <div class="subtitle">Recovery Support & Literature Assistant</div>
       </div>
     </div>
 
     <p class="intro">
-      Opt in to receive daily recovery reflections, sobriety anniversary milestones, and wellness check-in prompts directly via SMS.
+      Sobriety Copilot offers optional SMS recovery support, including daily morning recovery reflections, sobriety milestone celebrations, and wellness check-in prompts. SMS communications are <strong>completely voluntary and optional</strong>.
     </p>
 
-    <div class="card">
-      <form id="optin-form" onsubmit="event.preventDefault(); alert('Consent recorded. You will receive a confirmation text shortly.');">
-        <label for="phone">Mobile Phone Number</label>
-        <input type="tel" id="phone" name="phone" placeholder="(555) 123-4567" required autocomplete="tel">
+    <!-- Method 1: Text-to-Join / Keyword SMS Opt-In (Hosted proof for Carrier Compliance) -->
+    <div class="method-card">
+      <div class="method-header">
+        <span>Option 1: Text to Join via Keyword</span>
+        <span class="method-badge">Direct SMS Opt-In</span>
+      </div>
+      <p style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: #c9d1d9;">
+        You can subscribe to SMS support directly from your mobile phone by sending a text keyword to our dedicated service number:
+      </p>
 
-        <label style="margin-bottom: 0.5rem;">Select Notifications</label>
+      <div style="text-align: center; margin: 1rem 0;">
+        <div style="font-size: 0.85rem; color: #8b949e; margin-bottom: 4px;">Text the keyword <strong>START</strong> to:</div>
+        <div class="phone-highlight">(762) 376-9696</div>
+        <div style="font-size: 0.8rem; color: #8b949e; margin-top: 4px;">(+1-762-376-9696)</div>
+      </div>
+
+      <div class="sms-mockup">
+        <div class="mockup-header">
+          <span>Recipient: +1 (762) 376-9696</span>
+          <span>Sample Interaction</span>
+        </div>
+        <div class="chat-bubble outbound">START</div>
+        <div class="chat-bubble inbound">
+          Sobriety Copilot: Welcome! You are subscribed to recovery support & reflections. Msg freq varies. Msg & data rates may apply. Reply HELP for help, STOP to cancel.
+        </div>
+      </div>
+
+      <p style="margin: 0; font-size: 0.82rem; color: #8b949e; line-height: 1.45;">
+        By texting START to <strong>(762) 376-9696</strong>, you agree to receive automated and conversational recovery support messages from Sobriety Copilot. Consent is not a condition of any purchase or application usage. Message frequency varies. Msg & data rates may apply. Reply <strong>STOP</strong> at any time to unsubscribe, or <strong>HELP</strong> for assistance.
+      </p>
+    </div>
+
+    <!-- Method 2: Optional Web Portal Form Opt-In -->
+    <div class="method-card">
+      <div class="method-header">
+        <span>Option 2: Web Opt-In Form</span>
+        <span class="method-badge">Optional</span>
+      </div>
+      <p style="margin: 0 0 1rem 0; font-size: 0.95rem; color: #c9d1d9;">
+        You may optionally enter your mobile number below to enroll in text updates. Both the phone number and consent checkbox are entirely optional.
+      </p>
+
+      <form id="optin-form" onsubmit="handleFormSubmit(event)">
+        <label for="phone">
+          Mobile Phone Number
+          <span class="field-hint">(Optional)</span>
+        </label>
+        <input type="tel" id="phone" name="phone" placeholder="(555) 123-4567" autocomplete="tel">
+
+        <label style="margin-bottom: 0.5rem;">
+          Select Notification Topics
+          <span class="field-hint">(Optional - Unchecked by default)</span>
+        </label>
         <div style="font-size: 0.9rem; margin-bottom: 1.25rem; display: flex; flex-direction: column; gap: 8px;">
           <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; cursor: pointer;">
-            <input type="checkbox" checked style="accent-color: #2a9d8f;"> Daily morning recovery reflection
+            <input type="checkbox" id="topic-reflections" style="accent-color: #2a9d8f;"> Daily morning recovery reflection
           </label>
           <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; cursor: pointer;">
-            <input type="checkbox" checked style="accent-color: #2a9d8f;"> Sobriety milestone celebration alerts
+            <input type="checkbox" id="topic-milestones" style="accent-color: #2a9d8f;"> Sobriety milestone celebration alerts
           </label>
           <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; cursor: pointer;">
-            <input type="checkbox" style="accent-color: #2a9d8f;"> Evening check-in / accountability prompt
+            <input type="checkbox" id="topic-checkin" style="accent-color: #2a9d8f;"> Evening check-in / accountability prompt
           </label>
         </div>
 
+        <!-- Optional consent checkbox - NOT required, unchecked by default -->
         <div class="checkbox-container">
-          <input type="checkbox" id="sms-consent" name="consent" required>
+          <input type="checkbox" id="sms-consent" name="consent">
           <label for="sms-consent" class="consent-text">
-            I agree to receive recurring automated and conversational text messages from <strong>Sobriety Copilot</strong> at the mobile number provided above. Consent is not a condition of purchase. Message and data rates may apply. Message frequency varies. Reply <strong>STOP</strong> to cancel at any time, or reply <strong>HELP</strong> for assistance.
+            <strong>Optional Consent:</strong> I agree to receive recurring automated and conversational SMS text messages from <strong>Sobriety Copilot</strong> at the mobile phone number provided above. Consent is 100% voluntary and is not a condition of purchase, subscription, or using the app. Message and data rates may apply. Message frequency varies. Reply <strong>STOP</strong> to cancel at any time, or reply <strong>HELP</strong> for help.
           </label>
         </div>
 
-        <button type="submit" class="btn-submit">Opt In to SMS Support</button>
+        <button type="submit" class="btn-submit">Save Preferences</button>
+        <div id="form-feedback"></div>
       </form>
     </div>
 
-    <div class="disclaimer-box">
-      <strong>Carrier Disclosure & Privacy:</strong> Supported carriers include AT&T, Verizon, T-Mobile, and major US mobile networks. Carriers are not liable for delayed or undelivered messages. We strictly do not sell, rent, or share mobile phone numbers or SMS opt-in consent with any third parties or affiliates for marketing purposes.
+    <!-- Mandatory Carrier Compliance & Program Disclosures -->
+    <div class="disclosure-box">
+      <h4>Carrier Compliance & Program Details</h4>
+      <ul>
+        <li><strong>Program Name:</strong> Sobriety Copilot SMS Alerts & Support</li>
+        <li><strong>Program Contact Number:</strong> (762) 376-9696 (+1-762-376-9696)</li>
+        <li><strong>Opt-In Keywords:</strong> Text <code>START</code>, <code>YES</code>, or <code>UNSTOP</code> to (762) 376-9696</li>
+        <li><strong>Opt-Out Keywords:</strong> Text <code>STOP</code>, <code>CANCEL</code>, <code>QUIT</code>, <code>END</code>, or <code>UNSUBSCRIBE</code> to (762) 376-9696 to instantly unsubscribe</li>
+        <li><strong>Support / Help Keywords:</strong> Text <code>HELP</code> or <code>INFO</code> to (762) 376-9696, or email <a href="mailto:support@sobrietycopilot.com" style="color: #2a9d8f;">support@sobrietycopilot.com</a></li>
+        <li><strong>Cost & Message Rates:</strong> Message and data rates may apply.</li>
+        <li><strong>Message Frequency:</strong> Message frequency varies depending on your selected preferences and user requests.</li>
+        <li><strong>Supported Carriers:</strong> Compatible with all major US carriers including AT&T, Verizon, T-Mobile, and regional wireless networks. Carriers are not liable for delayed or undelivered messages.</li>
+        <li><strong>Privacy Policy & Non-Sharing:</strong> Mobile phone numbers and text messaging opt-in consent will strictly NOT be shared, sold, rented, or transferred to third parties or affiliates for marketing or promotional purposes. All opt-in data is excluded from third-party sharing.</li>
+      </ul>
     </div>
 
     <div class="links">
@@ -191,5 +355,25 @@
       <a href="mailto:support@sobrietycopilot.com">Contact Support</a>
     </div>
   </div>
+
+  <script>
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      var phone = document.getElementById('phone').value.trim();
+      var consent = document.getElementById('sms-consent').checked;
+      var feedback = document.getElementById('form-feedback');
+
+      if (phone && consent) {
+        feedback.className = 'success';
+        feedback.textContent = 'Thank you! You have opted in to Sobriety Copilot SMS support. You will receive a confirmation message shortly. Reply STOP to cancel anytime.';
+      } else if (phone && !consent) {
+        feedback.className = 'success';
+        feedback.textContent = 'Preferences saved. (Note: SMS enrollment was not activated because the optional SMS consent box was not checked).';
+      } else {
+        feedback.className = 'success';
+        feedback.textContent = 'Preferences saved successfully.';
+      }
+    }
+  </script>
 </body>
 </html>
