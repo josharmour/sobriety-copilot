@@ -184,11 +184,42 @@
       padding: 12px 24px;
       font-size: 1rem;
       cursor: pointer;
-      width: 100%;
+      flex: 1.4;
       transition: background 0.2s ease;
     }
     .btn-submit:hover {
       background: #34b3a4;
+    }
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 1.25rem;
+    }
+    .btn-skip {
+      background: transparent;
+      color: #8b949e;
+      font-weight: 600;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 12px 20px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      flex: 1;
+      transition: all 0.2s ease;
+    }
+    .btn-skip:hover {
+      background: #21262d;
+      color: #e6edf3;
+      border-color: #8b949e;
+    }
+    .voluntary-callout {
+      background: rgba(88, 166, 255, 0.08);
+      border-left: 3px solid #58a6ff;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.88rem;
+      color: #c9d1d9;
+      border-radius: 0 6px 6px 0;
     }
     .disclosure-box {
       background: rgba(42, 157, 143, 0.08);
@@ -293,20 +324,20 @@
         <span>Option 2: Web Opt-In Form</span>
         <span class="method-badge">Optional</span>
       </div>
-      <p style="margin: 0 0 1rem 0; font-size: 0.95rem; color: #c9d1d9;">
-        You may optionally enter your mobile number below to enroll in text updates. Both the phone number and consent checkbox are entirely optional.
-      </p>
+      <div class="voluntary-callout">
+        <strong>100% Optional Service:</strong> SMS notifications are completely voluntary. Declining or skipping SMS messaging will never restrict your access to Sobriety Copilot or its core features. You can use all recovery tools, literature, and meeting directories without providing a phone number.
+      </div>
 
       <form id="optin-form" onsubmit="handleFormSubmit(event)">
         <label for="phone">
           Mobile Phone Number
-          <span class="field-hint">(Optional)</span>
+          <span class="field-hint">(Optional — Not required to use service)</span>
         </label>
         <input type="tel" id="phone" name="phone" placeholder="(555) 123-4567" autocomplete="tel">
 
         <label style="margin-bottom: 0.5rem;">
           Select Notification Topics
-          <span class="field-hint">(Optional - Unchecked by default)</span>
+          <span class="field-hint">(Optional — Unchecked by default)</span>
         </label>
         <div style="font-size: 0.9rem; margin-bottom: 1.25rem; display: flex; flex-direction: column; gap: 8px;">
           <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; cursor: pointer;">
@@ -328,7 +359,18 @@
           </label>
         </div>
 
-        <button type="submit" class="btn-submit">Save Preferences</button>
+        <!-- Explicit Decline Option Required by Carrier Compliance -->
+        <div class="checkbox-container" style="background: rgba(248, 81, 73, 0.05); padding: 10px; border-radius: 6px; border: 1px dashed rgba(248, 81, 73, 0.3);">
+          <input type="checkbox" id="sms-decline" name="decline">
+          <label for="sms-decline" class="consent-text" style="color: #f0883e;">
+            <strong>Decline Messaging:</strong> I decline SMS messaging. I prefer to use Sobriety Copilot via the app/web without receiving text messages.
+          </label>
+        </div>
+
+        <div class="btn-row">
+          <button type="submit" class="btn-submit">Save Preferences</button>
+          <button type="button" class="btn-skip" onclick="handleSkipClick()">Decline / Skip SMS</button>
+        </div>
         <div id="form-feedback"></div>
       </form>
     </div>
@@ -357,13 +399,41 @@
   </div>
 
   <script>
+    var consentBox = document.getElementById('sms-consent');
+    var declineBox = document.getElementById('sms-decline');
+    var phoneInput = document.getElementById('phone');
+    var feedback = document.getElementById('form-feedback');
+
+    // Ensure consent and decline checkboxes are mutually exclusive
+    consentBox.addEventListener('change', function() {
+      if (this.checked) {
+        declineBox.checked = false;
+      }
+    });
+
+    declineBox.addEventListener('change', function() {
+      if (this.checked) {
+        consentBox.checked = false;
+      }
+    });
+
+    function handleSkipClick() {
+      declineBox.checked = true;
+      consentBox.checked = false;
+      feedback.className = 'success';
+      feedback.textContent = 'SMS notifications declined / skipped. You can continue using all Sobriety Copilot features without SMS.';
+    }
+
     function handleFormSubmit(e) {
       e.preventDefault();
-      var phone = document.getElementById('phone').value.trim();
-      var consent = document.getElementById('sms-consent').checked;
-      var feedback = document.getElementById('form-feedback');
+      var phone = phoneInput.value.trim();
+      var consent = consentBox.checked;
+      var declined = declineBox.checked;
 
-      if (phone && consent) {
+      if (declined) {
+        feedback.className = 'success';
+        feedback.textContent = 'SMS notifications declined. You can continue using all Sobriety Copilot features without SMS.';
+      } else if (phone && consent) {
         feedback.className = 'success';
         feedback.textContent = 'Thank you! You have opted in to Sobriety Copilot SMS support. You will receive a confirmation message shortly. Reply STOP to cancel anytime.';
       } else if (phone && !consent) {
@@ -371,7 +441,7 @@
         feedback.textContent = 'Preferences saved. (Note: SMS enrollment was not activated because the optional SMS consent box was not checked).';
       } else {
         feedback.className = 'success';
-        feedback.textContent = 'Preferences saved successfully.';
+        feedback.textContent = 'Preferences saved successfully. SMS enrollment was skipped.';
       }
     }
   </script>
