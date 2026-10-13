@@ -31,20 +31,41 @@
 
   <title>Sobriety Copilot</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    flutter-view, flt-glass-pane {
+      height: calc(100% - 24px) !important;
+    }
+    #carrier-compliance-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 24px;
+      line-height: 24px;
+      background: #0d1117;
+      border-top: 1px solid #21262d;
+      text-align: center;
+      font-size: 11px;
+      color: #8b949e;
+      z-index: 9999;
+      pointer-events: auto;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #carrier-compliance-footer a {
+      color: #2a9d8f;
+      margin: 0 8px;
+      text-decoration: none;
+    }
+    #carrier-compliance-footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
-  <footer id="carrier-compliance-footer" style="position: fixed; bottom: 6px; left: 0; right: 0; text-align: center; font-size: 11px; color: #8b949e; z-index: 9999; pointer-events: auto; font-family: sans-serif;">
-    <a href="/sms-optin.html" style="color: #2a9d8f; margin: 0 6px; text-decoration: none;">SMS Support &amp; Opt-In</a> &middot;
-    <a href="/privacy.html" style="color: #2a9d8f; margin: 0 6px; text-decoration: none;">Privacy Policy</a> &middot;
-    <a href="/terms.html" style="color: #2a9d8f; margin: 0 6px; text-decoration: none;">Terms of Service</a>
+  <footer id="carrier-compliance-footer">
+    <a href="/sms-optin.html">SMS Support &amp; Opt-In</a> &middot;
+    <a href="/privacy.html">Privacy Policy</a> &middot;
+    <a href="/terms.html">Terms of Service</a>
   </footer>
   <script src="flutter_bootstrap.js" async></script>
 </body>

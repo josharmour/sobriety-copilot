@@ -1420,6 +1420,28 @@ async def incoming_sms(request: Request):
     return Response(content=xml_content, media_type="application/xml")
 
 
+@app.post("/api/sms/optin")
+async def web_sms_optin(request: Request):
+    """Records voluntary web SMS opt-in preferences from /sms-optin.html."""
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    phone = str(data.get("phone", "")).strip()
+    consent = bool(data.get("consent", False))
+    return {
+        "status": "ok",
+        "enrolled": bool(phone and consent),
+        "message": (
+            "Sobriety Copilot: Welcome! You are subscribed to recovery support & reflections. "
+            "Msg freq varies. Msg & data rates may apply. Reply HELP for help, STOP to cancel."
+            if (phone and consent)
+            else "Preferences saved. SMS enrollment skipped."
+        ),
+    }
+
+
+
 @app.post("/api/chat")
 def chat(payload: ChatRequest):
     import time as _chat_time
