@@ -1354,6 +1354,7 @@ async def incoming_sms(request: Request):
     """Webhook for Twilio SMS interactions with carrier-compliant HELP/STOP handling."""
     from urllib.parse import parse_qs
     body_text = ""
+    from_phone = "default_sms"
     try:
         raw_bytes = await request.body()
         content_type = request.headers.get("content-type", "")
@@ -1361,11 +1362,13 @@ async def incoming_sms(request: Request):
             try:
                 json_data = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
                 body_text = str(json_data.get("Body", "")).strip()
+                from_phone = str(json_data.get("From", "")).strip() or "default_sms"
             except Exception:
                 pass
         if not body_text:
             parsed = parse_qs(raw_bytes.decode("utf-8", errors="ignore"))
             body_text = str(parsed.get("Body", [""])[0]).strip()
+            from_phone = str(parsed.get("From", ["default_sms"])[0]).strip() or "default_sms"
     except Exception:
         body_text = ""
     upper_body = body_text.upper()
@@ -1387,15 +1390,29 @@ async def incoming_sms(request: Request):
         )
     else:
         try:
+            # Load per-sender SMS conversation history from Redis so follow-up
+            # questions ("What are they specifically?", "Yes, list them") have context.
+            hist_key = f"sc:sms:history:{from_phone}"
+            sms_history: list[dict] = []
+            try:
+                raw_hist = get_redis_client().get(hist_key)
+                if raw_hist:
+                    loaded = json.loads(raw_hist)
+                    if isinstance(loaded, list):
+                        sms_history = loaded[-10:]
+            except Exception:
+                sms_history = []
+
             retriever_instance = _safe_get_retriever()
             context = ""
             if retriever_instance and body_text:
+                retrieval_query = _build_retrieval_query(body_text, sms_history)
                 docs = retriever_instance.retrieve(
-                    body_text, top_k=3, enable_reranker=False
+                    retrieval_query, top_k=4, enable_reranker=False
                 )
                 context = (
                     "\n\n".join(
-                        f"[{d.source}]\n{(d.excerpt or d.text)[:600]}"
+                        f"[{d.source}]\n{(d.excerpt or d.text)[:800]}"
                         for d in docs
                     )
                     if docs
@@ -1405,14 +1422,15 @@ async def incoming_sms(request: Request):
             sms_sys_msg = (
                 "You are Sobriety Copilot, a warm, supportive 12-step recovery assistant "
                 "replying via SMS text message. Ground your answer in the provided recovery "
-                "literature context when relevant. Write plain text only (no markdown, no "
-                "asterisks, no bullet points, no bracketed [1] citations). Keep your response "
-                "complete and concise (under 260 characters)."
+                "literature context and conversation history. Write plain text only (no markdown "
+                "bold/italics, no asterisks, no bracketed [1] citations). For general questions, "
+                "keep your answer concise (1-2 short paragraphs). When the user asks for a complete "
+                "list (such as all Twelve Steps or Twelve Traditions), provide all 12 items clearly "
+                "in numbered order, each on its own line, without cutting the list short."
             )
             prompt = (
-                f"User texted: {body_text}\n\n"
                 f"Reference Literature Context:\n{context or '(none)'}\n\n"
-                "Reply with a warm, literature-grounded recovery answer in plain text under 260 characters:"
+                f"User's SMS message: {body_text}"
             )
             active_eng = engine
             if engine_fallback is not None:
@@ -1424,14 +1442,16 @@ async def incoming_sms(request: Request):
             try:
                 raw_response = active_eng.generate(
                     prompt=prompt,
-                    max_tokens=512,
+                    history=sms_history,
+                    max_tokens=1536,
                     system_message=sms_sys_msg,
                 )
             except Exception as gen_err:
                 if engine_fallback is not None and active_eng is not engine_fallback:
                     raw_response = engine_fallback.generate(
                         prompt=prompt,
-                        max_tokens=512,
+                        history=sms_history,
+                        max_tokens=1536,
                         system_message=sms_sys_msg,
                     )
                 else:
@@ -1439,11 +1459,23 @@ async def incoming_sms(request: Request):
 
             clean_resp = re.sub(r"\[\d+\]", "", raw_response or "")
             clean_resp = re.sub(r"[*_#`]", "", clean_resp).strip()
-            clean_resp = re.sub(r"\s+", " ", clean_resp).strip()
-            if len(clean_resp) > 300:
-                cut = clean_resp[:297].rsplit(" ", 1)[0]
-                clean_resp = (cut or clean_resp[:297]) + "..."
-            twiml_reply = f"{clean_resp}\n\n(Sobriety Copilot. Reply STOP to cancel)"
+            # Normalize horizontal whitespace while preserving line breaks for lists
+            clean_resp = "\n".join(re.sub(r"[ \t]+", " ", ln).strip() for ln in clean_resp.splitlines())
+            clean_resp = re.sub(r"\n{3,}", "\n\n", clean_resp).strip()
+            # Twilio <Message> allows up to 1600 chars; cap at 1450 to leave room for footer
+            if len(clean_resp) > 1450:
+                cut = clean_resp[:1445].rsplit(" ", 1)[0]
+                clean_resp = (cut or clean_resp[:1445]) + "..."
+
+            # Persist updated conversation turn to Redis (7-day TTL)
+            try:
+                sms_history.append({"role": "user", "content": body_text})
+                sms_history.append({"role": "assistant", "content": clean_resp})
+                get_redis_client().setex(hist_key, 604800, json.dumps(sms_history[-10:]))
+            except Exception:
+                pass
+
+            twiml_reply = clean_resp
         except Exception as e:
             print(f"[SMS-ERR] {type(e).__name__}: {e}", flush=True)
             twiml_reply = (
