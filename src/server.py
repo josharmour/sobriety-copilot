@@ -1349,10 +1349,67 @@ def explain_snippet(payload: ExplainSnippetRequest):
     return result
 
 
+def _daily_reading_context_for_date(target_date) -> str:
+    """Return the exact Daily Reflections and Twenty-Four Hours a Day entries for `target_date`."""
+    import datetime as _dt
+
+    try:
+        leap_doy = (_dt.date(2024, target_date.month, target_date.day) - _dt.date(2024, 1, 1)).days + 1
+    except Exception:
+        return ""
+
+    date_label = target_date.strftime("%B %-d")
+    sections: list[str] = []
+    manifests_dir = os.environ.get("MANIFESTS_DIR") or os.path.join(DOCUMENTS_DIR, ".manifests")
+
+    # 1. Daily Reflections (Jan 1 = physical_page 7, 366-day leap-year layout)
+    dr_path = os.path.join(manifests_dir, "daily-reflections.json")
+    if os.path.exists(dr_path):
+        try:
+            with open(dr_path, "r", encoding="utf-8") as fh:
+                dr_data = json.load(fh)
+            target_phys = 6 + leap_doy
+            dr_blocks = [
+                b.get("text", "").strip()
+                for b in dr_data.get("blocks", [])
+                if b.get("physical_page") == target_phys and b.get("text", "").strip()
+            ]
+            if dr_blocks:
+                sections.append(
+                    f"[Daily Reflections - AA ({date_label})]\n" + "\n\n".join(dr_blocks)
+                )
+        except Exception:
+            pass
+
+    # 2. Twenty-Four Hours a Day (Jan 1 = physical_page 10)
+    tfh_path = os.path.join(manifests_dir, "twenty-four-hours-a-day.json")
+    if os.path.exists(tfh_path):
+        try:
+            with open(tfh_path, "r", encoding="utf-8") as fh:
+                tfh_data = json.load(fh)
+            target_phys = 9 + leap_doy
+            tfh_blocks = [
+                b.get("text", "").strip()
+                for b in tfh_data.get("blocks", [])
+                if b.get("physical_page") == target_phys and b.get("text", "").strip()
+            ]
+            if tfh_blocks:
+                sections.append(
+                    f"[Twenty-Four Hours a Day ({date_label})]\n" + "\n\n".join(tfh_blocks)
+                )
+        except Exception:
+            pass
+
+    return "\n\n".join(sections)
+
+
 @app.post("/api/sms")
 async def incoming_sms(request: Request):
     """Webhook for Twilio SMS interactions with carrier-compliant HELP/STOP handling."""
     from urllib.parse import parse_qs
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+
     body_text = ""
     from_phone = "default_sms"
     try:
@@ -1390,6 +1447,10 @@ async def incoming_sms(request: Request):
         )
     else:
         try:
+            now_local = _dt.datetime.now(ZoneInfo("America/Los_Angeles"))
+            today_full = now_local.strftime("%A, %B %-d, %Y")
+            today_short = now_local.strftime("%B %-d")
+
             # Load per-sender SMS conversation history from Redis so follow-up
             # questions ("What are they specifically?", "Yes, list them") have context.
             hist_key = f"sc:sms:history:{from_phone}"
@@ -1404,31 +1465,56 @@ async def incoming_sms(request: Request):
                 sms_history = []
 
             retriever_instance = _safe_get_retriever()
-            context = ""
+            context_parts: list[str] = []
+
+            # Always include today's exact Daily Reflection & Twenty-Four Hours reading
+            # when the user asks about today, daily reflection, meditation, or date.
+            lower_q = body_text.lower()
+            if any(
+                kw in lower_q
+                for kw in (
+                    "today",
+                    "daily reflection",
+                    "reflection",
+                    "twenty-four",
+                    "24 hours",
+                    "just for today",
+                    "morning",
+                    "date",
+                    today_short.lower(),
+                )
+            ):
+                daily_ctx = _daily_reading_context_for_date(now_local.date())
+                if daily_ctx:
+                    context_parts.append(daily_ctx)
+
             if retriever_instance and body_text:
                 retrieval_query = _build_retrieval_query(body_text, sms_history)
                 docs = retriever_instance.retrieve(
                     retrieval_query, top_k=4, enable_reranker=False
                 )
-                context = (
-                    "\n\n".join(
+                if docs:
+                    context_parts.extend(
                         f"[{d.source}]\n{(d.excerpt or d.text)[:800]}"
                         for d in docs
                     )
-                    if docs
-                    else ""
-                )
+
+            context = "\n\n".join(context_parts)
 
             sms_sys_msg = (
-                "You are Sobriety Copilot, a warm, supportive 12-step recovery assistant "
-                "replying via SMS text message. Ground your answer in the provided recovery "
-                "literature context and conversation history. Write plain text only (no markdown "
-                "bold/italics, no asterisks, no bracketed [1] citations). For general questions, "
-                "keep your answer concise (1-2 short paragraphs). When the user asks for a complete "
-                "list (such as all Twelve Steps or Twelve Traditions), provide all 12 items clearly "
-                "in numbered order, each on its own line, without cutting the list short."
+                f"You are Sobriety Copilot, a warm, supportive 12-step recovery assistant "
+                f"replying via SMS text message. Today's date is {today_full} ({today_short}). "
+                "Ground your answer in the provided recovery literature context and conversation "
+                "history. When asked for today's Daily Reflection, share the exact title, quote, "
+                "source citation, and reflection for today's date from the provided context. "
+                "Write plain text only (no markdown bold/italics, no asterisks, no bracketed [1] "
+                "citations). For general questions, keep your answer concise (1-2 short paragraphs). "
+                "When the user asks for a complete list (such as all Twelve Steps or Twelve "
+                "Traditions) or a full daily reading, provide the complete text clearly without "
+                "cutting it short."
             )
             prompt = (
+                f"Current Date: {today_full}\n\n"
                 f"Reference Literature Context:\n{context or '(none)'}\n\n"
                 f"User's SMS message: {body_text}"
             )
@@ -1608,14 +1694,41 @@ def chat(payload: ChatRequest):
     except Exception as _diag_exc:
         print(f"[CHAT-DIAG-ERR] {_diag_exc}", flush=True)
 
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+
+    now_local = _dt.datetime.now(ZoneInfo("America/Los_Angeles"))
+    today_full = now_local.strftime("%A, %B %-d, %Y")
+    today_short = now_local.strftime("%B %-d")
+
+    daily_ctx = ""
+    lower_q = query.lower()
+    if any(
+        kw in lower_q
+        for kw in (
+            "today",
+            "daily reflection",
+            "twenty-four hours",
+            "24 hours",
+            "just for today",
+            today_short.lower(),
+        )
+    ):
+        daily_ctx = _daily_reading_context_for_date(now_local.date())
+
     if results:
         context = retriever_instance.format_context(results)
+        if daily_ctx:
+            context = f"{daily_ctx}\n\n{context}"
         prompt = USER_MESSAGE_TEMPLATE.format(context=context, question=query)
+    elif daily_ctx:
+        prompt = USER_MESSAGE_TEMPLATE.format(context=daily_ctx, question=query)
     else:
         prompt = NO_CONTEXT_TEMPLATE.format(question=query)
 
     sources = _build_chat_sources(results)
     sys_msg = system_message_for_tone(payload.tone)
+    sys_msg = f"{sys_msg}\n\nToday's date is {today_full} ({today_short})." if sys_msg else f"Today's date is {today_full} ({today_short})."
     if user_state_note:
         sys_msg = f"{sys_msg}\n\n{user_state_note}" if sys_msg else user_state_note
     client_note = (payload.client_context or "").strip()
