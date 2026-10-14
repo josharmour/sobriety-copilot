@@ -699,6 +699,15 @@ class RAGRetriever:
         elif len(retrieval_results) > top_k:
             retrieval_results = retrieval_results[:top_k]
 
+        dated_results = self._resolve_daily_reading_results(query, categories)
+        if dated_results:
+            existing_keys = {(r.doc_id, tuple(r.block_ids or [])) for r in dated_results}
+            filtered_rest = [
+                r for r in retrieval_results
+                if (r.doc_id, tuple(r.block_ids or [])) not in existing_keys
+            ]
+            retrieval_results = (dated_results + filtered_rest)[: max(top_k, len(dated_results))]
+
         _elapsed = _rtime.monotonic() - _t0
         if _elapsed > 0.2:
             print(f"[RETRIEVE] {_elapsed:.1f}s top_k={top_k} candidates={len(retrieval_results)} "
@@ -706,6 +715,173 @@ class RAGRetriever:
                   f"query={query[:80]!r}", flush=True)
 
         return retrieval_results
+
+    def _resolve_daily_reading_results(
+        self,
+        query: str,
+        categories: list[str] | None = None,
+    ) -> list[RetrievalResult]:
+        """When a query asks about a daily reflection / daily meditation (for today,
+        yesterday, tomorrow, an explicit Month Day, or generally 'the reflection'),
+        look up the exact dated entry from the daily reader manifests.
+        """
+        import datetime as _dt
+        import json as _json
+        from zoneinfo import ZoneInfo
+
+        q_lower = (query or "").lower()
+        daily_triggers = (
+            "reflection",
+            "reflections",
+            "daily reading",
+            "today's reading",
+            "todays reading",
+            "today's meditation",
+            "todays meditation",
+            "daily meditation",
+            "just for today",
+            "twenty-four hours",
+            "twenty four hours",
+            "24 hours a day",
+        )
+        if not any(t in q_lower for t in daily_triggers):
+            return []
+
+        now_local = _dt.datetime.now(ZoneInfo("America/Los_Angeles")).date()
+        target_date = now_local
+
+        # Check for explicit Month + Day in the query (e.g. "October 14", "Oct 14th", "14th of October")
+        month_map = {
+            "january": 1, "jan": 1,
+            "february": 2, "feb": 2,
+            "march": 3, "mar": 3,
+            "april": 4, "apr": 4,
+            "may": 5,
+            "june": 6, "jun": 6,
+            "july": 7, "jul": 7,
+            "august": 8, "aug": 8,
+            "september": 9, "sep": 9, "sept": 9,
+            "october": 10, "oct": 10,
+            "november": 11, "nov": 11,
+            "december": 12, "dec": 12,
+        }
+        month_pattern = "|".join(month_map.keys())
+        m_match = re.search(
+            rf"\b(?P<m>{month_pattern})\.?\s+(?P<d>\d{{1,2}})(?:st|nd|rd|th)?\b"
+            rf"|\b(?P<d2>\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?(?P<m2>{month_pattern})\b",
+            q_lower,
+        )
+        if m_match:
+            m_name = m_match.group("m") or m_match.group("m2")
+            d_str = m_match.group("d") or m_match.group("d2")
+            try:
+                target_date = _dt.date(2024, month_map[m_name], int(d_str))
+            except Exception:
+                target_date = now_local
+        elif "yesterday" in q_lower:
+            target_date = now_local - _dt.timedelta(days=1)
+        elif "tomorrow" in q_lower:
+            target_date = now_local + _dt.timedelta(days=1)
+
+        try:
+            leap_doy = (_dt.date(2024, target_date.month, target_date.day) - _dt.date(2024, 1, 1)).days + 1
+        except Exception:
+            return []
+
+        date_label = target_date.strftime("%B %-d")
+        manifests_dir = os.environ.get("MANIFESTS_DIR") or os.path.join(
+            os.environ.get("DOCUMENTS_DIR", "documents"), ".manifests"
+        )
+
+        books_spec = [
+            (
+                "daily-reflections.json",
+                "Daily Reflections",
+                "Daily Reflections - AA.pdf",
+                "documents/conference_approved/Daily Reflections - AA.pdf",
+                "conference_approved/Daily Reflections - AA.pdf",
+                "conference_approved",
+                "daily-reflections",
+                6 + leap_doy,
+            ),
+            (
+                "twenty-four-hours-a-day.json",
+                "Twenty-Four Hours a Day",
+                "Twenty-Four Hours a Day - R W.pdf",
+                "documents/books_about_aa/Twenty-Four Hours a Day - R W.pdf",
+                "books_about_aa/Twenty-Four Hours a Day - R W.pdf",
+                "books_about_aa",
+                "twenty-four-hours-a-day",
+                9 + leap_doy,
+            ),
+            (
+                "just-for-today.json",
+                "Just for Today",
+                "Just for Today - NA.pdf",
+                "documents/other_anonymous/Just for Today - NA.pdf",
+                "other_anonymous/Just for Today - NA.pdf",
+                "other_anonymous",
+                "just-for-today",
+                8 + leap_doy,
+            ),
+        ]
+
+        if not hasattr(self, "_daily_manifests_cache"):
+            self._daily_manifests_cache: dict[str, dict] = {}
+
+        cat_filter = set(categories) if categories else None
+        out: list[RetrievalResult] = []
+
+        for fname, title, source, source_path, rel_path, cat, doc_id, target_phys in books_spec:
+            if cat_filter and cat not in cat_filter:
+                continue
+            # If user explicitly named one of the other daily books, prioritize that book first
+            if fname not in self._daily_manifests_cache:
+                fpath = os.path.join(manifests_dir, fname)
+                if not os.path.exists(fpath):
+                    continue
+                try:
+                    with open(fpath, "r", encoding="utf-8") as fh:
+                        self._daily_manifests_cache[fname] = _json.load(fh)
+                except Exception:
+                    continue
+
+            mdata = self._daily_manifests_cache.get(fname) or {}
+            day_blocks = [
+                b for b in mdata.get("blocks", [])
+                if b.get("physical_page") == target_phys and (b.get("text") or "").strip()
+            ]
+            if not day_blocks:
+                continue
+
+            block_texts = [b["text"].strip() for b in day_blocks]
+            block_ids = [b["id"] for b in day_blocks if b.get("id")]
+            printed_page = day_blocks[0].get("printed_page") or target_phys
+            full_text = f"[{title} — {date_label}]\n\n" + "\n\n".join(block_texts)
+            excerpt_text = f"{date_label} — {block_texts[0]}"
+
+            out.append(
+                RetrievalResult(
+                    text=full_text,
+                    excerpt=excerpt_text,
+                    similarity=1.0,
+                    source=source,
+                    chunk_index=target_phys,
+                    source_path=source_path,
+                    relative_path=rel_path,
+                    scale="medium",
+                    match_scale="small",
+                    parent_id=f"{doc_id}:p{target_phys}",
+                    matched_chunk_id=f"{doc_id}:p{target_phys}",
+                    category=cat,
+                    doc_id=doc_id,
+                    block_ids=block_ids,
+                    printed_page_start=printed_page,
+                    printed_page_end=printed_page,
+                )
+            )
+
+        return out
 
     def format_context(
         self,

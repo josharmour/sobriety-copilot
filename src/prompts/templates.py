@@ -105,10 +105,22 @@ SYSTEM_MESSAGE = WARM_SYSTEM_MESSAGE
 
 
 def system_message_for_tone(tone: str | None) -> str:
-    """Return the system prompt for the requested tone, falling back to warm."""
-    if not tone:
-        return WARM_SYSTEM_MESSAGE
-    return TONE_VARIANTS.get(tone.lower(), WARM_SYSTEM_MESSAGE)
+    """Return the system prompt for the requested tone (with current date), falling back to warm."""
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+
+    base = WARM_SYSTEM_MESSAGE if not tone else TONE_VARIANTS.get(tone.lower(), WARM_SYSTEM_MESSAGE)
+    now_local = _dt.datetime.now(ZoneInfo("America/Los_Angeles"))
+    today_full = now_local.strftime("%A, %B %-d, %Y")
+    today_short = now_local.strftime("%B %-d")
+    return (
+        f"{base}\n\n"
+        f"Current Date Context:\n"
+        f"- Today's date is {today_full} ({today_short}). When the user asks about "
+        f"the Daily Reflection, Just for Today, or Twenty-Four Hours a Day (even if "
+        f"they don't specify a date), default to today's date ({today_short}) unless "
+        f"they specify another date."
+    )
 
 USER_MESSAGE_TEMPLATE = """Here is some relevant context from recovery literature that may help inform this conversation:
 
