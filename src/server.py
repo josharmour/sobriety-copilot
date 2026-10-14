@@ -1390,21 +1390,62 @@ async def incoming_sms(request: Request):
             retriever_instance = _safe_get_retriever()
             context = ""
             if retriever_instance and body_text:
-                docs = retriever_instance.retrieve(body_text, k=2)
-                context = "\n".join([d.text for d in docs]) if docs else ""
+                docs = retriever_instance.retrieve(
+                    body_text, top_k=3, enable_reranker=False
+                )
+                context = (
+                    "\n\n".join(
+                        f"[{d.source}]\n{(d.excerpt or d.text)[:600]}"
+                        for d in docs
+                    )
+                    if docs
+                    else ""
+                )
 
-            prompt = (
-                f"You are Sobriety Copilot SMS assistant. A user texted: '{body_text}'.\n"
-                f"Reference Literature Context:\n{context}\n\n"
-                "Give a warm, supportive, literature-grounded recovery answer in under 260 characters. "
-                "Do not use markdown bold, asterisks, or bullet points. Keep it conversational."
+            sms_sys_msg = (
+                "You are Sobriety Copilot, a warm, supportive 12-step recovery assistant "
+                "replying via SMS text message. Ground your answer in the provided recovery "
+                "literature context when relevant. Write plain text only (no markdown, no "
+                "asterisks, no bullet points, no bracketed [1] citations). Keep your response "
+                "complete and concise (under 260 characters)."
             )
-            raw_response = engine.generate(prompt)
-            clean_resp = re.sub(r'[*_#`]', '', raw_response).strip()
-            if len(clean_resp) > 280:
-                clean_resp = clean_resp[:277] + "..."
+            prompt = (
+                f"User texted: {body_text}\n\n"
+                f"Reference Literature Context:\n{context or '(none)'}\n\n"
+                "Reply with a warm, literature-grounded recovery answer in plain text under 260 characters:"
+            )
+            active_eng = engine
+            if engine_fallback is not None:
+                try:
+                    if get_redis_client().get(_BREAKER_KEY):
+                        active_eng = engine_fallback
+                except Exception:
+                    pass
+            try:
+                raw_response = active_eng.generate(
+                    prompt=prompt,
+                    max_tokens=512,
+                    system_message=sms_sys_msg,
+                )
+            except Exception as gen_err:
+                if engine_fallback is not None and active_eng is not engine_fallback:
+                    raw_response = engine_fallback.generate(
+                        prompt=prompt,
+                        max_tokens=512,
+                        system_message=sms_sys_msg,
+                    )
+                else:
+                    raise gen_err
+
+            clean_resp = re.sub(r"\[\d+\]", "", raw_response or "")
+            clean_resp = re.sub(r"[*_#`]", "", clean_resp).strip()
+            clean_resp = re.sub(r"\s+", " ", clean_resp).strip()
+            if len(clean_resp) > 300:
+                cut = clean_resp[:297].rsplit(" ", 1)[0]
+                clean_resp = (cut or clean_resp[:297]) + "..."
             twiml_reply = f"{clean_resp}\n\n(Sobriety Copilot. Reply STOP to cancel)"
         except Exception as e:
+            print(f"[SMS-ERR] {type(e).__name__}: {e}", flush=True)
             twiml_reply = (
                 "Sobriety Copilot: Thank you for your message. One day at a time! "
                 "For help, reply HELP or email support@sobrietycopilot.com. Reply STOP to cancel."
