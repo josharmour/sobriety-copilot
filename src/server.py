@@ -1408,10 +1408,19 @@ async def incoming_sms(request: Request):
             "Sobriety Copilot: Welcome! You are subscribed to recovery support & reflections. "
             "Msg freq varies. Msg & data rates may apply. Reply HELP for help, STOP to cancel."
         )
+    elif upper_body in {"NEW", "RESET", "CLEAR", "NEW CHAT", "START OVER"}:
+        try:
+            get_redis_client().delete(f"sc:sms:history:{from_phone}")
+        except Exception:
+            pass
+        twiml_reply = (
+            "Sobriety Copilot: Started a fresh conversation. What's on your mind or what would "
+            "you like to look up in the literature?"
+        )
     else:
         try:
-            # Load per-sender SMS conversation history from Redis so follow-up
-            # questions ("What are they specifically?", "Yes, list them") have context.
+            # Load per-sender SMS conversation history from Redis so ongoing
+            # multi-turn conversations stay coherent by default.
             hist_key = f"sc:sms:history:{from_phone}"
             sms_history: list[dict] = []
             try:
@@ -1419,7 +1428,7 @@ async def incoming_sms(request: Request):
                 if raw_hist:
                     loaded = json.loads(raw_hist)
                     if isinstance(loaded, list):
-                        sms_history = loaded[-6:]
+                        sms_history = loaded[-8:]
             except Exception:
                 sms_history = []
 
@@ -1437,17 +1446,6 @@ async def incoming_sms(request: Request):
                     embedding_query=embedding_query,
                 )
 
-            is_followup = (
-                retrieval_query != body_text
-                or bool(
-                    re.search(
-                        r"\b(?:they|them|that|those|these|more|else|also|yes|yeah|yep|sure|please|specifically|elaborate|first|second|third|other)\b",
-                        (body_text or "").lower(),
-                    )
-                )
-            )
-            effective_history = sms_history if is_followup else []
-
             if results:
                 context = retriever_instance.format_context(results)
                 prompt = USER_MESSAGE_TEMPLATE.format(context=context, question=body_text)
@@ -1457,9 +1455,14 @@ async def incoming_sms(request: Request):
             sms_sys_msg = (
                 system_message_for_tone("warm")
                 + "\n\nSMS Delivery Guidelines:\n"
-                "- You are replying via SMS text message. Provide the exact same literature breadth "
-                "(Big Book, Twelve Steps and Twelve Traditions, As Bill Sees It, Living Sober, and the "
-                "full recovery library), depth of insight, and directness as the main web/mobile app.\n"
+                "- You are replying via SMS text message in a continuous conversation thread. "
+                "Provide the exact same literature breadth (Big Book, Twelve Steps and Twelve "
+                "Traditions, As Bill Sees It, Living Sober, and the full recovery library), "
+                "depth of insight, and directness as the main web/mobile app.\n"
+                "- Maintain a coherent ongoing conversation when the person follows up or continues "
+                "a thread, and pivot cleanly to the newly retrieved literature whenever they ask "
+                "about a new topic (never force an earlier turn's book, like Daily Reflections, "
+                "onto a new topic).\n"
                 "- Format as plain text only (no markdown asterisks ** or #, no bracketed [1] citations).\n"
                 "- Keep general responses to 2 to 3 tight paragraphs (around 800 to 1,150 characters total) "
                 "so the entire answer finishes cleanly without truncation, unless the user asks for a "
@@ -1476,7 +1479,7 @@ async def incoming_sms(request: Request):
             try:
                 raw_response = active_eng.generate(
                     prompt=prompt,
-                    history=effective_history,
+                    history=sms_history,
                     max_tokens=1536,
                     system_message=sms_sys_msg,
                 )
@@ -1484,7 +1487,7 @@ async def incoming_sms(request: Request):
                 if engine_fallback is not None and active_eng is not engine_fallback:
                     raw_response = engine_fallback.generate(
                         prompt=prompt,
-                        history=effective_history,
+                        history=sms_history,
                         max_tokens=1536,
                         system_message=sms_sys_msg,
                     )
@@ -1508,10 +1511,9 @@ async def incoming_sms(request: Request):
 
             # Persist updated conversation turn to Redis (7-day TTL)
             try:
-                updated_history = list(effective_history)
-                updated_history.append({"role": "user", "content": body_text})
-                updated_history.append({"role": "assistant", "content": clean_resp})
-                get_redis_client().setex(hist_key, 604800, json.dumps(updated_history[-6:]))
+                sms_history.append({"role": "user", "content": body_text})
+                sms_history.append({"role": "assistant", "content": clean_resp})
+                get_redis_client().setex(hist_key, 604800, json.dumps(sms_history[-8:]))
             except Exception:
                 pass
 
