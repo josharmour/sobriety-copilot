@@ -42,8 +42,14 @@ QUERY_STOPWORDS = frozenset({
     "can", "could", "would", "should", "may", "might", "will", "have", "has",
     "had", "having", "and", "or", "but", "if", "than", "then", "so", "not",
     "just", "very", "really", "much", "more", "most", "some", "any", "like",
-    "go", "get", "got", "make", "made", "let", "help", "know", "tell", "say",
-    "said", "deal", "doing", "being", "want", "need", "thing", "things", "way",
+    "go", "get", "got", "make", "made", "let", "help", "know", "tell", "tells",
+    "say", "says", "said", "deal", "doing", "being", "want", "need", "thing",
+    "things", "way", "talk", "talks", "talking", "talked", "literature",
+    "book", "books", "text", "texts", "reading", "readings", "passage",
+    "passages", "page", "pages", "chapter", "chapters", "mention", "mentions",
+    "mentioned", "speak", "speaks", "speaking", "discuss", "discusses",
+    "discussed", "write", "writes", "written", "read", "quote", "quotes",
+    "find", "found", "look", "looking", "show", "shows", "give", "gives",
 })
 SEMANTIC_WEIGHT = float(os.environ.get("SEMANTIC_WEIGHT", "0.7"))
 KEYWORD_WEIGHT = float(os.environ.get("KEYWORD_WEIGHT", "0.3"))
@@ -95,6 +101,7 @@ TITLE_REFERENCE_BOOST = float(os.environ.get("BOOST_TITLE_REFERENCE", "3.0"))
 # RAG_ENUMERATION_MIN_MARKERS list markers get their score multiplied down.
 ENUMERATION_PENALTY = float(os.environ.get("RAG_ENUMERATION_PENALTY", "0.45"))
 ENUMERATION_MIN_MARKERS = int(os.environ.get("RAG_ENUMERATION_MIN_MARKERS", "5"))
+INDEX_PENALTY = float(os.environ.get("RAG_INDEX_PENALTY", "0.20"))
 
 # Header-only chunks (short text after stripping page headers) are structural
 # noise -- they match semantically because their heading happens to live near
@@ -113,6 +120,10 @@ _ENUMERATION_MARKER = re.compile(
 # A literal CONTENTS heading is near-certain evidence of a table-of-contents
 # page (counts as several markers on its own).
 _CONTENTS_RE = re.compile(r"\bCONTENTS\b")
+# Back-of-book alphabetical index and endnotes/bibliography markers.
+_INDEX_PAGE_RUN_RE = re.compile(r"\b\d{1,3}\s*,\s*\d{1,3}(?:\s*[,–\-]\s*\d{1,3})+|\bref\d+\s*,\s*ref\d+", re.IGNORECASE)
+_INDEX_ENTRY_RE = re.compile(r"(?:\bSee\s+also\b|\bSee\s+[A-Z]|\bINDEX\b|\bref\d+\b|,\s*\d{1,3}(?:[–\-]\d{1,3})?\b)")
+_ENDNOTE_RE = re.compile(r"(?:\bCf\.\s|\bibid\b|\bop\.\s*cit\.|\bAAGV\b|\bpp?\.\s*\d{1,3}\b)", re.IGNORECASE)
 REFERENCED_MAX_PER_SOURCE = int(os.environ.get("RAG_REFERENCED_MAX_PER_SOURCE", "4"))
 
 # Running-header regex (matches PDF repeating headers / page numbers at start
@@ -294,7 +305,7 @@ class RAGRetriever:
                     self._chunks_by_id = cache_data["chunks_by_id"]
                     self._postings = defaultdict(dict, cache_data["postings"])
                     self._doc_lengths = cache_data["doc_lengths"]
-                    self._enum_penalty = cache_data.get("enum_penalty", {})
+                    self._enum_penalty = {}
                     self._avg_doc_length = cache_data["avg_doc_length"]
                     print(f"[BM25-CACHE] Loaded {self._document_count} chunks from {cache_file} instantly.", flush=True)
                     return
@@ -374,6 +385,33 @@ class RAGRetriever:
         if _elapsed > 0.5 and self._document_count > 0:
             print(f"[BM25-CACHE] refresh_cache done: {self._document_count} chunks, {_elapsed:.1f}s", flush=True)
 
+    def _expand_query_terms(self, base_terms: list[str]) -> list[str]:
+        """Expand query terms with simple singular/plural variants present in postings."""
+        expanded: list[str] = []
+        seen: set[str] = set()
+        for t in base_terms:
+            if t not in seen:
+                expanded.append(t)
+                seen.add(t)
+            candidates: list[str] = []
+            if t.endswith("ies") and len(t) > 4:
+                candidates.append(t[:-3] + "y")
+            elif t.endswith("es") and len(t) > 4:
+                candidates.append(t[:-2])
+                candidates.append(t[:-1])
+            elif t.endswith("s") and len(t) > 3 and not t.endswith("ss"):
+                candidates.append(t[:-1])
+            else:
+                if t.endswith("y") and len(t) > 3:
+                    candidates.append(t[:-1] + "ies")
+                candidates.append(t + "s")
+                candidates.append(t + "es")
+            for cand in candidates:
+                if len(cand) > 2 and cand not in seen and cand in self._postings:
+                    expanded.append(cand)
+                    seen.add(cand)
+        return expanded
+
     def _keyword_scores(
         self,
         query: str,
@@ -383,12 +421,13 @@ class RAGRetriever:
         if not self._chunks_by_id:
             return {}
 
-        query_terms = [
+        base_terms = [
             t for t in self._tokenize(query)
             if len(t) > 2 and t not in QUERY_STOPWORDS
         ]
-        if not query_terms:
+        if not base_terms:
             return {}
+        query_terms = self._expand_query_terms(base_terms)
 
         scores: defaultdict[str, float] = defaultdict(float)
         k1 = 1.5
@@ -442,12 +481,36 @@ class RAGRetriever:
         cached = self._enum_penalty.get(chunk_id)
         if cached is None:
             text = chunk.text or ""
-            markers = len(_ENUMERATION_MARKER.findall(text))
-            if _CONTENTS_RE.search(text):
-                markers += 3
-            cached = ENUMERATION_PENALTY if markers >= ENUMERATION_MIN_MARKERS else 1.0
+            ctx_chunk = self._compact_context_chunk(chunk)
+            full_text = f"{text}\n{ctx_chunk.text or ''}" if ctx_chunk.id != chunk.id else text
+            # Back-of-book alphabetical index or endnotes/bibliography pages
+            if (
+                len(_INDEX_PAGE_RUN_RE.findall(full_text)) >= 1
+                or len(_INDEX_ENTRY_RE.findall(full_text)) >= 5
+                or len(_ENDNOTE_RE.findall(full_text)) >= 3
+            ):
+                cached = INDEX_PENALTY
+            else:
+                markers = len(_ENUMERATION_MARKER.findall(text))
+                if _CONTENTS_RE.search(text):
+                    markers += 3
+                cached = ENUMERATION_PENALTY if markers >= ENUMERATION_MIN_MARKERS else 1.0
             self._enum_penalty[chunk_id] = cached
         return cached
+
+    def _foundational_source_prior(self, source: str, has_referenced_sources: bool) -> float:
+        """Gentle prior on general topical queries so primary texts (Big Book, 12&12)
+        lead over daily-reader snippets or historical biographies unless named."""
+        if has_referenced_sources:
+            return 1.0
+        s = (source or "").lower()
+        if "alcoholics anonymous - aa" in s or "twelve steps and twelve traditions - aa" in s:
+            return 1.22
+        if "as bill sees it" in s or "living sober" in s or "came to believe" in s:
+            return 1.08
+        if "daily reflections" in s:
+            return 0.88
+        return 1.0
 
     def _is_header_only(self, chunk: CachedChunk) -> bool:
         """True if the chunk is too short / header-like to be substantive."""
@@ -563,9 +626,21 @@ class RAGRetriever:
         if categories:
             where = {"category": {"$in": categories}}
 
-        referenced_sources = _referenced_source_substrings(query)
+        # Extract the current user turn (first line) so prior conversation history
+        # turns never falsely trigger title boosts or daily-reflection lookups.
+        current_turn = (query or "").splitlines()[0].strip() or query
+        referenced_sources = _referenced_source_substrings(current_turn)
 
-        query_embedding = embed_query(embedding_query or query)
+        effective_embed_query = embedding_query or query
+        if not embedding_query or "\n\n" not in embedding_query:
+            core_terms = self._expand_query_terms([
+                t for t in self._tokenize(current_turn)
+                if len(t) > 2 and t not in QUERY_STOPWORDS
+            ])
+            if core_terms and len(core_terms) <= 6:
+                effective_embed_query = f"{' '.join(core_terms)}: {current_turn}"
+
+        query_embedding = embed_query(effective_embed_query)
         candidate_count = min(max(top_k * QUERY_CANDIDATE_MULTIPLIER, top_k), collection_count)
         semantic_results = self.collection.query(
             query_embeddings=[query_embedding],
@@ -590,6 +665,7 @@ class RAGRetriever:
         max_semantic = max(semantic_scores.values(), default=1.0)
         max_keyword = max(keyword_scores.values(), default=1.0)
 
+        has_ref = bool(referenced_sources)
         combined_scores = {}
         for chunk_id in set(semantic_scores) | set(keyword_scores):
             chunk = self._chunks_by_id.get(chunk_id)
@@ -601,7 +677,7 @@ class RAGRetriever:
             title_boost = (
                 TITLE_REFERENCE_BOOST
                 if _source_is_referenced(chunk.source, referenced_sources)
-                else 1.0
+                else self._foundational_source_prior(chunk.source, has_ref)
             )
             hybrid_score = (
                 (SEMANTIC_WEIGHT * semantic_score) + (KEYWORD_WEIGHT * keyword_score)
@@ -689,17 +765,17 @@ class RAGRetriever:
                 * (
                     TITLE_REFERENCE_BOOST
                     if _source_is_referenced(r.source, referenced_sources)
-                    else 1.0
+                    else self._foundational_source_prior(r.source, has_ref)
                 )
                 for r in retrieval_results
             ]
             retrieval_results = reranker.rerank(
-                query, retrieval_results, top_k=top_k, boosts=rerank_boosts
+                current_turn, retrieval_results, top_k=top_k, boosts=rerank_boosts
             )
         elif len(retrieval_results) > top_k:
             retrieval_results = retrieval_results[:top_k]
 
-        dated_results = self._resolve_daily_reading_results(query, categories)
+        dated_results = self._resolve_daily_reading_results(current_turn, categories)
         if dated_results:
             existing_keys = {(r.doc_id, tuple(r.block_ids or [])) for r in dated_results}
             filtered_rest = [
@@ -731,8 +807,12 @@ class RAGRetriever:
 
         q_lower = (query or "").lower()
         daily_triggers = (
-            "reflection",
-            "reflections",
+            "daily reflection",
+            "daily reflections",
+            "today's reflection",
+            "todays reflection",
+            "the reflection",
+            "reflection for",
             "daily reading",
             "today's reading",
             "todays reading",
@@ -771,6 +851,13 @@ class RAGRetriever:
             rf"|\b(?P<d2>\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?(?P<m2>{month_pattern})\b",
             q_lower,
         )
+        has_explicit_date = bool(m_match) or any(w in q_lower for w in ("today", "yesterday", "tomorrow"))
+        # If the user is asking a topical search ("what does Daily Reflections say about resentments?")
+        # without asking for a dated entry, let normal semantic/keyword search handle it.
+        if not has_explicit_date and re.search(r"\b(?:say|says|talk|talks|about|on|where)\b", q_lower):
+            if not re.search(r"\b(?:what(?:'s|\s+is)\s+(?:the\s+)?(?:daily\s+)?reflection)\b", q_lower):
+                return []
+
         if m_match:
             m_name = m_match.group("m") or m_match.group("m2")
             d_str = m_match.group("d") or m_match.group("d2")

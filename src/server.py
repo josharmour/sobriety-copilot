@@ -1136,24 +1136,41 @@ def _hyde_for_query(question: str) -> str | None:
     return passage
 
 
+_FOLLOWUP_GENERIC_WORDS = frozenset({
+    "specifically", "specific", "more", "detail", "details", "explain",
+    "elaborate", "list", "all", "full", "complete", "mean", "means",
+    "meaning", "apply", "applies", "example", "examples", "yes", "yeah",
+    "yep", "sure", "ok", "okay", "please", "thanks", "first", "second",
+    "third", "fourth", "other", "another", "next", "last", "one", "ones",
+    "part", "parts", "understand",
+})
+
+
 def _build_retrieval_query(message: str, history: list[dict[str, Any]]) -> str:
-    """Build a retrieval query that incorporates conversation context.
+    """Build a retrieval query that incorporates conversation context only when
+    the current message is a referential follow-up ("What are they specifically?",
+    "Tell me more about that", "Yes, list them").
 
-    For follow-up messages we append key phrases from the last few turns so the
-    retriever can resolve references like "tell me more" or "what about that".
-
-    For first-turn messages we use the user's wording verbatim. The corpus is
-    already entirely recovery literature, so adding a generic recovery hint
-    only dilutes the embedding and pulls back unrelated material.
+    When the current message already contains its own substantive topic terms
+    (e.g., "Where does it talk about resentments in the literature?"), we return
+    `message` verbatim so prior turns (like an earlier question about the Daily
+    Reflection) never contaminate the new topic's retrieval.
     """
     if not history:
         return message
+    from src.rag.retriever import QUERY_STOPWORDS, TOKEN_RE
+    tokens = [
+        t.lower() for t in TOKEN_RE.findall(message or "")
+        if len(t) > 1 and t.lower() not in QUERY_STOPWORDS and t.lower() not in _FOLLOWUP_GENERIC_WORDS
+    ]
+    if tokens:
+        return message
     parts = [message]
-    for turn in history[-4:]:
+    for turn in reversed(history[-4:]):
         content = (turn.get("content") or "")[:200].strip()
         if content:
             parts.append(content)
-    return " ".join(parts)
+    return "\n".join(parts)
 
 
 _explain_cache: dict[str, dict[str, str]] = {}
@@ -1393,10 +1410,6 @@ async def incoming_sms(request: Request):
         )
     else:
         try:
-            now_local = _dt.datetime.now(ZoneInfo("America/Los_Angeles"))
-            today_full = now_local.strftime("%A, %B %-d, %Y")
-            today_short = now_local.strftime("%B %-d")
-
             # Load per-sender SMS conversation history from Redis so follow-up
             # questions ("What are they specifically?", "Yes, list them") have context.
             hist_key = f"sc:sms:history:{from_phone}"
@@ -1406,37 +1419,52 @@ async def incoming_sms(request: Request):
                 if raw_hist:
                     loaded = json.loads(raw_hist)
                     if isinstance(loaded, list):
-                        sms_history = loaded[-10:]
+                        sms_history = loaded[-6:]
             except Exception:
                 sms_history = []
 
             retriever_instance = _safe_get_retriever()
-            context = ""
+            results = []
+            retrieval_query = body_text
             if retriever_instance and body_text:
                 retrieval_query = _build_retrieval_query(body_text, sms_history)
-                docs = retriever_instance.retrieve(
-                    retrieval_query, top_k=6, enable_reranker=False
+                hyde_passage = _hyde_for_query(body_text)
+                embedding_query = (
+                    f"{body_text}\n\n{hyde_passage}" if hyde_passage else retrieval_query
                 )
-                if docs:
-                    context = retriever_instance.format_context(docs, max_total_chars=6000)
+                results = retriever_instance.retrieve(
+                    retrieval_query,
+                    embedding_query=embedding_query,
+                )
+
+            is_followup = (
+                retrieval_query != body_text
+                or bool(
+                    re.search(
+                        r"\b(?:they|them|that|those|these|more|else|also|yes|yeah|yep|sure|please|specifically|elaborate|first|second|third|other)\b",
+                        (body_text or "").lower(),
+                    )
+                )
+            )
+            effective_history = sms_history if is_followup else []
+
+            if results:
+                context = retriever_instance.format_context(results)
+                prompt = USER_MESSAGE_TEMPLATE.format(context=context, question=body_text)
+            else:
+                prompt = NO_CONTEXT_TEMPLATE.format(question=body_text)
 
             sms_sys_msg = (
-                f"You are Sobriety Copilot, a warm, supportive 12-step recovery assistant "
-                f"replying via SMS text message. Today's date is {today_full} ({today_short}). "
-                "Ground your answer in the provided recovery literature context and conversation "
-                "history. When asked about the Daily Reflection, Just for Today, or Twenty-Four "
-                "Hours a Day, default to today's date unless another date is specified, and share "
-                "the title, quote, source citation, and reflection from the provided context. "
-                "Write plain text only (no markdown bold/italics, no asterisks, no bracketed [1] "
-                "citations). For general questions, keep your answer concise (1-2 short paragraphs). "
-                "When the user asks for a complete list (such as all Twelve Steps or Twelve "
-                "Traditions) or a full daily reading, provide the complete text clearly without "
-                "cutting it short."
-            )
-            prompt = (
-                f"Current Date: {today_full}\n\n"
-                f"Reference Literature Context:\n{context or '(none)'}\n\n"
-                f"User's SMS message: {body_text}"
+                system_message_for_tone("warm")
+                + "\n\nSMS Delivery Guidelines:\n"
+                "- You are replying via SMS text message. Provide the exact same literature breadth "
+                "(Big Book, Twelve Steps and Twelve Traditions, As Bill Sees It, Living Sober, and the "
+                "full recovery library), depth of insight, and directness as the main web/mobile app.\n"
+                "- Format as plain text only (no markdown asterisks ** or #, no bracketed [1] citations).\n"
+                "- Keep general responses to 2 to 3 tight paragraphs (around 800 to 1,150 characters total) "
+                "so the entire answer finishes cleanly without truncation, unless the user asks for a "
+                "complete list (such as all Twelve Steps or Twelve Traditions) or a full daily reading, "
+                "in which case provide the complete text."
             )
             active_eng = engine
             if engine_fallback is not None:
@@ -1448,7 +1476,7 @@ async def incoming_sms(request: Request):
             try:
                 raw_response = active_eng.generate(
                     prompt=prompt,
-                    history=sms_history,
+                    history=effective_history,
                     max_tokens=1536,
                     system_message=sms_sys_msg,
                 )
@@ -1456,7 +1484,7 @@ async def incoming_sms(request: Request):
                 if engine_fallback is not None and active_eng is not engine_fallback:
                     raw_response = engine_fallback.generate(
                         prompt=prompt,
-                        history=sms_history,
+                        history=effective_history,
                         max_tokens=1536,
                         system_message=sms_sys_msg,
                     )
@@ -1468,16 +1496,22 @@ async def incoming_sms(request: Request):
             # Normalize horizontal whitespace while preserving line breaks for lists
             clean_resp = "\n".join(re.sub(r"[ \t]+", " ", ln).strip() for ln in clean_resp.splitlines())
             clean_resp = re.sub(r"\n{3,}", "\n\n", clean_resp).strip()
-            # Twilio <Message> allows up to 1600 chars; cap at 1450 to leave room for footer
-            if len(clean_resp) > 1450:
-                cut = clean_resp[:1445].rsplit(" ", 1)[0]
-                clean_resp = (cut or clean_resp[:1445]) + "..."
+            # Twilio <Message> allows up to 1600 chars; cap at 1480 and prefer ending on a full sentence
+            if len(clean_resp) > 1480:
+                window = clean_resp[:1480]
+                sent_matches = list(re.finditer(r"[.!?](?:['\"\u201d\u2019])?(?=\s|$)", window))
+                if sent_matches and sent_matches[-1].end() >= 800:
+                    clean_resp = window[: sent_matches[-1].end()].strip()
+                else:
+                    cut = window[:1475].rsplit(" ", 1)[0]
+                    clean_resp = (cut or window[:1475]) + "..."
 
             # Persist updated conversation turn to Redis (7-day TTL)
             try:
-                sms_history.append({"role": "user", "content": body_text})
-                sms_history.append({"role": "assistant", "content": clean_resp})
-                get_redis_client().setex(hist_key, 604800, json.dumps(sms_history[-10:]))
+                updated_history = list(effective_history)
+                updated_history.append({"role": "user", "content": body_text})
+                updated_history.append({"role": "assistant", "content": clean_resp})
+                get_redis_client().setex(hist_key, 604800, json.dumps(updated_history[-6:]))
             except Exception:
                 pass
 
