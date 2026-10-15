@@ -1600,21 +1600,65 @@ async def web_sms_optin(request: Request):
 
 
 
+_PROMPT_INJECTION_RE = re.compile(
+    r"(?:ignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions"
+    r"|reveal\s+(?:your\s+)?(?:system\s+prompt|hidden\s+instructions)"
+    r"|repeat\s+(?:your\s+)?(?:system\s+prompt|instructions)\s+verbatim"
+    r"|/etc/passwd|\.env\b|TWILIO_AUTH_TOKEN|LLM_API_KEY|REDIS_URL)",
+    re.IGNORECASE,
+)
+
+
 @app.post("/api/chat")
-def chat(payload: ChatRequest):
+def chat(payload: ChatRequest, request: Request):
     import time as _chat_time
     _chat_t0 = _chat_time.monotonic()
     
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="missing 'message' field")
 
-    user_id = (payload.user_id or "default_user").strip() or "default_user"
+    # Per-IP sliding rate limit (max 30 chat queries per 10 minutes)
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        or (request.client.host if request.client else "unknown")
+    )
+    client_ip = re.sub(r"[^0-9a-fA-F.:_-]", "", client_ip)[:48] or "unknown"
+    try:
+        rl_key = f"sc:chat:rl:{client_ip}"
+        rc = get_redis_client()
+        cnt = rc.incr(rl_key)
+        if cnt == 1:
+            rc.expire(rl_key, 600)
+        if cnt > 30:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded. Please wait a few minutes.")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    query = payload.message.strip()[:2000]
+    if _PROMPT_INJECTION_RE.search(query):
+        def _refuse_stream():
+            msg = (
+                "Sobriety Copilot is a 12-step recovery and literature companion. "
+                "Ask me about the Steps, Traditions, Daily Reflections, or recovery literature."
+            )
+            yield f"data: {json.dumps({'sources': []})}\n\n"
+            yield f"data: {json.dumps({'token': msg})}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(_refuse_stream(), media_type="text/event-stream")
+
+    user_id = re.sub(r"[^0-9a-zA-Z_-]", "", (payload.user_id or "default_user").strip())[:64] or "default_user"
     user_state = memory_manager.get_user_state(user_id)
     user_state_note = format_state_note(user_state)
 
     retriever_instance = _safe_get_retriever()
-    query = payload.message
-    history = payload.history
+    history = [
+        {"role": str(t.get("role", "user")), "content": str(t.get("content", ""))[:2000]}
+        for t in (payload.history or [])[-12:]
+        if isinstance(t, dict)
+    ]
     categories = _normalize_categories(payload.categories)
 
     # A/B model variant routing -------------------------------------------------
@@ -2068,7 +2112,7 @@ def doc_window_endpoint(doc_id: str, blocks: str = Query(default=""),
     an index built against an older extraction of the book.
     """
     from src.rag.graph import doc_window
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", doc_id):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", doc_id):
         raise HTTPException(status_code=400, detail="Bad document id")
     block_ids = [b.strip() for b in blocks.split(",") if b.strip()]
     payload = doc_window(DOCUMENTS_DIR, doc_id, block_ids, radius=radius, anchor_text=q or None)
@@ -2250,7 +2294,8 @@ def render_manifest_doc(
     debug: str = Query(default=""),
 ):
     import json
-    
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", doc_id):
+        raise HTTPException(status_code=400, detail="Bad document id")
     manifest_path = os.path.join(DOCUMENTS_DIR, ".manifests", f"{doc_id}.json")
     if not os.path.isfile(manifest_path):
         raise HTTPException(status_code=404, detail="Document manifest not found")
@@ -2769,13 +2814,19 @@ p {{ margin: 0.75em 0; }}
 def index_documents(
     payload: IndexRequest | None = None,
     wait: bool = Query(default=False),
+    x_admin_token: str | None = Header(default=None),
 ):
+    expected = os.environ.get("BUG_ADMIN_TOKEN", "")
+    if not expected or not x_admin_token or not hmac.compare_digest(
+        x_admin_token, expected
+    ):
+        raise HTTPException(status_code=403, detail="forbidden")
     data = payload or IndexRequest()
-    directory = os.path.abspath(data.directory or DOCUMENTS_DIR)
+    directory = os.path.abspath(DOCUMENTS_DIR)
     wait_for_completion = data.wait or wait
 
     if not os.path.isdir(directory):
-        raise HTTPException(status_code=400, detail=f"directory not found: {directory}")
+        raise HTTPException(status_code=400, detail="documents directory not found")
 
     _assert_no_active_index_job()
 
