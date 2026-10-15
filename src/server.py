@@ -14,9 +14,9 @@ from threading import Lock
 from typing import Any
 from uuid import uuid4
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from src.render_cache import (
@@ -29,7 +29,7 @@ from src.render_cache import (
 
 from src.inference.engine import InferenceEngine
 from src.meetings.online import search_online_meetings, warmup_online_feeds
-from src.meetings.service import feed_health, run_refresh_loop as run_meeting_refresh_loop, search_meetings
+from src.meetings.service import search_meetings, warmup_feeds as warmup_meeting_feeds
 from src.prompts.templates import NO_CONTEXT_TEMPLATE, USER_MESSAGE_TEMPLATE, system_message_for_tone
 from src.rag.chroma_client import find_largest_collection_with_prefix
 from src.rag.embeddings import warmup as warmup_embeddings
@@ -52,6 +52,27 @@ from src.tasks.job_store import (
     set_index_version,
     swap_active_collection_name,
     update_index_task,
+)
+from src.sms_subscriptions import (
+    DAILY_BOOKS_CATALOG,
+    DEFAULT_DELIVERY_TIME,
+    DEFAULT_TIMEZONE,
+    format_books_label,
+    format_daily_reading_sms,
+    format_time_12h,
+    format_tz_short,
+    get_subscriber,
+    mark_subscriber_sent,
+    normalize_books,
+    normalize_delivery_time,
+    normalize_phone,
+    normalize_timezone,
+    parse_sms_subscription_command,
+    run_daily_sms_scheduler_tick,
+    send_daily_readings_for_subscriber,
+    send_twilio_sms,
+    set_subscriber_enabled,
+    upsert_subscriber,
 )
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -963,30 +984,41 @@ async def _warmup_models() -> None:
         pass
 
 
-async def _refresh_online_meetings_forever() -> None:
-    # Cheap when fresh (cache hit); re-downloads once the 6h TTL lapses, so a
-    # user request never waits on the multi-MB directory feeds.
+async def _warmup_meetings() -> None:
+    try:
+        await warmup_meeting_feeds()
+    except Exception:
+        pass
+    try:
+        await warmup_online_feeds()
+    except Exception:
+        pass
+
+
+async def _daily_sms_scheduler_loop() -> None:
+    # Brief initial delay so server startup completes first
+    await asyncio.sleep(5)
     while True:
         try:
-            await warmup_online_feeds()
-        except Exception:
-            pass
-        await asyncio.sleep(30 * 60)
+            await asyncio.to_thread(run_daily_sms_scheduler_tick)
+        except Exception as exc:
+            print(f"[DAILY-SMS-LOOP-ERR] {exc}", flush=True)
+        await asyncio.sleep(30)
 
 
 @asynccontextmanager
-async def lifespan(app_: FastAPI):
+async def lifespan(_: FastAPI):
     try:
         _refresh_retriever(force=True)
     except Exception:
         pass
     asyncio.create_task(_warmup_models())
-    # Keep strong references: the loop only holds weak refs to tasks.
-    app_.state.background_tasks = [
-        asyncio.create_task(run_meeting_refresh_loop()),
-        asyncio.create_task(_refresh_online_meetings_forever()),
-    ]
-    yield
+    asyncio.create_task(_warmup_meetings())
+    scheduler_task = asyncio.create_task(_daily_sms_scheduler_loop())
+    try:
+        yield
+    finally:
+        scheduler_task.cancel()
 
 
 app = FastAPI(title="Sobriety Copilot", lifespan=lifespan)
@@ -1009,6 +1041,13 @@ async def validation_exception_handler(_, exc: RequestValidationError):
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(INDEX_HTML_PATH)
+
+
+@app.get("/sms")
+@app.get("/sms-optin")
+@app.get("/sms-optin.html")
+def sms_optin_page() -> FileResponse:
+    return FileResponse(os.path.join(STATIC_DIR, "sms-optin.html"))
 
 
 @app.get("/service-worker.js")
@@ -1140,24 +1179,41 @@ def _hyde_for_query(question: str) -> str | None:
     return passage
 
 
+_FOLLOWUP_GENERIC_WORDS = frozenset({
+    "specifically", "specific", "more", "detail", "details", "explain",
+    "elaborate", "list", "all", "full", "complete", "mean", "means",
+    "meaning", "apply", "applies", "example", "examples", "yes", "yeah",
+    "yep", "sure", "ok", "okay", "please", "thanks", "first", "second",
+    "third", "fourth", "other", "another", "next", "last", "one", "ones",
+    "part", "parts", "understand",
+})
+
+
 def _build_retrieval_query(message: str, history: list[dict[str, Any]]) -> str:
-    """Build a retrieval query that incorporates conversation context.
+    """Build a retrieval query that incorporates conversation context only when
+    the current message is a referential follow-up ("What are they specifically?",
+    "Tell me more about that", "Yes, list them").
 
-    For follow-up messages we append key phrases from the last few turns so the
-    retriever can resolve references like "tell me more" or "what about that".
-
-    For first-turn messages we use the user's wording verbatim. The corpus is
-    already entirely recovery literature, so adding a generic recovery hint
-    only dilutes the embedding and pulls back unrelated material.
+    When the current message already contains its own substantive topic terms
+    (e.g., "Where does it talk about resentments in the literature?"), we return
+    `message` verbatim so prior turns (like an earlier question about the Daily
+    Reflection) never contaminate the new topic's retrieval.
     """
     if not history:
         return message
+    from src.rag.retriever import QUERY_STOPWORDS, TOKEN_RE
+    tokens = [
+        t.lower() for t in TOKEN_RE.findall(message or "")
+        if len(t) > 1 and t.lower() not in QUERY_STOPWORDS and t.lower() not in _FOLLOWUP_GENERIC_WORDS
+    ]
+    if tokens:
+        return message
     parts = [message]
-    for turn in history[-4:]:
+    for turn in reversed(history[-4:]):
         content = (turn.get("content") or "")[:200].strip()
         if content:
             parts.append(content)
-    return " ".join(parts)
+    return "\n".join(parts)
 
 
 _explain_cache: dict[str, dict[str, str]] = {}
@@ -1225,218 +1281,6 @@ BATCH_EXPLAIN_PROMPT = (
     "  KEY: <the single most directly relevant phrase from the passage, "
     "verbatim, max 15 words. Empty if nothing is directly on point.>"
 )
-
-# ---------------------------------------------------------------------------
-# FR11 — /api/distill: on-device memory-distillation passthrough.
-#
-# The Flutter app runs a one-shot LLM extraction at conversation END to turn
-# the last turns into durable facts + open threads (FR11 Task 2/3). In server
-# mode the app POSTs the transcript tail here and we forward ONLY the built
-# prompt to the SHARED inference engine (the same engine /api/chat uses). The
-# product server stores NOTHING: the transcript exists only within this single
-# request — nothing is written to disk, SQLite, or Redis — mirroring
-# /api/chat's non-persistence default. The model's reply is parsed and
-# validated defensively here (same caps as the client) and returned as
-# {new_facts, threads}; the app re-applies its own caps before anything
-# reaches on-device storage.
-#
-# SYNC NOTE: DISTILL_INSTRUCTION is a faithful replica of the Flutter constant
-# kMemoryDistillPrompt in
-# mobile_app/lib/features/personal_memory/memory_distiller.dart (values
-# inlined: 12 turns, 3 facts, 2 threads, 120/50/120 chars). Keep the two in
-# lockstep — the client builds the identical prompt text when distilling
-# locally.
-# ---------------------------------------------------------------------------
-
-DISTILL_SYSTEM_MESSAGE = (
-    "You extract durable personal facts and unfinished topics from a "
-    "recovery-support chat. Reply with STRICT JSON only, exactly matching the "
-    "requested schema. No markdown fences, no prose, no commentary."
-)
-
-DISTILL_INSTRUCTION = (
-    "You are reading the last 12 turns of a finished recovery-support chat\n"
-    "between a person and their sober-companion assistant. Extract only what is\n"
-    "worth the assistant remembering in FUTURE conversations. Keep the person's\n"
-    "dignity; never use judgment phrasing about them or their recovery.\n"
-    "\n"
-    "Reply with STRICT JSON only — no markdown fences, no prose, no commentary —\n"
-    "matching EXACTLY this schema:\n"
-    '{"new_facts": ["..."], "threads": [{"id": "kebab-case-slug", "title": "...", "detail": "...", "resolved": false}]}\n'
-    "\n"
-    "Rules:\n"
-    "- new_facts: up to 3 durable traits, preferences, or plans about the\n"
-    "  person that would matter later, written in the THIRD person (e.g. \"Prefers\n"
-    "  evening meetings over morning ones\"). Max 120 chars each.\n"
-    "  NEVER copy message bodies verbatim. No medical or diagnostic claims.\n"
-    "- threads: up to 2 UNFINISHED topics from this conversation worth\n"
-    "  resuming. \"id\" is a kebab-case slug; \"title\" max 50 chars;\n"
-    "  \"detail\" max 120 chars (where it left off / natural next\n"
-    "  step). \"resolved\" is always false.\n"
-    "- If nothing is worth remembering, return empty arrays.\n"
-    "\n"
-    "Existing memory is listed below ONLY to prevent duplicates — never re-issue a\n"
-    "fact or thread already recorded there."
-)
-
-# Suggest-mode variant for the "Remember this" button (FR11.2): proposes the
-# ONE most memory-worthy fact from the recent conversation as a prefilled
-# suggestion the user confirms/edits. Kept in lockstep with the Flutter
-# constant kMemorySuggestPrompt (memory_distiller.dart). Same caps/sync rules
-# as DISTILL_INSTRUCTION above.
-DISTILL_SUGGEST_INSTRUCTION = (
-    "You are reading the recent turns of an ongoing recovery-support chat\n"
-    "between a person and their sober-companion assistant. The person just\n"
-    "tapped \"Remember this\" — propose the SINGLE fact from this conversation\n"
-    "they most plausibly want remembered for future chats. Keep the person's\n"
-    "dignity; never use judgment phrasing about them or their recovery.\n"
-    "\n"
-    "Reply with STRICT JSON only — no markdown fences, no prose, no commentary —\n"
-    "matching EXACTLY this schema:\n"
-    '{"new_facts": ["..."], "threads": []}\n'
-    "\n"
-    "Rules:\n"
-    "- new_facts contains EXACTLY ONE string: the best candidate, written in\n"
-    '  the THIRD person (e.g. "Got sober on September 21, 2001"), max 120\n'
-    "  chars. Prefer durable personal facts the user stated (dates, people,\n"
-    "  triggers, plans, preferences) over literature content the assistant\n"
-    "  said. NEVER copy a message body verbatim. No medical or diagnostic\n"
-    "  claims.\n"
-    "- threads is ALWAYS an empty array.\n"
-    '- If nothing personal is memory-worthy, return {"new_facts": [],\n'
-    '  "threads": []} and the UI will fall back to an empty editable field.\n'
-)
-
-
-class DistillRequest(BaseModel):
-    """FR11 memory-distillation passthrough payload.
-
-    transcript: the conversation tail as {role, content} turns (user/assistant
-    only). Capped server-side: the LAST 12 turns are kept and each content is
-    truncated at 2000 chars. Junk turns (unknown role / blank content) are
-    dropped defensively; a transcript with zero usable turns is a 422.
-    existing: optional {"facts": [titles], "threads": [titles]} digest of what
-    the app already remembers, folded into the prompt so the model dedupes.
-    suggest_mode: switches the prompt to the single-fact suggestion variant
-    used by the "Remember this" prefill flow (same caps, same parsing).
-    """
-
-    transcript: list[dict[str, str]] = Field(default_factory=list)
-    existing: dict[str, Any] | None = None
-    suggest_mode: bool = False
-
-
-def _distill_existing_titles(existing: dict[str, Any] | None, key: str) -> str:
-    if not existing:
-        return "(none)"
-    value = existing.get(key)
-    if not isinstance(value, list) or not value:
-        return "(none)"
-    titles = [str(t).strip() for t in value if str(t).strip()]
-    if not titles:
-        return "(none)"
-    return "[" + " | ".join(titles) + "]"
-
-
-def _build_distill_prompt(
-    turns: list[tuple[str, str]],
-    existing: dict[str, Any] | None,
-    suggest_mode: bool = False,
-) -> str:
-    """Mirrors MemoryDistiller._buildPrompt on the Flutter side: instruction +
-    known-memory digest lines + the conversation tail rendered with roles.
-    suggest_mode swaps in the single-fact suggestion instruction."""
-    lines = [
-        DISTILL_SUGGEST_INSTRUCTION if suggest_mode else DISTILL_INSTRUCTION,
-        "",
-        f"Existing memory — facts: {_distill_existing_titles(existing, 'facts')}",
-        f"Existing memory — open threads: {_distill_existing_titles(existing, 'threads')}",
-        "",
-        f"Conversation (last {len(turns)} turns):",
-    ]
-    for role, content in turns:
-        lines.append(f"{role.capitalize()}: {content.strip()}")
-    return "\n".join(lines)
-
-
-def _distill_slugify(title: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
-
-
-def _parse_distill_response(raw: str) -> dict[str, Any]:
-    """Defensively parse the model's completion into {new_facts, threads}.
-
-    Tolerates markdown fences and prose-wrapped JSON (first {...} block),
-    drops non-string/non-map garbage, and applies the SAME caps as the Flutter
-    parser: 3 facts / 2 threads, fact 120 chars, title 50, detail 120.
-    Raises ValueError on anything unparseable (mapped to HTTP 502 by the
-    endpoint).
-    """
-    text = (raw or "").strip()
-    if not text:
-        raise ValueError("malformed model output: empty response")
-
-    # Strip ```json ... ``` fences (with or without a language tag).
-    if text.startswith("```"):
-        first_nl = text.find("\n")
-        if first_nl >= 0:
-            text = text[first_nl + 1 :].strip()
-        else:
-            text = re.sub(r"^```[a-zA-Z0-9_-]*", "", text).strip()
-        if text.endswith("```"):
-            text = text[: -3].strip()
-
-    def _decode(blob: str) -> Any:
-        return json.loads(blob)
-
-    obj: Any = None
-    try:
-        obj = _decode(text)
-    except Exception:
-        start, end = text.find("{"), text.rfind("}")
-        if start < 0 or end <= start:
-            raise ValueError("malformed model output: no JSON object found")
-        try:
-            obj = _decode(text[start : end + 1])
-        except Exception as exc:
-            raise ValueError("malformed model output: invalid JSON") from exc
-    if not isinstance(obj, dict):
-        raise ValueError("malformed model output: not a JSON object")
-
-    facts: list[str] = []
-    raw_facts = obj.get("new_facts")
-    if isinstance(raw_facts, list):
-        for item in raw_facts:
-            if len(facts) >= 3:
-                break
-            if not isinstance(item, str):
-                continue
-            t = item.strip()
-            if not t:
-                continue
-            facts.append(t[:120])
-
-    threads: list[dict[str, Any]] = []
-    raw_threads = obj.get("threads")
-    if isinstance(raw_threads, list):
-        for item in raw_threads:
-            if len(threads) >= 2:
-                break
-            if not isinstance(item, dict):
-                continue
-            tid = str(item.get("id") or "").strip()
-            title = str(item.get("title") or "").strip()[:50]
-            detail = str(item.get("detail") or "").strip()[:120]
-            resolved = item.get("resolved") is True
-            if not tid and not title:
-                continue
-            if not tid:
-                tid = _distill_slugify(title) or "thread"
-            threads.append(
-                {"id": tid, "title": title, "detail": detail, "resolved": resolved}
-            )
-
-    return {"new_facts": facts, "threads": threads}
 
 
 def _parse_batch_explanations(text: str, n: int) -> list[dict[str, str]]:
@@ -1565,70 +1409,530 @@ def explain_snippet(payload: ExplainSnippetRequest):
     return result
 
 
-@app.post("/api/distill")
-def distill(payload: DistillRequest):
-    """FR11 memory-distillation passthrough (one-shot, stateless).
+@app.post("/api/sms")
+async def incoming_sms(request: Request):
+    """Webhook for Twilio SMS interactions with carrier-compliant HELP/STOP handling."""
+    from urllib.parse import parse_qs
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
 
-    Privacy contract: this endpoint forwards ONLY the built distillation prompt
-    to the shared inference engine and returns parsed facts/threads. The
-    transcript exists only within this single request — NOTHING is written to
-    disk, SQLite, or Redis, mirroring /api/chat's non-persistence default.
-    Caps: last 12 turns, each content truncated at 2000 chars; the response is
-    re-capped at 3 facts / 2 threads / 120 / 50 / 120 chars before it leaves.
-    Engine failure -> 502; malformed model output -> 502 with detail.
-    """
-    turns = payload.transcript or []
-    # Server-side caps: keep the LAST 12 turns, truncate each content at 2000.
-    turns = turns[-12:]
-    cleaned: list[tuple[str, str]] = []
-    for turn in turns:
-        if not isinstance(turn, dict):
-            continue
-        role = str(turn.get("role") or "").strip().lower()
-        content = str(turn.get("content") or "").strip()
-        if role not in ("user", "assistant") or not content:
-            continue  # drop junk turns defensively rather than failing the call
-        cleaned.append((role, content[:2000]))
-    if not cleaned:
+    body_text = ""
+    from_phone = "default_sms"
+    try:
+        raw_bytes = await request.body()
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            try:
+                json_data = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
+                body_text = str(json_data.get("Body", "")).strip()
+                from_phone = str(json_data.get("From", "")).strip() or "default_sms"
+            except Exception:
+                pass
+        if not body_text:
+            parsed = parse_qs(raw_bytes.decode("utf-8", errors="ignore"))
+            body_text = str(parsed.get("Body", [""])[0]).strip()
+            from_phone = str(parsed.get("From", ["default_sms"])[0]).strip() or "default_sms"
+    except Exception:
+        body_text = ""
+    body_text = body_text[:800]
+    raw_phone = re.sub(r"[^0-9+a-zA-Z_-]", "", from_phone)[:32] or "default_sms"
+    from_phone = normalize_phone(raw_phone) or raw_phone
+    upper_body = body_text.upper()
+
+    _sms_injection_re = re.compile(
+        r"(?:ignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions"
+        r"|reveal\s+(?:your\s+)?(?:system\s+prompt|hidden\s+instructions)"
+        r"|repeat\s+(?:your\s+)?(?:system\s+prompt|instructions)\s+verbatim"
+        r"|/etc/passwd|\.env\b|TWILIO_AUTH_TOKEN|LLM_API_KEY|REDIS_URL)",
+        re.IGNORECASE,
+    )
+
+    sub_cmd = parse_sms_subscription_command(body_text)
+
+    if upper_body in {"HELP", "INFO"}:
+        twiml_reply = (
+            "Sobriety Copilot: For support email support@sobrietycopilot.com or visit "
+            "sobrietycopilot.com/sms. Reply DAILY 7am PT for daily readings, NEW to reset chat, "
+            "or STOP to cancel. Msg freq varies. Msg & data rates may apply."
+        )
+    elif upper_body in {"STOP", "CANCEL", "QUIT", "END", "OPTOUT", "UNSUBSCRIBE", "STOPALL", "REVOKE"}:
+        try:
+            set_subscriber_enabled(from_phone, False)
+        except Exception:
+            pass
+        twiml_reply = (
+            "Sobriety Copilot: You have been unsubscribed and will receive no further messages. "
+            "Reply START to resubscribe. Msg & data rates may apply."
+        )
+    elif upper_body in {"START", "YES", "UNSTOP"}:
+        try:
+            if get_subscriber(from_phone):
+                set_subscriber_enabled(from_phone, True)
+        except Exception:
+            pass
+        twiml_reply = (
+            "Sobriety Copilot: Welcome! You are subscribed to recovery support & reflections. "
+            "Msg freq varies. Msg & data rates may apply. Reply HELP for help, STOP to cancel."
+        )
+    elif upper_body in {"NEW", "RESET", "CLEAR", "NEW CHAT", "START OVER"}:
+        try:
+            get_redis_client().delete(f"sc:sms:history:{from_phone}")
+        except Exception:
+            pass
+        twiml_reply = (
+            "Sobriety Copilot: Started a fresh conversation. What's on your mind or what would "
+            "you like to look up in the literature?"
+        )
+    elif sub_cmd is not None:
+        action = sub_cmd.get("action")
+        if action == "pause":
+            try:
+                set_subscriber_enabled(from_phone, False)
+            except Exception:
+                pass
+            twiml_reply = (
+                "Sobriety Copilot: Your daily reading SMS delivery is now paused. "
+                "You can still text questions anytime, or reply DAILY 7:00 AM PT to resume daily readings."
+            )
+        elif action == "status":
+            sub = get_subscriber(from_phone)
+            if sub and sub.get("enabled"):
+                t_label = format_time_12h(sub["delivery_time"])
+                tz_label = format_tz_short(sub["timezone"])
+                b_label = format_books_label(sub["books"])
+                twiml_reply = (
+                    f"Sobriety Copilot: Active daily SMS schedule — {b_label} delivered daily at "
+                    f"{t_label} {tz_label}. Reply DAILY <time> <tz> to change, SEND NOW for today's "
+                    f"reading, or PAUSE to pause."
+                )
+            else:
+                twiml_reply = (
+                    "Sobriety Copilot: You don't have an active daily SMS schedule. "
+                    "Reply DAILY 7:00 AM PT (or your preferred time/timezone) to subscribe, "
+                    "or manage preferences at sobrietycopilot.com/sms."
+                )
+        elif action == "send_now":
+            sub = get_subscriber(from_phone)
+            books = normalize_books(sub.get("books") if sub else None)
+            tz_name = (sub.get("timezone") if sub else None) or DEFAULT_TIMEZONE
+            today_local = _dt.datetime.now(ZoneInfo(tz_name)).date()
+            first_msg = format_daily_reading_sms(
+                books[0], target_date=today_local, include_reply_prompt=True
+            )
+            if first_msg:
+                twiml_reply = first_msg
+                try:
+                    hist_key = f"sc:sms:history:{from_phone}"
+                    raw_hist = get_redis_client().get(hist_key)
+                    sms_history = json.loads(raw_hist) if raw_hist else []
+                    if not isinstance(sms_history, list):
+                        sms_history = []
+                    sms_history.append({"role": "assistant", "content": first_msg})
+                    get_redis_client().setex(hist_key, 604800, json.dumps(sms_history[-8:]))
+                except Exception:
+                    pass
+                for extra_book in books[1:]:
+                    extra_msg = format_daily_reading_sms(
+                        extra_book, target_date=today_local, include_reply_prompt=True
+                    )
+                    if extra_msg:
+                        send_twilio_sms(from_phone, extra_msg, record_in_history=True)
+            else:
+                twiml_reply = "Sobriety Copilot: Unable to load today's reading right now. Please try again shortly."
+        else:
+            # action == "subscribe"
+            existing = get_subscriber(from_phone)
+            d_time = sub_cmd.get("delivery_time") or (
+                existing["delivery_time"] if existing else DEFAULT_DELIVERY_TIME
+            )
+            tz_name = sub_cmd.get("timezone") or (
+                existing["timezone"] if existing else DEFAULT_TIMEZONE
+            )
+            books = sub_cmd.get("books") or (
+                existing["books"] if existing else ["daily-reflections"]
+            )
+            sub = upsert_subscriber(
+                phone=from_phone,
+                enabled=True,
+                delivery_time=d_time,
+                timezone=tz_name,
+                books=books,
+            )
+            if sub:
+                t_label = format_time_12h(sub["delivery_time"])
+                tz_label = format_tz_short(sub["timezone"])
+                b_label = format_books_label(sub["books"])
+                twiml_reply = (
+                    f"Sobriety Copilot: You're subscribed to {b_label} every day at {t_label} {tz_label}! "
+                    f"Reply SEND NOW to get today's reading right away, DAILY <time> <tz> to change your time, "
+                    f"PAUSE to pause daily texts, or STOP to cancel."
+                )
+            else:
+                twiml_reply = (
+                    "Sobriety Copilot: Could not save your subscription for this number. "
+                    "Visit sobrietycopilot.com/sms to subscribe."
+                )
+    elif _sms_injection_re.search(body_text):
+        twiml_reply = (
+            "Sobriety Copilot is a 12-step recovery and literature companion. "
+            "Ask me about the Steps, Traditions, Daily Reflections, or recovery literature."
+        )
+    else:
+        try:
+            # Per-sender sliding rate limit (max 20 SMS queries per 10 minutes)
+            rate_limited = False
+            try:
+                rl_key = f"sc:sms:rl:{from_phone}"
+                rc = get_redis_client()
+                cnt = rc.incr(rl_key)
+                if cnt == 1:
+                    rc.expire(rl_key, 600)
+                if cnt > 20:
+                    rate_limited = True
+            except Exception:
+                pass
+            if rate_limited:
+                twiml_reply = (
+                    "Sobriety Copilot: You've sent several messages quickly. Please pause a "
+                    "few minutes before sending your next recovery question."
+                )
+                escaped_rl = (
+                    twiml_reply.replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace('"', "&quot;")
+                )
+                return Response(
+                    content=f'<?xml version="1.0" encoding="UTF-8"?><Response><Message>{escaped_rl}</Message></Response>',
+                    media_type="application/xml",
+                )
+
+            # Load per-sender SMS conversation history from Redis so ongoing
+            # multi-turn conversations stay coherent by default.
+            hist_key = f"sc:sms:history:{from_phone}"
+            sms_history: list[dict] = []
+            try:
+                raw_hist = get_redis_client().get(hist_key)
+                if raw_hist:
+                    loaded = json.loads(raw_hist)
+                    if isinstance(loaded, list):
+                        sms_history = loaded[-8:]
+            except Exception:
+                sms_history = []
+
+            retriever_instance = _safe_get_retriever()
+            results = []
+            retrieval_query = body_text
+            if retriever_instance and body_text:
+                retrieval_query = _build_retrieval_query(body_text, sms_history)
+                hyde_passage = _hyde_for_query(body_text)
+                embedding_query = (
+                    f"{body_text}\n\n{hyde_passage}" if hyde_passage else retrieval_query
+                )
+                results = retriever_instance.retrieve(
+                    retrieval_query,
+                    embedding_query=embedding_query,
+                )
+
+            if results:
+                context = retriever_instance.format_context(results)
+                prompt = USER_MESSAGE_TEMPLATE.format(context=context, question=body_text)
+            else:
+                prompt = NO_CONTEXT_TEMPLATE.format(question=body_text)
+
+            sms_sys_msg = (
+                system_message_for_tone("warm")
+                + "\n\nSMS Delivery Guidelines:\n"
+                "- You are replying via SMS text message in a continuous conversation thread. "
+                "Provide the exact same literature breadth (Big Book, Twelve Steps and Twelve "
+                "Traditions, As Bill Sees It, Living Sober, and the full recovery library), "
+                "depth of insight, and directness as the main web/mobile app.\n"
+                "- Maintain a coherent ongoing conversation when the person follows up or continues "
+                "a thread, and pivot cleanly to the newly retrieved literature whenever they ask "
+                "about a new topic (never force an earlier turn's book, like Daily Reflections, "
+                "onto a new topic).\n"
+                "- Format as plain text only (no markdown asterisks ** or #, no bracketed [1] citations).\n"
+                "- Keep general responses to 2 to 3 tight paragraphs (around 800 to 1,150 characters total) "
+                "so the entire answer finishes cleanly without truncation, unless the user asks for a "
+                "complete list (such as all Twelve Steps or Twelve Traditions) or a full daily reading, "
+                "in which case provide the complete text."
+            )
+            active_eng = engine
+            if engine_fallback is not None:
+                try:
+                    if get_redis_client().get(_BREAKER_KEY):
+                        active_eng = engine_fallback
+                except Exception:
+                    pass
+            try:
+                raw_response = active_eng.generate(
+                    prompt=prompt,
+                    history=sms_history,
+                    max_tokens=1536,
+                    system_message=sms_sys_msg,
+                )
+            except Exception as gen_err:
+                if engine_fallback is not None and active_eng is not engine_fallback:
+                    raw_response = engine_fallback.generate(
+                        prompt=prompt,
+                        history=sms_history,
+                        max_tokens=1536,
+                        system_message=sms_sys_msg,
+                    )
+                else:
+                    raise gen_err
+
+            clean_resp = re.sub(r"\[\d+\]", "", raw_response or "")
+            clean_resp = re.sub(r"[*_#`]", "", clean_resp).strip()
+            # Normalize horizontal whitespace while preserving line breaks for lists
+            clean_resp = "\n".join(re.sub(r"[ \t]+", " ", ln).strip() for ln in clean_resp.splitlines())
+            clean_resp = re.sub(r"\n{3,}", "\n\n", clean_resp).strip()
+            # Twilio <Message> allows up to 1600 chars; cap at 1480 and prefer ending on a full sentence
+            if len(clean_resp) > 1480:
+                window = clean_resp[:1480]
+                sent_matches = list(re.finditer(r"[.!?](?:['\"\u201d\u2019])?(?=\s|$)", window))
+                if sent_matches and sent_matches[-1].end() >= 800:
+                    clean_resp = window[: sent_matches[-1].end()].strip()
+                else:
+                    cut = window[:1475].rsplit(" ", 1)[0]
+                    clean_resp = (cut or window[:1475]) + "..."
+
+            # Persist updated conversation turn to Redis (7-day TTL)
+            try:
+                sms_history.append({"role": "user", "content": body_text})
+                sms_history.append({"role": "assistant", "content": clean_resp})
+                get_redis_client().setex(hist_key, 604800, json.dumps(sms_history[-8:]))
+            except Exception:
+                pass
+
+            twiml_reply = clean_resp
+        except Exception as e:
+            print(f"[SMS-ERR] {type(e).__name__}: {e}", flush=True)
+            twiml_reply = (
+                "Sobriety Copilot: Thank you for your message. One day at a time! "
+                "For help, reply HELP or email support@sobrietycopilot.com. Reply STOP to cancel."
+            )
+
+    escaped_reply = (
+        twiml_reply.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+    xml_content = f'<?xml version="1.0" encoding="UTF-8"?><Response><Message>{escaped_reply}</Message></Response>'
+    return Response(content=xml_content, media_type="application/xml")
+
+
+@app.get("/api/sms/subscription")
+def get_sms_subscription(phone: str = Query(default="")):
+    """Look up current SMS daily reading subscription status and available books catalog."""
+    catalog = [
+        {"id": k, "label": v["label"], "fellowship": v["fellowship"]}
+        for k, v in DAILY_BOOKS_CATALOG.items()
+    ]
+    raw = (phone or "").strip()
+    if not raw:
+        return {"status": "ok", "subscription": None, "catalog": catalog}
+    norm = normalize_phone(raw)
+    if not norm:
         raise HTTPException(
-            status_code=422,
-            detail="transcript must contain at least one {role, content} turn",
+            status_code=400,
+            detail="Please enter a valid 10-digit US/Canada phone number.",
+        )
+    sub = get_subscriber(norm)
+    return {
+        "status": "ok",
+        "phone": norm,
+        "subscription": sub,
+        "catalog": catalog,
+    }
+
+
+@app.post("/api/sms/optin")
+async def web_sms_optin(request: Request):
+    """Records voluntary web/mobile SMS opt-in and daily reading schedule preferences."""
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+
+    raw_phone = str(data.get("phone", "")).strip()
+    action = str(data.get("action", "")).strip().lower()
+    consent = bool(data.get("consent", False))
+    enabled_flag = data.get("enabled", True)
+    send_now = bool(data.get("send_now", False))
+    delivery_time = data.get("delivery_time")
+    timezone = data.get("timezone")
+    books = data.get("books")
+
+    if action in {"pause", "unsubscribe"} or enabled_flag is False:
+        norm = normalize_phone(raw_phone)
+        if not norm:
+            raise HTTPException(
+                status_code=400,
+                detail="Please enter a valid phone number to pause or unsubscribe.",
+            )
+        sub = set_subscriber_enabled(norm, False)
+        return {
+            "status": "ok",
+            "enrolled": False,
+            "subscription": sub,
+            "message": "Your daily SMS readings have been paused. You can re-enable them anytime.",
+        }
+
+    if action == "send_now":
+        norm = normalize_phone(raw_phone)
+        if not norm:
+            raise HTTPException(
+                status_code=400,
+                detail="Please enter a valid 10-digit US/Canada phone number.",
+            )
+        sub = get_subscriber(norm) or {
+            "phone": norm,
+            "timezone": normalize_timezone(str(timezone) if timezone else None),
+            "books": normalize_books(books if isinstance(books, list) else ([str(books)] if books else None)),
+        }
+        local_today = _dt.datetime.now(ZoneInfo(sub["timezone"])).date()
+        sent_cnt = await asyncio.to_thread(
+            send_daily_readings_for_subscriber, sub, local_today
+        )
+        return {
+            "status": "ok",
+            "enrolled": bool(sub.get("enabled", False)),
+            "sent_now_count": sent_cnt,
+            "subscription": get_subscriber(norm),
+            "message": (
+                "Today's reading has been texted to your phone!"
+                if sent_cnt > 0
+                else "Unable to send SMS right now. Please check your phone number and try again."
+            ),
+        }
+
+    if not raw_phone or not consent:
+        return {
+            "status": "ok",
+            "enrolled": False,
+            "subscription": None,
+            "message": "Preferences saved. SMS enrollment skipped (phone and consent are required to subscribe).",
+        }
+
+    norm = normalize_phone(raw_phone)
+    if not norm:
+        raise HTTPException(
+            status_code=400,
+            detail="Please enter a valid 10-digit US/Canada phone number.",
         )
 
-    prompt = _build_distill_prompt(cleaned, payload.existing, payload.suggest_mode)
-    try:
-        raw = engine.generate(
-            prompt=prompt,
-            history=[],
-            max_tokens=400,
-            system_message=DISTILL_SYSTEM_MESSAGE,
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail=f"inference engine failure: {exc}"
-        ) from exc
+    sub = upsert_subscriber(
+        phone=norm,
+        enabled=True,
+        delivery_time=str(delivery_time) if delivery_time is not None else None,
+        timezone=str(timezone) if timezone is not None else None,
+        books=books if isinstance(books, list) else ([str(books)] if books else None),
+        mark_sent_today=send_now,
+    )
+    if not sub:
+        raise HTTPException(status_code=500, detail="Unable to save subscription.")
 
-    try:
-        return _parse_distill_response(raw)
-    except ValueError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    t_label = format_time_12h(sub["delivery_time"])
+    tz_label = format_tz_short(sub["timezone"])
+    b_label = format_books_label(sub["books"])
+
+    welcome_msg = (
+        f"Sobriety Copilot: Welcome! You're subscribed to {b_label} delivered daily at "
+        f"{t_label} {tz_label}. Reply to any reading to chat about it, text SEND NOW for "
+        f"today's reading, PAUSE to pause, or STOP to cancel. Msg & data rates may apply."
+    )
+    await asyncio.to_thread(send_twilio_sms, norm, welcome_msg, False)
+
+    sent_now_count = 0
+    if send_now:
+        local_today = _dt.datetime.now(ZoneInfo(sub["timezone"])).date()
+        today_str = local_today.strftime("%Y-%m-%d")
+        mark_subscriber_sent(norm, today_str)
+        try:
+            get_redis_client().setex(f"sc:sms:daily_sent:{norm}:{today_str}", 172800, "1")
+        except Exception:
+            pass
+        sent_now_count = await asyncio.to_thread(
+            send_daily_readings_for_subscriber, sub, local_today
+        )
+
+    return {
+        "status": "ok",
+        "enrolled": True,
+        "sent_now_count": sent_now_count,
+        "subscription": sub,
+        "message": (
+            f"Subscribed! You'll receive {b_label} daily at {t_label} {tz_label}."
+            + (" Today's reading has also been texted to your phone!" if sent_now_count > 0 else "")
+        ),
+    }
+
+
+
+_PROMPT_INJECTION_RE = re.compile(
+    r"(?:ignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions"
+    r"|reveal\s+(?:your\s+)?(?:system\s+prompt|hidden\s+instructions)"
+    r"|repeat\s+(?:your\s+)?(?:system\s+prompt|instructions)\s+verbatim"
+    r"|/etc/passwd|\.env\b|TWILIO_AUTH_TOKEN|LLM_API_KEY|REDIS_URL)",
+    re.IGNORECASE,
+)
 
 
 @app.post("/api/chat")
-def chat(payload: ChatRequest):
+def chat(payload: ChatRequest, request: Request):
     import time as _chat_time
     _chat_t0 = _chat_time.monotonic()
     
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="missing 'message' field")
 
-    user_id = (payload.user_id or "default_user").strip() or "default_user"
+    # Per-IP sliding rate limit (max 30 chat queries per 10 minutes)
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        or (request.client.host if request.client else "unknown")
+    )
+    client_ip = re.sub(r"[^0-9a-fA-F.:_-]", "", client_ip)[:48] or "unknown"
+    try:
+        rl_key = f"sc:chat:rl:{client_ip}"
+        rc = get_redis_client()
+        cnt = rc.incr(rl_key)
+        if cnt == 1:
+            rc.expire(rl_key, 600)
+        if cnt > 30:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded. Please wait a few minutes.")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    query = payload.message.strip()[:2000]
+    if _PROMPT_INJECTION_RE.search(query):
+        def _refuse_stream():
+            msg = (
+                "Sobriety Copilot is a 12-step recovery and literature companion. "
+                "Ask me about the Steps, Traditions, Daily Reflections, or recovery literature."
+            )
+            yield f"data: {json.dumps({'sources': []})}\n\n"
+            yield f"data: {json.dumps({'token': msg})}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(_refuse_stream(), media_type="text/event-stream")
+
+    user_id = re.sub(r"[^0-9a-zA-Z_-]", "", (payload.user_id or "default_user").strip())[:64] or "default_user"
     user_state = memory_manager.get_user_state(user_id)
     user_state_note = format_state_note(user_state)
 
     retriever_instance = _safe_get_retriever()
-    query = payload.message
-    history = payload.history
+    history = [
+        {"role": str(t.get("role", "user")), "content": str(t.get("content", ""))[:2000]}
+        for t in (payload.history or [])[-12:]
+        if isinstance(t, dict)
+    ]
     categories = _normalize_categories(payload.categories)
 
     # A/B model variant routing -------------------------------------------------
@@ -1719,11 +2023,7 @@ def chat(payload: ChatRequest):
         sys_msg = f"{sys_msg}\n\n{user_state_note}" if sys_msg else user_state_note
     client_note = (payload.client_context or "").strip()
     if client_note:
-        # FR11: the client now merges the sobriety day-count line with the
-        # personal-memory snapshot (<= 400 chars by construction), so the
-        # injection clamp is widened to 600 to fit both. It only bounds the
-        # injected note length; nothing here is persisted.
-        client_note = client_note.replace("\n", " ")[:600]
+        client_note = client_note.replace("\n", " ")[:300]
         note_line = (
             "Personal context from their device for this reply only "
             f"(mention only if it fits what they're asking): {client_note}"
@@ -2086,7 +2386,7 @@ def doc_window_endpoint(doc_id: str, blocks: str = Query(default=""),
     an index built against an older extraction of the book.
     """
     from src.rag.graph import doc_window
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", doc_id):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", doc_id):
         raise HTTPException(status_code=400, detail="Bad document id")
     block_ids = [b.strip() for b in blocks.split(",") if b.strip()]
     payload = doc_window(DOCUMENTS_DIR, doc_id, block_ids, radius=radius, anchor_text=q or None)
@@ -2166,36 +2466,16 @@ async def meetings(
     lat: float = Query(...),
     lng: float = Query(...),
     radius_mi: float = Query(25.0, ge=1.0, le=200.0),
-    max: int = Query(30, ge=1, le=300),
+    max: int = Query(30, ge=1, le=100),
     day: int | None = Query(None, ge=0, le=6),
     attendance: str | None = Query(None, pattern="^(inperson|online|all)$"),
     fellowship: str | None = Query(None, max_length=40),
-    range_: str | None = Query(None, alias="range", pattern="^(upcoming|today|tonight|tomorrow|week|any)$"),
-    tod: str | None = Query(None, pattern="^(any|morning|afternoon|evening|late)$"),
-    now_day: int | None = Query(None, ge=0, le=6),
-    now_min: int | None = Query(None, ge=0, le=1439),
 ):
-    """In-person/hybrid meetings near a point, from every intergroup feed plus
-    the NA BMLT aggregator.
-
-    `range`/`tod` with the client's local clock (`now_day` 0=Sun, `now_min`)
-    select server-side — soonest first for upcoming/today/tonight/tomorrow —
-    so a dense metro returns the right `max` meetings rather than the nearest.
-    Without them results are nearest-first (what app builds < 1.4.1 expect).
-    """
     return await search_meetings(
         lat=lat, lng=lng,
         radius_mi=radius_mi, max_results=max,
         day=day, attendance=attendance, fellowship=fellowship,
-        range_=range_, time_of_day=tod, now_day=now_day, now_min=now_min,
     )
-
-
-@app.get("/api/meetings/sources")
-async def meetings_sources():
-    """Per-feed health of the meeting catalog (status, meeting count, last
-    error), worst first — the place to spot a feed that stopped answering."""
-    return feed_health()
 
 
 @app.get("/api/meetings/online")
@@ -2288,7 +2568,8 @@ def render_manifest_doc(
     debug: str = Query(default=""),
 ):
     import json
-    
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", doc_id):
+        raise HTTPException(status_code=400, detail="Bad document id")
     manifest_path = os.path.join(DOCUMENTS_DIR, ".manifests", f"{doc_id}.json")
     if not os.path.isfile(manifest_path):
         raise HTTPException(status_code=404, detail="Document manifest not found")
@@ -2807,13 +3088,19 @@ p {{ margin: 0.75em 0; }}
 def index_documents(
     payload: IndexRequest | None = None,
     wait: bool = Query(default=False),
+    x_admin_token: str | None = Header(default=None),
 ):
+    expected = os.environ.get("BUG_ADMIN_TOKEN", "")
+    if not expected or not x_admin_token or not hmac.compare_digest(
+        x_admin_token, expected
+    ):
+        raise HTTPException(status_code=403, detail="forbidden")
     data = payload or IndexRequest()
-    directory = os.path.abspath(data.directory or DOCUMENTS_DIR)
+    directory = os.path.abspath(DOCUMENTS_DIR)
     wait_for_completion = data.wait or wait
 
     if not os.path.isdir(directory):
-        raise HTTPException(status_code=400, detail=f"directory not found: {directory}")
+        raise HTTPException(status_code=400, detail="documents directory not found")
 
     _assert_no_active_index_job()
 

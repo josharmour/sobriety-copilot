@@ -52,6 +52,11 @@ x-app-env: &app-env
   RENDER_CACHE_DIR: /home/app/render_cache
   RENDER_CACHE_MAX_DOCUMENTS: "8"
   USER_MEMORY_DB_PATH: /home/app/memory/user_memory.db
+  SMS_SUBSCRIPTIONS_DB_PATH: /home/app/memory/sms_subscriptions.db
+  TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID:-}"
+  TWILIO_AUTH_TOKEN: "${TWILIO_AUTH_TOKEN:-}"
+  TWILIO_PHONE_NUMBER: "${TWILIO_PHONE_NUMBER:-+17623769696}"
+  TWILIO_MESSAGING_SERVICE_SID: "${TWILIO_MESSAGING_SERVICE_SID:-}"
   # Bug report admin token — gates GET /api/bugs (reads expose conversation
   # history). Override via .env on the host or in your environment. Generate:
   #   python3 -c "import secrets; print(secrets.token_hex(24))"
