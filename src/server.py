@@ -1391,7 +1391,17 @@ async def incoming_sms(request: Request):
             from_phone = str(parsed.get("From", ["default_sms"])[0]).strip() or "default_sms"
     except Exception:
         body_text = ""
+    body_text = body_text[:800]
+    from_phone = re.sub(r"[^0-9+a-zA-Z_-]", "", from_phone)[:32] or "default_sms"
     upper_body = body_text.upper()
+
+    _sms_injection_re = re.compile(
+        r"(?:ignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions"
+        r"|reveal\s+(?:your\s+)?(?:system\s+prompt|hidden\s+instructions)"
+        r"|repeat\s+(?:your\s+)?(?:system\s+prompt|instructions)\s+verbatim"
+        r"|/etc/passwd|\.env\b|TWILIO_AUTH_TOKEN|LLM_API_KEY|REDIS_URL)",
+        re.IGNORECASE,
+    )
 
     if upper_body in {"HELP", "INFO"}:
         twiml_reply = (
@@ -1417,8 +1427,41 @@ async def incoming_sms(request: Request):
             "Sobriety Copilot: Started a fresh conversation. What's on your mind or what would "
             "you like to look up in the literature?"
         )
+    elif _sms_injection_re.search(body_text):
+        twiml_reply = (
+            "Sobriety Copilot is a 12-step recovery and literature companion. "
+            "Ask me about the Steps, Traditions, Daily Reflections, or recovery literature."
+        )
     else:
         try:
+            # Per-sender sliding rate limit (max 20 SMS queries per 10 minutes)
+            rate_limited = False
+            try:
+                rl_key = f"sc:sms:rl:{from_phone}"
+                rc = get_redis_client()
+                cnt = rc.incr(rl_key)
+                if cnt == 1:
+                    rc.expire(rl_key, 600)
+                if cnt > 20:
+                    rate_limited = True
+            except Exception:
+                pass
+            if rate_limited:
+                twiml_reply = (
+                    "Sobriety Copilot: You've sent several messages quickly. Please pause a "
+                    "few minutes before sending your next recovery question."
+                )
+                escaped_rl = (
+                    twiml_reply.replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace('"', "&quot;")
+                )
+                return Response(
+                    content=f'<?xml version="1.0" encoding="UTF-8"?><Response><Message>{escaped_rl}</Message></Response>',
+                    media_type="application/xml",
+                )
+
             # Load per-sender SMS conversation history from Redis so ongoing
             # multi-turn conversations stay coherent by default.
             hist_key = f"sc:sms:history:{from_phone}"
