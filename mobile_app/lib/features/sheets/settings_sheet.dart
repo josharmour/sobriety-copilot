@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sobriety_copilot_mobile/config/app_config.dart';
 import 'package:sobriety_copilot_mobile/config/capabilities.dart';
 import 'package:sobriety_copilot_mobile/data/models/meeting_models.dart';
+import 'package:sobriety_copilot_mobile/features/daily/sms_subscription_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
 import 'package:sobriety_copilot_mobile/features/private_mode/private_mode_section.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
@@ -183,6 +184,8 @@ class SettingsSheet extends ConsumerWidget {
                         onTap: () => showTrackerEditor(context, ref),
                       );
                     }),
+                    const SizedBox(height: AppSpacing.md),
+                    const SmsSubscriptionTile(asCard: false),
                     const SizedBox(height: AppSpacing.xl),
 
                     const SectionHeader('Reading & voice'),

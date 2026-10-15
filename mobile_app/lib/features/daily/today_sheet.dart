@@ -10,6 +10,7 @@ import 'package:sobriety_copilot_mobile/features/daily/inventory_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/daily/mood_log.dart';
 import 'package:sobriety_copilot_mobile/features/daily/mood_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/daily/reminders.dart';
+import 'package:sobriety_copilot_mobile/features/daily/sms_subscription_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/meditation/meditation_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/sobriety_tracker.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/streak_card.dart';
@@ -257,6 +258,8 @@ class TodaySheet extends ConsumerWidget {
                         ),
                       ),
                     ),
+                    const SizedBox(height: AppSpacing.md),
+                    const SmsSubscriptionTile(asCard: true),
                     const SizedBox(height: AppSpacing.xl),
                     if (remindersSupported) ...[
                       const SectionHeader('Reminders'),

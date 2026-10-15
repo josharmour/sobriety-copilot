@@ -53,6 +53,27 @@ from src.tasks.job_store import (
     swap_active_collection_name,
     update_index_task,
 )
+from src.sms_subscriptions import (
+    DAILY_BOOKS_CATALOG,
+    DEFAULT_DELIVERY_TIME,
+    DEFAULT_TIMEZONE,
+    format_books_label,
+    format_daily_reading_sms,
+    format_time_12h,
+    format_tz_short,
+    get_subscriber,
+    mark_subscriber_sent,
+    normalize_books,
+    normalize_delivery_time,
+    normalize_phone,
+    normalize_timezone,
+    parse_sms_subscription_command,
+    run_daily_sms_scheduler_tick,
+    send_daily_readings_for_subscriber,
+    send_twilio_sms,
+    set_subscriber_enabled,
+    upsert_subscriber,
+)
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -974,6 +995,17 @@ async def _warmup_meetings() -> None:
         pass
 
 
+async def _daily_sms_scheduler_loop() -> None:
+    # Brief initial delay so server startup completes first
+    await asyncio.sleep(5)
+    while True:
+        try:
+            await asyncio.to_thread(run_daily_sms_scheduler_tick)
+        except Exception as exc:
+            print(f"[DAILY-SMS-LOOP-ERR] {exc}", flush=True)
+        await asyncio.sleep(30)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     try:
@@ -982,7 +1014,11 @@ async def lifespan(_: FastAPI):
         pass
     asyncio.create_task(_warmup_models())
     asyncio.create_task(_warmup_meetings())
-    yield
+    scheduler_task = asyncio.create_task(_daily_sms_scheduler_loop())
+    try:
+        yield
+    finally:
+        scheduler_task.cancel()
 
 
 app = FastAPI(title="Sobriety Copilot", lifespan=lifespan)
@@ -1005,6 +1041,13 @@ async def validation_exception_handler(_, exc: RequestValidationError):
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(INDEX_HTML_PATH)
+
+
+@app.get("/sms")
+@app.get("/sms-optin")
+@app.get("/sms-optin.html")
+def sms_optin_page() -> FileResponse:
+    return FileResponse(os.path.join(STATIC_DIR, "sms-optin.html"))
 
 
 @app.get("/service-worker.js")
@@ -1392,7 +1435,8 @@ async def incoming_sms(request: Request):
     except Exception:
         body_text = ""
     body_text = body_text[:800]
-    from_phone = re.sub(r"[^0-9+a-zA-Z_-]", "", from_phone)[:32] or "default_sms"
+    raw_phone = re.sub(r"[^0-9+a-zA-Z_-]", "", from_phone)[:32] or "default_sms"
+    from_phone = normalize_phone(raw_phone) or raw_phone
     upper_body = body_text.upper()
 
     _sms_injection_re = re.compile(
@@ -1403,17 +1447,29 @@ async def incoming_sms(request: Request):
         re.IGNORECASE,
     )
 
+    sub_cmd = parse_sms_subscription_command(body_text)
+
     if upper_body in {"HELP", "INFO"}:
         twiml_reply = (
             "Sobriety Copilot: For support email support@sobrietycopilot.com or visit "
-            "sobrietycopilot.com. Msg freq varies. Msg & data rates may apply. Reply STOP to cancel."
+            "sobrietycopilot.com/sms. Reply DAILY 7am PT for daily readings, NEW to reset chat, "
+            "or STOP to cancel. Msg freq varies. Msg & data rates may apply."
         )
     elif upper_body in {"STOP", "CANCEL", "QUIT", "END", "OPTOUT", "UNSUBSCRIBE", "STOPALL", "REVOKE"}:
+        try:
+            set_subscriber_enabled(from_phone, False)
+        except Exception:
+            pass
         twiml_reply = (
             "Sobriety Copilot: You have been unsubscribed and will receive no further messages. "
             "Reply START to resubscribe. Msg & data rates may apply."
         )
     elif upper_body in {"START", "YES", "UNSTOP"}:
+        try:
+            if get_subscriber(from_phone):
+                set_subscriber_enabled(from_phone, True)
+        except Exception:
+            pass
         twiml_reply = (
             "Sobriety Copilot: Welcome! You are subscribed to recovery support & reflections. "
             "Msg freq varies. Msg & data rates may apply. Reply HELP for help, STOP to cancel."
@@ -1427,6 +1483,95 @@ async def incoming_sms(request: Request):
             "Sobriety Copilot: Started a fresh conversation. What's on your mind or what would "
             "you like to look up in the literature?"
         )
+    elif sub_cmd is not None:
+        action = sub_cmd.get("action")
+        if action == "pause":
+            try:
+                set_subscriber_enabled(from_phone, False)
+            except Exception:
+                pass
+            twiml_reply = (
+                "Sobriety Copilot: Your daily reading SMS delivery is now paused. "
+                "You can still text questions anytime, or reply DAILY 7:00 AM PT to resume daily readings."
+            )
+        elif action == "status":
+            sub = get_subscriber(from_phone)
+            if sub and sub.get("enabled"):
+                t_label = format_time_12h(sub["delivery_time"])
+                tz_label = format_tz_short(sub["timezone"])
+                b_label = format_books_label(sub["books"])
+                twiml_reply = (
+                    f"Sobriety Copilot: Active daily SMS schedule — {b_label} delivered daily at "
+                    f"{t_label} {tz_label}. Reply DAILY <time> <tz> to change, SEND NOW for today's "
+                    f"reading, or PAUSE to pause."
+                )
+            else:
+                twiml_reply = (
+                    "Sobriety Copilot: You don't have an active daily SMS schedule. "
+                    "Reply DAILY 7:00 AM PT (or your preferred time/timezone) to subscribe, "
+                    "or manage preferences at sobrietycopilot.com/sms."
+                )
+        elif action == "send_now":
+            sub = get_subscriber(from_phone)
+            books = normalize_books(sub.get("books") if sub else None)
+            tz_name = (sub.get("timezone") if sub else None) or DEFAULT_TIMEZONE
+            today_local = _dt.datetime.now(ZoneInfo(tz_name)).date()
+            first_msg = format_daily_reading_sms(
+                books[0], target_date=today_local, include_reply_prompt=True
+            )
+            if first_msg:
+                twiml_reply = first_msg
+                try:
+                    hist_key = f"sc:sms:history:{from_phone}"
+                    raw_hist = get_redis_client().get(hist_key)
+                    sms_history = json.loads(raw_hist) if raw_hist else []
+                    if not isinstance(sms_history, list):
+                        sms_history = []
+                    sms_history.append({"role": "assistant", "content": first_msg})
+                    get_redis_client().setex(hist_key, 604800, json.dumps(sms_history[-8:]))
+                except Exception:
+                    pass
+                for extra_book in books[1:]:
+                    extra_msg = format_daily_reading_sms(
+                        extra_book, target_date=today_local, include_reply_prompt=True
+                    )
+                    if extra_msg:
+                        send_twilio_sms(from_phone, extra_msg, record_in_history=True)
+            else:
+                twiml_reply = "Sobriety Copilot: Unable to load today's reading right now. Please try again shortly."
+        else:
+            # action == "subscribe"
+            existing = get_subscriber(from_phone)
+            d_time = sub_cmd.get("delivery_time") or (
+                existing["delivery_time"] if existing else DEFAULT_DELIVERY_TIME
+            )
+            tz_name = sub_cmd.get("timezone") or (
+                existing["timezone"] if existing else DEFAULT_TIMEZONE
+            )
+            books = sub_cmd.get("books") or (
+                existing["books"] if existing else ["daily-reflections"]
+            )
+            sub = upsert_subscriber(
+                phone=from_phone,
+                enabled=True,
+                delivery_time=d_time,
+                timezone=tz_name,
+                books=books,
+            )
+            if sub:
+                t_label = format_time_12h(sub["delivery_time"])
+                tz_label = format_tz_short(sub["timezone"])
+                b_label = format_books_label(sub["books"])
+                twiml_reply = (
+                    f"Sobriety Copilot: You're subscribed to {b_label} every day at {t_label} {tz_label}! "
+                    f"Reply SEND NOW to get today's reading right away, DAILY <time> <tz> to change your time, "
+                    f"PAUSE to pause daily texts, or STOP to cancel."
+                )
+            else:
+                twiml_reply = (
+                    "Sobriety Copilot: Could not save your subscription for this number. "
+                    "Visit sobrietycopilot.com/sms to subscribe."
+                )
     elif _sms_injection_re.search(body_text):
         twiml_reply = (
             "Sobriety Copilot is a 12-step recovery and literature companion. "
@@ -1578,23 +1723,152 @@ async def incoming_sms(request: Request):
     return Response(content=xml_content, media_type="application/xml")
 
 
+@app.get("/api/sms/subscription")
+def get_sms_subscription(phone: str = Query(default="")):
+    """Look up current SMS daily reading subscription status and available books catalog."""
+    catalog = [
+        {"id": k, "label": v["label"], "fellowship": v["fellowship"]}
+        for k, v in DAILY_BOOKS_CATALOG.items()
+    ]
+    raw = (phone or "").strip()
+    if not raw:
+        return {"status": "ok", "subscription": None, "catalog": catalog}
+    norm = normalize_phone(raw)
+    if not norm:
+        raise HTTPException(
+            status_code=400,
+            detail="Please enter a valid 10-digit US/Canada phone number.",
+        )
+    sub = get_subscriber(norm)
+    return {
+        "status": "ok",
+        "phone": norm,
+        "subscription": sub,
+        "catalog": catalog,
+    }
+
+
 @app.post("/api/sms/optin")
 async def web_sms_optin(request: Request):
-    """Records voluntary web SMS opt-in preferences from /sms-optin.html."""
+    """Records voluntary web/mobile SMS opt-in and daily reading schedule preferences."""
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+
     try:
         data = await request.json()
     except Exception:
         data = {}
-    phone = str(data.get("phone", "")).strip()
+
+    raw_phone = str(data.get("phone", "")).strip()
+    action = str(data.get("action", "")).strip().lower()
     consent = bool(data.get("consent", False))
+    enabled_flag = data.get("enabled", True)
+    send_now = bool(data.get("send_now", False))
+    delivery_time = data.get("delivery_time")
+    timezone = data.get("timezone")
+    books = data.get("books")
+
+    if action in {"pause", "unsubscribe"} or enabled_flag is False:
+        norm = normalize_phone(raw_phone)
+        if not norm:
+            raise HTTPException(
+                status_code=400,
+                detail="Please enter a valid phone number to pause or unsubscribe.",
+            )
+        sub = set_subscriber_enabled(norm, False)
+        return {
+            "status": "ok",
+            "enrolled": False,
+            "subscription": sub,
+            "message": "Your daily SMS readings have been paused. You can re-enable them anytime.",
+        }
+
+    if action == "send_now":
+        norm = normalize_phone(raw_phone)
+        if not norm:
+            raise HTTPException(
+                status_code=400,
+                detail="Please enter a valid 10-digit US/Canada phone number.",
+            )
+        sub = get_subscriber(norm) or {
+            "phone": norm,
+            "timezone": normalize_timezone(str(timezone) if timezone else None),
+            "books": normalize_books(books if isinstance(books, list) else ([str(books)] if books else None)),
+        }
+        local_today = _dt.datetime.now(ZoneInfo(sub["timezone"])).date()
+        sent_cnt = await asyncio.to_thread(
+            send_daily_readings_for_subscriber, sub, local_today
+        )
+        return {
+            "status": "ok",
+            "enrolled": bool(sub.get("enabled", False)),
+            "sent_now_count": sent_cnt,
+            "subscription": get_subscriber(norm),
+            "message": (
+                "Today's reading has been texted to your phone!"
+                if sent_cnt > 0
+                else "Unable to send SMS right now. Please check your phone number and try again."
+            ),
+        }
+
+    if not raw_phone or not consent:
+        return {
+            "status": "ok",
+            "enrolled": False,
+            "subscription": None,
+            "message": "Preferences saved. SMS enrollment skipped (phone and consent are required to subscribe).",
+        }
+
+    norm = normalize_phone(raw_phone)
+    if not norm:
+        raise HTTPException(
+            status_code=400,
+            detail="Please enter a valid 10-digit US/Canada phone number.",
+        )
+
+    sub = upsert_subscriber(
+        phone=norm,
+        enabled=True,
+        delivery_time=str(delivery_time) if delivery_time is not None else None,
+        timezone=str(timezone) if timezone is not None else None,
+        books=books if isinstance(books, list) else ([str(books)] if books else None),
+        mark_sent_today=send_now,
+    )
+    if not sub:
+        raise HTTPException(status_code=500, detail="Unable to save subscription.")
+
+    t_label = format_time_12h(sub["delivery_time"])
+    tz_label = format_tz_short(sub["timezone"])
+    b_label = format_books_label(sub["books"])
+
+    welcome_msg = (
+        f"Sobriety Copilot: Welcome! You're subscribed to {b_label} delivered daily at "
+        f"{t_label} {tz_label}. Reply to any reading to chat about it, text SEND NOW for "
+        f"today's reading, PAUSE to pause, or STOP to cancel. Msg & data rates may apply."
+    )
+    await asyncio.to_thread(send_twilio_sms, norm, welcome_msg, False)
+
+    sent_now_count = 0
+    if send_now:
+        local_today = _dt.datetime.now(ZoneInfo(sub["timezone"])).date()
+        today_str = local_today.strftime("%Y-%m-%d")
+        mark_subscriber_sent(norm, today_str)
+        try:
+            get_redis_client().setex(f"sc:sms:daily_sent:{norm}:{today_str}", 172800, "1")
+        except Exception:
+            pass
+        sent_now_count = await asyncio.to_thread(
+            send_daily_readings_for_subscriber, sub, local_today
+        )
+
     return {
         "status": "ok",
-        "enrolled": bool(phone and consent),
+        "enrolled": True,
+        "sent_now_count": sent_now_count,
+        "subscription": sub,
         "message": (
-            "Sobriety Copilot: Welcome! You are subscribed to recovery support & reflections. "
-            "Msg freq varies. Msg & data rates may apply. Reply HELP for help, STOP to cancel."
-            if (phone and consent)
-            else "Preferences saved. SMS enrollment skipped."
+            f"Subscribed! You'll receive {b_label} daily at {t_label} {tz_label}."
+            + (" Today's reading has also been texted to your phone!" if sent_now_count > 0 else "")
         ),
     }
 

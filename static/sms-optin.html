@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SMS Opt-In &amp; Preferences - Sobriety Copilot</title>
+  <title>Daily Reflection SMS &amp; Preferences - Sobriety Copilot</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -14,7 +14,7 @@
       padding: 2rem 1rem;
     }
     .container {
-      max-width: 640px;
+      max-width: 660px;
       margin: 1rem auto;
       background: #161b22;
       padding: 2.25rem;
@@ -73,13 +73,6 @@
       padding: 1.5rem;
       margin-bottom: 1.25rem;
     }
-    .section-title {
-      margin-top: 0;
-      margin-bottom: 0.75rem;
-      color: #e6edf3;
-      font-size: 1.1rem;
-      font-weight: 600;
-    }
     label {
       display: block;
       font-weight: 600;
@@ -93,7 +86,14 @@
       color: #8b949e;
       margin-left: 6px;
     }
-    input[type="tel"] {
+    .phone-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 1.15rem;
+    }
+    input[type="tel"],
+    input[type="time"],
+    select {
       width: 100%;
       box-sizing: border-box;
       padding: 11px 14px;
@@ -101,13 +101,123 @@
       border: 1px solid #30363d;
       border-radius: 6px;
       color: #e6edf3;
-      font-size: 1rem;
-      margin-bottom: 1.1rem;
+      font-size: 0.98rem;
+      color-scheme: dark;
     }
-    input[type="tel"]:focus {
+    input[type="tel"]:focus,
+    input[type="time"]:focus,
+    select:focus {
       outline: none;
       border-color: #2a9d8f;
       box-shadow: 0 0 0 2px rgba(42, 157, 143, 0.3);
+    }
+    .btn-lookup {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 0 14px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    .btn-lookup:hover {
+      background: #30363d;
+      color: #fff;
+    }
+    .status-banner {
+      display: none;
+      margin-bottom: 1.15rem;
+      padding: 0.7rem 0.95rem;
+      border-radius: 8px;
+      font-size: 0.86rem;
+      border: 1px solid rgba(42, 157, 143, 0.35);
+      background: rgba(42, 157, 143, 0.1);
+      color: #c9d1d9;
+    }
+    .status-banner.paused {
+      border-color: rgba(210, 153, 34, 0.4);
+      background: rgba(210, 153, 34, 0.1);
+      color: #e3b341;
+    }
+    .book-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 1.2rem;
+    }
+    .book-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: normal;
+      margin: 0;
+      transition: border-color 0.15s ease;
+    }
+    .book-option:hover {
+      border-color: #2a9d8f;
+    }
+    .book-option-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.93rem;
+      color: #e6edf3;
+    }
+    .book-option input[type="checkbox"] {
+      width: 17px;
+      height: 17px;
+      accent-color: #2a9d8f;
+      cursor: pointer;
+    }
+    .book-badge {
+      font-size: 0.73rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(42, 157, 143, 0.15);
+      color: #2a9d8f;
+      font-weight: 600;
+    }
+    .schedule-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.6fr;
+      gap: 12px;
+      margin-bottom: 1.15rem;
+    }
+    @media (max-width: 520px) {
+      .schedule-grid {
+        grid-template-columns: 1fr;
+      }
+      .btn-row {
+        flex-direction: column;
+      }
+    }
+    .send-now-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: rgba(42, 157, 143, 0.08);
+      border: 1px solid rgba(42, 157, 143, 0.28);
+      border-radius: 8px;
+      margin-bottom: 1.15rem;
+      font-size: 0.9rem;
+      color: #e6edf3;
+      cursor: pointer;
+      font-weight: normal;
+    }
+    .send-now-box input[type="checkbox"] {
+      width: 17px;
+      height: 17px;
+      accent-color: #2a9d8f;
+      cursor: pointer;
     }
     .checkbox-container {
       display: flex;
@@ -143,8 +253,9 @@
     }
     .btn-row {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       margin-top: 1rem;
+      flex-wrap: wrap;
     }
     .btn-submit {
       background: #2a9d8f;
@@ -152,14 +263,30 @@
       font-weight: 700;
       border: none;
       border-radius: 6px;
-      padding: 11px 20px;
-      font-size: 0.98rem;
+      padding: 11px 18px;
+      font-size: 0.96rem;
       cursor: pointer;
-      flex: 1.5;
+      flex: 1.6;
       transition: background 0.2s ease;
     }
     .btn-submit:hover {
       background: #34b3a4;
+    }
+    .btn-secondary {
+      background: #21262d;
+      color: #e6edf3;
+      font-weight: 600;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 11px 14px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      flex: 1;
+      transition: all 0.2s ease;
+    }
+    .btn-secondary:hover {
+      background: #30363d;
+      border-color: #2a9d8f;
     }
     .btn-skip {
       background: transparent;
@@ -167,8 +294,8 @@
       font-weight: 600;
       border: 1px solid #30363d;
       border-radius: 6px;
-      padding: 11px 16px;
-      font-size: 0.92rem;
+      padding: 11px 14px;
+      font-size: 0.9rem;
       cursor: pointer;
       flex: 1;
       transition: all 0.2s ease;
@@ -187,7 +314,7 @@
       background: #0d1117;
       border: 1px solid #30363d;
       border-radius: 10px;
-      padding: 1.1rem 1.4rem;
+      padding: 1.15rem 1.4rem;
       margin-bottom: 1.25rem;
     }
     .phone-highlight {
@@ -200,6 +327,17 @@
       border: 1px solid rgba(42, 157, 143, 0.35);
       padding: 4px 10px;
       border-radius: 6px;
+      text-decoration: none;
+    }
+    .cmd-pill {
+      display: inline-block;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 5px;
+      padding: 1px 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      color: #2a9d8f;
     }
     .disclosure-box {
       background: rgba(42, 157, 143, 0.06);
@@ -249,6 +387,12 @@
       border: 1px solid #2ea043;
       color: #3fb950;
     }
+    #form-feedback.error {
+      display: block;
+      background: rgba(248, 81, 73, 0.15);
+      border: 1px solid #f85149;
+      color: #ff7b72;
+    }
   </style>
 </head>
 <body>
@@ -261,44 +405,87 @@
       <div class="brand-icon">🌱</div>
       <div>
         <h1>Sobriety Copilot</h1>
-        <div class="subtitle">SMS Recovery Support &amp; Notification Preferences</div>
+        <div class="subtitle">Daily Reflection &amp; Meditation SMS Delivery</div>
       </div>
     </div>
 
     <p class="intro">
-      Receive interactive 12-step recovery literature answers, local meeting directory assistance, daily morning reflections, and sobriety milestone check-ins via text message. SMS enrollment is <strong>100% optional</strong>—you can use all Sobriety Copilot features without providing a phone number.
+      Subscribe to receive your daily recovery reading (<em>Daily Reflections</em>, <em>Twenty-Four Hours a Day</em>, and/or <em>Just for Today</em>) via text message at the exact time of your choice—and reply directly to any reading to talk through how it applies to your day. SMS enrollment is <strong>100% optional</strong>.
     </p>
 
-    <!-- Primary Web Opt-In Form -->
+    <!-- Primary Web Opt-In & Daily Schedule Form -->
     <div class="card">
       <form id="optin-form" onsubmit="handleFormSubmit(event)">
         <label for="phone">
           Mobile Phone Number
-          <span class="field-hint">(Optional)</span>
+          <span class="field-hint">(US/Canada, Optional)</span>
         </label>
-        <input type="tel" id="phone" name="phone" placeholder="(555) 123-4567" autocomplete="tel">
+        <div class="phone-row">
+          <input type="tel" id="phone" name="phone" placeholder="(555) 123-4567" autocomplete="tel" style="margin-bottom:0;">
+          <button type="button" class="btn-lookup" onclick="lookupSubscription()">Check Schedule</button>
+        </div>
 
-        <label style="margin-bottom: 0.4rem;">
-          Message Preferences
-          <span class="field-hint">(Optional)</span>
+        <div id="status-banner" class="status-banner"></div>
+
+        <label>
+          Daily Readings to Deliver
+          <span class="field-hint">(Select one or more)</span>
         </label>
-        <div style="font-size: 0.88rem; margin-bottom: 1.1rem; display: flex; flex-direction: column; gap: 6px; color: #c9d1d9;">
-          <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0;">
-            <input type="checkbox" id="topic-qa" style="accent-color: #2a9d8f;"> 2-way 12-step literature Q&amp;A and meeting directory lookups
+        <div class="book-grid">
+          <label class="book-option">
+            <span class="book-option-left">
+              <input type="checkbox" name="book" value="daily-reflections" id="book-dr" checked>
+              <span><strong>Daily Reflections</strong> &mdash; Full daily quote &amp; reflection</span>
+            </span>
+            <span class="book-badge">A.A.</span>
           </label>
-          <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0;">
-            <input type="checkbox" id="topic-reflections" style="accent-color: #2a9d8f;"> Daily morning recovery reflections &amp; milestone alerts
+          <label class="book-option">
+            <span class="book-option-left">
+              <input type="checkbox" name="book" value="twenty-four-hours-a-day" id="book-24h">
+              <span><strong>Twenty-Four Hours a Day</strong> &mdash; Thought, Meditation &amp; Prayer</span>
+            </span>
+            <span class="book-badge">Hazelden / A.A.</span>
           </label>
-          <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0;">
-            <input type="checkbox" id="topic-checkin" style="accent-color: #2a9d8f;"> Evening wellness check-in prompts
+          <label class="book-option">
+            <span class="book-option-left">
+              <input type="checkbox" name="book" value="just-for-today" id="book-jft">
+              <span><strong>Just for Today</strong> &mdash; Daily meditation for recovery</span>
+            </span>
+            <span class="book-badge">N.A.</span>
           </label>
         </div>
+
+        <div class="schedule-grid">
+          <div>
+            <label for="delivery-time">Delivery Time</label>
+            <input type="time" id="delivery-time" name="delivery_time" value="07:00" required>
+          </div>
+          <div>
+            <label for="timezone">Your Timezone</label>
+            <select id="timezone" name="timezone">
+              <option value="America/Los_Angeles">Pacific Time (PT &mdash; Los Angeles)</option>
+              <option value="America/Denver">Mountain Time (MT &mdash; Denver)</option>
+              <option value="America/Phoenix">Arizona Time (MST &mdash; Phoenix)</option>
+              <option value="America/Chicago">Central Time (CT &mdash; Chicago)</option>
+              <option value="America/New_York">Eastern Time (ET &mdash; New York)</option>
+              <option value="America/Anchorage">Alaska Time (AKT &mdash; Anchorage)</option>
+              <option value="Pacific/Honolulu">Hawaii Time (HST &mdash; Honolulu)</option>
+              <option value="America/Halifax">Atlantic Time (AT &mdash; Halifax)</option>
+              <option value="UTC">UTC</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="send-now-box">
+          <input type="checkbox" id="send-now" name="send_now" checked>
+          <span><strong>Also send today's reading right now</strong> so I can read and reply to it immediately</span>
+        </label>
 
         <!-- Optional consent checkbox - NOT required, unchecked by default -->
         <div class="checkbox-container">
           <input type="checkbox" id="sms-consent" name="consent">
           <label for="sms-consent" class="consent-text">
-            <strong>Optional Consent:</strong> I agree to receive recurring automated and conversational SMS text messages from <strong>Sobriety Copilot</strong> at the mobile phone number provided above. Consent is 100% voluntary and is not a condition of purchase, subscription, or using the app. Message and data rates may apply. Message frequency varies. Reply <strong>STOP</strong> to cancel at any time, or reply <strong>HELP</strong> for help. View our <a href="/terms.html">Terms of Service</a> and <a href="/privacy.html">Privacy Policy</a>.
+            <strong>Optional Consent:</strong> I agree to receive recurring automated daily recovery readings and conversational SMS text messages from <strong>Sobriety Copilot</strong> at the mobile phone number provided above. Consent is 100% voluntary and is not a condition of purchase, subscription, or using the app. Message and data rates may apply. Message frequency varies. Reply <strong>STOP</strong> to cancel at any time, <strong>PAUSE</strong> to pause daily readings, or <strong>HELP</strong> for help. View our <a href="/terms.html">Terms of Service</a> and <a href="/privacy.html">Privacy Policy</a>.
           </label>
         </div>
 
@@ -306,13 +493,14 @@
         <div class="checkbox-container decline-container">
           <input type="checkbox" id="sms-decline" name="decline">
           <label for="sms-decline" class="consent-text" style="color: #8b949e;">
-            <strong>Decline Messaging:</strong> I decline SMS messaging. I prefer to use Sobriety Copilot via the app/web without receiving text messages.
+            <strong>Decline / Pause Messaging:</strong> Pause daily SMS deliveries or use Sobriety Copilot on the web/app without receiving text messages.
           </label>
         </div>
 
         <div class="btn-row">
-          <button type="submit" class="btn-submit">Save SMS Preferences</button>
-          <button type="button" class="btn-skip" onclick="handleSkipClick()">Decline / Skip SMS</button>
+          <button type="submit" class="btn-submit" id="submit-btn">Save Daily SMS Schedule</button>
+          <button type="button" class="btn-secondary" onclick="handleSendNowClick()">Send Today's Reading Now</button>
+          <button type="button" class="btn-skip" onclick="handlePauseClick()">Pause / Decline SMS</button>
         </div>
         <div id="form-feedback"></div>
       </form>
@@ -321,13 +509,13 @@
     <!-- Direct Keyword Opt-In Option -->
     <div class="keyword-box">
       <div style="flex: 1; min-width: 240px;">
-        <div style="font-weight: 600; color: #e6edf3; font-size: 0.95rem; margin-bottom: 2px;">Prefer to opt in from your phone?</div>
-        <div style="font-size: 0.83rem; color: #8b949e;">
-          Text <strong>START</strong>, <strong>YES</strong>, or <strong>UNSTOP</strong> directly to our service number. Reply <strong>STOP</strong> anytime to cancel or <strong>HELP</strong> for support.
+        <div style="font-weight: 600; color: #e6edf3; font-size: 0.95rem; margin-bottom: 4px;">Manage or subscribe directly by text message</div>
+        <div style="font-size: 0.83rem; color: #8b949e; line-height: 1.55;">
+          Text <span class="cmd-pill">DAILY 7:00 AM PT</span> (or any time &amp; timezone) to subscribe, <span class="cmd-pill">SEND NOW</span> for today's reading, <span class="cmd-pill">SCHEDULE</span> to check your time, <span class="cmd-pill">PAUSE</span> to pause daily texts, <span class="cmd-pill">NEW</span> to start a fresh chat topic, or <span class="cmd-pill">STOP</span> to cancel.
         </div>
       </div>
       <div>
-        <span class="phone-highlight">(762) 376-9696</span>
+        <a href="sms:+17623769696?&body=DAILY%207%3A00%20AM%20PT" class="phone-highlight">(762) 376-9696</a>
       </div>
     </div>
 
@@ -336,10 +524,10 @@
       <h4>Program &amp; Carrier Disclosures</h4>
       <ul>
         <li><strong>Program:</strong> Sobriety Copilot SMS Alerts &amp; Support &mdash; <strong>(762) 376-9696</strong> (+17623769696)</li>
-        <li><strong>Opt-In Keywords:</strong> Text <code>START</code>, <code>YES</code>, or <code>UNSTOP</code> to (762) 376-9696</li>
-        <li><strong>Opt-Out Keywords:</strong> Text <code>STOP</code>, <code>CANCEL</code>, <code>QUIT</code>, <code>END</code>, <code>OPTOUT</code>, <code>UNSUBSCRIBE</code>, <code>STOPALL</code>, or <code>REVOKE</code> to (762) 376-9696</li>
+        <li><strong>Opt-In Keywords:</strong> Text <code>DAILY 7:00 AM PT</code>, <code>START</code>, <code>YES</code>, or <code>UNSTOP</code> to (762) 376-9696</li>
+        <li><strong>Opt-Out Keywords:</strong> Text <code>STOP</code>, <code>CANCEL</code>, <code>QUIT</code>, <code>END</code>, <code>OPTOUT</code>, <code>UNSUBSCRIBE</code>, <code>STOPALL</code>, or <code>REVOKE</code> to (762) 376-9696 (or <code>PAUSE</code> to pause daily readings while keeping 2-way Q&amp;A active)</li>
         <li><strong>Support / Help:</strong> Text <code>HELP</code> or <code>INFO</code> to (762) 376-9696, or email <!--email_off--><a href="mailto:support@sobrietycopilot.com" style="color: #2a9d8f;">support@sobrietycopilot.com</a><!--/email_off--></li>
-        <li><strong>Rates &amp; Frequency:</strong> Message and data rates may apply. Message frequency varies based on your interactions and preferences. Supported on AT&amp;T, Verizon, T-Mobile, and major US carriers (carriers are not liable for delayed or undelivered messages).</li>
+        <li><strong>Rates &amp; Frequency:</strong> Message and data rates may apply. Message frequency varies based on your daily reading schedule and 2-way interactions. Supported on AT&amp;T, Verizon, T-Mobile, and major US carriers (carriers are not liable for delayed or undelivered messages).</li>
         <li><strong>Strict Privacy Guarantee:</strong> Mobile phone numbers and text messaging opt-in consent will strictly NOT be shared, sold, rented, or transferred to third parties or affiliates for marketing or promotional purposes.</li>
       </ul>
     </div>
@@ -356,7 +544,43 @@
     var consentBox = document.getElementById('sms-consent');
     var declineBox = document.getElementById('sms-decline');
     var phoneInput = document.getElementById('phone');
+    var timeInput = document.getElementById('delivery-time');
+    var tzSelect = document.getElementById('timezone');
+    var sendNowBox = document.getElementById('send-now');
     var feedback = document.getElementById('form-feedback');
+    var statusBanner = document.getElementById('status-banner');
+
+    // Auto-detect browser timezone if it matches or add it dynamically
+    (function initTimezoneAndSavedPhone() {
+      try {
+        var detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (detectedTz) {
+          var found = false;
+          for (var i = 0; i < tzSelect.options.length; i++) {
+            if (tzSelect.options[i].value === detectedTz) {
+              tzSelect.selectedIndex = i;
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            var opt = document.createElement('option');
+            opt.value = detectedTz;
+            opt.textContent = detectedTz;
+            tzSelect.insertBefore(opt, tzSelect.firstChild);
+            tzSelect.value = detectedTz;
+          }
+        }
+      } catch (e) {}
+
+      try {
+        var savedPhone = localStorage.getItem('sc_sms_phone');
+        if (savedPhone) {
+          phoneInput.value = savedPhone;
+          lookupSubscription(true);
+        }
+      } catch (e) {}
+    })();
 
     consentBox.addEventListener('change', function() {
       if (this.checked) {
@@ -370,11 +594,139 @@
       }
     });
 
-    function handleSkipClick() {
+    function getSelectedBooks() {
+      var boxes = document.querySelectorAll('input[name="book"]:checked');
+      var out = [];
+      for (var i = 0; i < boxes.length; i++) {
+        out.push(boxes[i].value);
+      }
+      return out.length ? out : ['daily-reflections'];
+    }
+
+    function applySubscriptionToForm(sub) {
+      if (!sub) {
+        statusBanner.style.display = 'none';
+        return;
+      }
+      if (sub.delivery_time) {
+        timeInput.value = sub.delivery_time;
+      }
+      if (sub.timezone) {
+        tzSelect.value = sub.timezone;
+      }
+      if (Array.isArray(sub.books) && sub.books.length) {
+        var allBoxes = document.querySelectorAll('input[name="book"]');
+        for (var i = 0; i < allBoxes.length; i++) {
+          allBoxes[i].checked = sub.books.indexOf(allBoxes[i].value) !== -1;
+        }
+      }
+      consentBox.checked = !!sub.enabled;
+      declineBox.checked = !sub.enabled;
+      statusBanner.style.display = 'block';
+      if (sub.enabled) {
+        statusBanner.className = 'status-banner';
+        statusBanner.innerHTML = '<strong>Active Schedule:</strong> Delivering daily at <strong>' +
+          sub.delivery_time + ' (' + sub.timezone + ')</strong> to ' + sub.phone + '.';
+      } else {
+        statusBanner.className = 'status-banner paused';
+        statusBanner.innerHTML = '<strong>Paused:</strong> Daily SMS delivery is currently paused for ' + sub.phone + '.';
+      }
+    }
+
+    async function lookupSubscription(silent) {
+      var phone = phoneInput.value.trim();
+      if (!phone) {
+        if (!silent) {
+          feedback.className = 'error';
+          feedback.textContent = 'Please enter your mobile phone number first to check your schedule.';
+        }
+        return;
+      }
+      try {
+        var res = await fetch('/api/sms/subscription?phone=' + encodeURIComponent(phone));
+        var data = await res.json();
+        if (!res.ok) {
+          if (!silent) {
+            feedback.className = 'error';
+            feedback.textContent = data.error || data.detail || 'Invalid phone number.';
+          }
+          return;
+        }
+        if (data.subscription) {
+          applySubscriptionToForm(data.subscription);
+          if (!silent) {
+            feedback.className = 'success';
+            feedback.textContent = 'Loaded your saved daily SMS schedule.';
+          }
+        } else if (!silent) {
+          statusBanner.style.display = 'none';
+          feedback.className = 'success';
+          feedback.textContent = 'No existing schedule found for that number—choose your time and books below to subscribe!';
+        }
+      } catch (err) {
+        if (!silent) {
+          feedback.className = 'error';
+          feedback.textContent = 'Could not check subscription status right now.';
+        }
+      }
+    }
+
+    async function handlePauseClick() {
+      var phone = phoneInput.value.trim();
       declineBox.checked = true;
       consentBox.checked = false;
+      if (phone) {
+        try {
+          var res = await fetch('/api/sms/optin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: phone, action: 'pause', enabled: false })
+          });
+          var data = await res.json();
+          if (data.subscription) {
+            applySubscriptionToForm(data.subscription);
+          }
+          feedback.className = 'success';
+          feedback.textContent = data.message || 'Your daily SMS readings have been paused.';
+          return;
+        } catch (err) {}
+      }
       feedback.className = 'success';
-      feedback.textContent = 'SMS notifications declined / skipped. You can continue using all Sobriety Copilot features without SMS.';
+      feedback.textContent = 'SMS notifications declined / paused. You can continue using all Sobriety Copilot features without SMS.';
+    }
+
+    async function handleSendNowClick() {
+      var phone = phoneInput.value.trim();
+      if (!phone) {
+        feedback.className = 'error';
+        feedback.textContent = 'Please enter your mobile phone number above first.';
+        return;
+      }
+      feedback.className = 'success';
+      feedback.textContent = 'Sending today\'s reading to your phone...';
+      try {
+        var res = await fetch('/api/sms/optin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: phone,
+            action: 'send_now',
+            timezone: tzSelect.value,
+            books: getSelectedBooks()
+          })
+        });
+        var data = await res.json();
+        if (!res.ok) {
+          feedback.className = 'error';
+          feedback.textContent = data.error || data.detail || 'Could not send reading.';
+          return;
+        }
+        feedback.className = 'success';
+        feedback.textContent = data.message || 'Today\'s reading has been texted to your phone!';
+      } catch (err) {
+        feedback.className = 'error';
+        feedback.textContent = 'Network error sending SMS. Please try again.';
+      }
     }
 
     async function handleFormSubmit(e) {
@@ -384,36 +736,50 @@
       var declined = declineBox.checked;
 
       if (declined) {
-        feedback.className = 'success';
-        feedback.textContent = 'SMS notifications declined. You can continue using all Sobriety Copilot features without SMS.';
+        await handlePauseClick();
         return;
       }
       if (phone && consent) {
         try {
-          await fetch('/api/sms/optin', {
+          localStorage.setItem('sc_sms_phone', phone);
+        } catch (err) {}
+        feedback.className = 'success';
+        feedback.textContent = 'Saving your daily SMS schedule...';
+        try {
+          var res = await fetch('/api/sms/optin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               phone: phone,
               consent: true,
-              topics: {
-                qa: document.getElementById('topic-qa').checked,
-                reflections: document.getElementById('topic-reflections').checked,
-                checkin: document.getElementById('topic-checkin').checked
-              }
+              enabled: true,
+              delivery_time: timeInput.value || '07:00',
+              timezone: tzSelect.value || 'America/Los_Angeles',
+              books: getSelectedBooks(),
+              send_now: sendNowBox.checked
             })
           });
+          var data = await res.json();
+          if (!res.ok) {
+            feedback.className = 'error';
+            feedback.textContent = data.error || data.detail || 'Failed to save subscription.';
+            return;
+          }
+          if (data.subscription) {
+            applySubscriptionToForm(data.subscription);
+          }
+          feedback.className = 'success';
+          feedback.textContent = data.message || 'Subscribed! Your daily SMS schedule is active.';
         } catch (err) {
-          // Graceful fallback if offline
+          feedback.className = 'error';
+          feedback.textContent = 'Unable to reach server. Please try again.';
         }
-        feedback.className = 'success';
-        feedback.textContent = 'Thank you! You have opted in to Sobriety Copilot SMS support. Reply STOP to cancel anytime, or HELP for assistance.';
       } else if (phone && !consent) {
-        feedback.className = 'success';
-        feedback.textContent = 'Preferences saved. (SMS enrollment was not activated because the optional SMS consent box was not checked).';
+        feedback.className = 'error';
+        feedback.textContent = 'Please check the Optional Consent box above to activate daily SMS delivery to your phone.';
       } else {
         feedback.className = 'success';
-        feedback.textContent = 'Preferences saved successfully. SMS enrollment was skipped.';
+        feedback.textContent = 'Preferences saved. Enter a phone number and check the consent box anytime to subscribe to daily SMS readings.';
       }
     }
   </script>
