@@ -177,7 +177,7 @@ class MilestoneCard extends ConsumerWidget {
                     value: state.milestoneProgress,
                     minHeight: 5,
                     backgroundColor: isLight ? theme.colorScheme.outlineVariant : Colors.white24,
-                    color: AppColors.accent,
+                    color: theme.colorScheme.primary,
                   ),
                 ),
               ],
@@ -192,10 +192,10 @@ class MilestoneCard extends ConsumerWidget {
 /// Bottom-sheet editor: set/change the sobriety date, discreet mode, and the
 /// optional daily-spend estimate for the money-saved line.
 Future<void> showTrackerEditor(BuildContext context, WidgetRef ref) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    builder: (sheetContext) => const _TrackerEditorSheet(),
+  return showAppSheet<void>(
+    context,
+    const _TrackerEditorSheet(),
+    fitContent: true,
   );
 }
 
@@ -266,107 +266,91 @@ class _TrackerEditorSheetState extends ConsumerState<_TrackerEditorSheet> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(sobrietyProvider);
-    final theme = Theme.of(context);
     final dateLabel = state.sobrietyDate == null
         ? 'Not set'
         : DateFormat.yMMMMd().format(state.sobrietyDate!);
 
-    return SafeArea(
-      top: false,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.only(
-          left: AppSpacing.lg,
-          right: AppSpacing.lg,
-          top: AppSpacing.sm,
-          bottom:
-              MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Recovery tracker',
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Stored only on this device. Never sent anywhere.',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.event_outlined),
-              title: const Text('Sobriety date'),
-              subtitle: Text(dateLabel),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _pickDate,
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: state.discreet,
-              title: const Text('Discreet display'),
-              subtitle: Text(
-                supportsHomeWidget
-                    ? 'Show "Day 92" with no recovery wording — here and on '
-                        'the home-screen widget.'
-                    : 'Show "Day 92" with no recovery wording.',
-              ),
-              onChanged: (v) =>
-                  ref.read(sobrietyProvider.notifier).setDiscreet(v),
-            ),
-            TextField(
-              controller: _spendController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              onSubmitted: (_) => _saveSpend(),
-              onTapOutside: (_) => _saveSpend(),
-              decoration: const InputDecoration(
-                isDense: true,
-                prefixText: r'$ ',
-                labelText: 'Estimated daily spend (optional)',
-                helperText: 'Shows how much you have saved. Leave blank to hide.',
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            // History (and its erase controls) stays reachable even after the
-            // user stops tracking — notes must never become undeletable, and
-            // the preserved streak record must stay erasable too.
-            if (state.relapses.isNotEmpty || state.bestStreakDays > 0) ...[
-              _HistorySection(discreet: state.discreet),
-              const SizedBox(height: AppSpacing.md),
-            ],
-            if (state.isTracking)
-              // Deliberately NOT delete-styled: stopping the counter keeps
-              // all history on the device, and the dialog says so.
-              TextButton.icon(
-                icon: const Icon(Icons.stop_circle_outlined, size: 18),
-                label: const Text('Stop tracking'),
-                onPressed: () async {
-                  final confirmed = await _confirmStopTracking(
-                    context,
-                    state.discreet,
-                    state.relapses.isNotEmpty,
-                  );
-                  if (confirmed != true) return;
-                  await ref.read(sobrietyProvider.notifier).clearDate();
-                  if (context.mounted) Navigator.of(context).maybePop();
-                },
-              ),
-            if (_showSupport) ...[
-              const SizedBox(height: AppSpacing.sm),
-              _SupportPanel(discreet: state.discreet),
-            ],
-            if (state.isTracking) ...[
-              const SizedBox(height: AppSpacing.xs),
-              _SlippedAffordance(onTap: _onSlipped),
-            ],
-          ],
-        ),
+    return AppSheet(
+      header: const SheetHeader(
+        icon: AppIcons.tracker,
+        title: 'Recovery tracker',
+        subtitle: 'Stored only on this device. Never sent anywhere.',
       ),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.sm,
+        AppSpacing.lg,
+        AppSpacing.xl,
+      ),
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.event_outlined),
+          title: const Text('Sobriety date'),
+          subtitle: Text(dateLabel),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _pickDate,
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: state.discreet,
+          title: const Text('Discreet display'),
+          subtitle: Text(
+            supportsHomeWidget
+                ? 'Show "Day 92" with no recovery wording — here and on '
+                    'the home-screen widget.'
+                : 'Show "Day 92" with no recovery wording.',
+          ),
+          onChanged: (v) =>
+              ref.read(sobrietyProvider.notifier).setDiscreet(v),
+        ),
+        TextField(
+          controller: _spendController,
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          onSubmitted: (_) => _saveSpend(),
+          onTapOutside: (_) => _saveSpend(),
+          decoration: const InputDecoration(
+            isDense: true,
+            prefixText: r'$ ',
+            labelText: 'Estimated daily spend (optional)',
+            helperText: 'Shows how much you have saved. Leave blank to hide.',
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        // History (and its erase controls) stays reachable even after the
+        // user stops tracking — notes must never become undeletable, and
+        // the preserved streak record must stay erasable too.
+        if (state.relapses.isNotEmpty || state.bestStreakDays > 0) ...[
+          _HistorySection(discreet: state.discreet),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        if (state.isTracking)
+          // Deliberately NOT delete-styled: stopping the counter keeps
+          // all history on the device, and the dialog says so.
+          TextButton.icon(
+            icon: const Icon(Icons.stop_circle_outlined, size: 18),
+            label: const Text('Stop tracking'),
+            onPressed: () async {
+              final confirmed = await _confirmStopTracking(
+                context,
+                state.discreet,
+                state.relapses.isNotEmpty,
+              );
+              if (confirmed != true) return;
+              await ref.read(sobrietyProvider.notifier).clearDate();
+              if (context.mounted) Navigator.of(context).maybePop();
+            },
+          ),
+        if (_showSupport) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _SupportPanel(discreet: state.discreet),
+        ],
+        if (state.isTracking) ...[
+          const SizedBox(height: AppSpacing.xs),
+          _SlippedAffordance(onTap: _onSlipped),
+        ],
+      ],
     );
   }
 }
@@ -455,7 +439,7 @@ class _HistorySection extends ConsumerWidget {
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
               style: TextButton.styleFrom(
-                foregroundColor: AppColors.error,
+                foregroundColor: theme.colorScheme.error,
                 visualDensity: VisualDensity.compact,
               ),
               icon: const Icon(Icons.delete_sweep_outlined, size: 16),
@@ -476,7 +460,7 @@ class _HistorySection extends ConsumerWidget {
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
               style: TextButton.styleFrom(
-                foregroundColor: AppColors.error,
+                foregroundColor: theme.colorScheme.error,
                 visualDensity: VisualDensity.compact,
               ),
               icon: const Icon(Icons.delete_sweep_outlined, size: 16),
@@ -503,33 +487,20 @@ Future<bool?> _confirmEraseRecord(
   bool discreet,
   int days,
 ) {
-  return showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(discreet
-          ? 'Erase longest-run record?'
-          : 'Erase longest-streak record?'),
-      content: Text(
-        discreet
-            ? 'This permanently deletes the $days-day longest-run record '
-                'from this device. This cannot be undone. Your current day '
-                'count is unchanged.'
-            : 'This permanently deletes the $days-day longest-streak record '
-                'from this device. This cannot be undone. Your current day '
-                'count is unchanged.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          style: TextButton.styleFrom(foregroundColor: AppColors.error),
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Erase'),
-        ),
-      ],
-    ),
+  return confirmDialog(
+    context,
+    title: discreet
+        ? 'Erase longest-run record?'
+        : 'Erase longest-streak record?',
+    message: discreet
+        ? 'This permanently deletes the $days-day longest-run record '
+            'from this device. This cannot be undone. Your current day '
+            'count is unchanged.'
+        : 'This permanently deletes the $days-day longest-streak record '
+            'from this device. This cannot be undone. Your current day '
+            'count is unchanged.',
+    confirmLabel: 'Erase',
+    destructive: true,
   );
 }
 
@@ -543,65 +514,39 @@ Future<bool?> _confirmStopTracking(
   bool discreet,
   bool hasHistory,
 ) {
-  return showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Stop tracking?'),
-      content: Text(
-        !hasHistory
-            ? 'The day counter turns off. You can start tracking again '
-                'any time.'
-            : discreet
-                ? 'The day counter turns off. Your history and notes stay on '
-                    'this device — you can erase them separately.'
-                : 'The day counter turns off. Your relapse history and notes '
-                    'stay on this device — you can erase them separately with '
-                    '"Erase relapse history".',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Stop tracking'),
-        ),
-      ],
-    ),
+  return confirmDialog(
+    context,
+    title: 'Stop tracking?',
+    message: !hasHistory
+        ? 'The day counter turns off. You can start tracking again '
+            'any time.'
+        : discreet
+            ? 'The day counter turns off. Your history and notes stay on '
+                'this device — you can erase them separately.'
+            : 'The day counter turns off. Your relapse history and notes '
+                'stay on this device — you can erase them separately with '
+                '"Erase relapse history".',
+    confirmLabel: 'Stop tracking',
   );
 }
 
 /// Asks before permanently deleting all relapse history. Returns true when the
 /// user confirms.
 Future<bool?> _confirmErase(BuildContext context, bool discreet) {
-  return showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(discreet ? 'Erase restart history?' : 'Erase relapse history?'),
-      content: Text(
-        discreet
-            ? 'This permanently deletes every logged restart and any notes '
-                'from this device. This cannot be undone. This does not '
-                'change your current day count, and your longest-run record '
-                'is kept.'
-            : 'This permanently deletes every logged relapse and any notes '
-                'from this device. This cannot be undone. This does not reset '
-                'your current day count, and your longest-streak record is '
-                'kept.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          style: TextButton.styleFrom(foregroundColor: AppColors.error),
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Erase'),
-        ),
-      ],
-    ),
+  return confirmDialog(
+    context,
+    title: discreet ? 'Erase restart history?' : 'Erase relapse history?',
+    message: discreet
+        ? 'This permanently deletes every logged restart and any notes '
+            'from this device. This cannot be undone. This does not '
+            'change your current day count, and your longest-run record '
+            'is kept.'
+        : 'This permanently deletes every logged relapse and any notes '
+            'from this device. This cannot be undone. This does not reset '
+            'your current day count, and your longest-streak record is '
+            'kept.',
+    confirmLabel: 'Erase',
+    destructive: true,
   );
 }
 
@@ -653,14 +598,8 @@ class _SupportPanel extends ConsumerWidget {
     final hasHistory = ref.watch(
       sobrietyProvider.select((s) => s.relapses.isNotEmpty),
     );
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: cs.secondaryContainer.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(AppSpacing.radius),
-      ),
+    return NoticeCard(
+      icon: Icons.favorite_border,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -673,17 +612,15 @@ class _SupportPanel extends ConsumerWidget {
                     ? "You're back. Today is day one again — your history "
                         'is kept.'
                     : "You're back. Today is day one again."),
-            style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: AppSpacing.xs),
           TextButton.icon(
             style: TextButton.styleFrom(
-              foregroundColor: cs.primary,
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
             ),
-            onPressed: () => showAppSheet(context, const CrisisSheet()),
-            icon: const Icon(Icons.support_agent, size: 18),
+            onPressed: () => CrisisSheet.show(context),
+            icon: const Icon(AppIcons.helpline, size: 18),
             label: const Text('Get support now'),
           ),
         ],

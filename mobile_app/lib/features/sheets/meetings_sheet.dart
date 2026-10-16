@@ -14,14 +14,18 @@ import 'package:sobriety_copilot_mobile/data/models/meeting_models.dart';
 import 'package:sobriety_copilot_mobile/features/daily/home_group_manager.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
+import 'package:sobriety_copilot_mobile/widgets.dart';
 
 /// Find-a-meeting bottom sheet.
 ///
 /// Location input -> `/api/geocode`, "use my location" -> `geolocator`, then
-/// `/api/meetings`. Fellowship + attendance filters trigger a server re-fetch
-/// (they change the payload); day-range and time-of-day filters are applied
-/// client-side. Results are de-duped per occurrence, or grouped by meeting for
-/// the "This week" / "Any day" views.
+/// `/api/meetings`. Every filter triggers a server re-fetch: the server picks
+/// the `max` meetings that match the Day/Time chips against this device's
+/// clock (soonest first), so a dense metro with thousands of meetings still
+/// shows tonight's instead of the nearest 100 across the week. The same
+/// filters are re-applied client-side so results stay right as time passes.
+/// Results are de-duped per occurrence, or grouped by meeting for the
+/// "This week" / "Any day" views.
 ///
 /// Layout: only the location row (search field, "use my location", filter
 /// toggle) is visible by default — the filter chip rows live in a collapsible
@@ -111,6 +115,7 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
   static const List<int> _radiusOptions = [15, 30, 60, 100, 200];
 
   bool _loading = false;
+  int _fetchSeq = 0;
   String? _error;
   MeetingSearchResult? _lastResults;
   MeetingSearchResult? _onlineResults;
@@ -346,6 +351,8 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
 
   Future<void> _fetchAndRender() async {
     if (_lat == null || _lng == null) return;
+    // Chip taps re-fetch; only the latest request may land.
+    final seq = ++_fetchSeq;
     setState(() {
       _loading = true;
       _error = null;
@@ -357,25 +364,28 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
             lat: _lat!,
             lng: _lng!,
             radiusMi: _radiusMi.toDouble(),
-            max: 100,
+            // Grouped views collapse several occurrences into one card.
+            max: (_range == 'week' || _range == 'any') ? 300 : 100,
             attendance: _attendance == 'all' ? null : _attendance,
             fellowship: _fellowship == 'all' ? null : _fellowship,
+            range: _range,
+            timeOfDay: _timeOfDay,
           )
           .timeout(const Duration(seconds: 25));
-      if (!mounted) return;
+      if (!mounted || seq != _fetchSeq) return;
       setState(() {
         _lastResults = result;
         _resetCarousel();
       });
     } on TimeoutException {
-      if (!mounted) return;
+      if (!mounted || seq != _fetchSeq) return;
       setState(() => _error = 'The meeting service timed out. Please retry.');
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _fetchSeq) return;
       setState(
           () => _error = "Couldn't reach the meeting service. ${_clean(e)}");
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && seq == _fetchSeq) setState(() => _loading = false);
     }
   }
 
@@ -571,31 +581,25 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.xl,
-                  AppSpacing.md,
-                  AppSpacing.xl,
-                  AppSpacing.sm,
-                ),
-                child: Row(
+              SheetHeader(
+                icon: AppIcons.meetings,
+                title: 'Find a meeting',
+                bottom: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: Text(
-                        'Find a meeting',
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        0,
+                        AppSpacing.lg,
+                        AppSpacing.md,
                       ),
+                      child: _buildModeSwitch(theme),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    _buildModeSwitch(theme),
+                    _buildSearchControls(theme),
                   ],
                 ),
               ),
-              _buildSearchControls(theme),
-              const Divider(height: 1),
               Expanded(
                 child: _mode == 'online'
                     ? (_loading
@@ -626,13 +630,8 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
       ],
       selected: {_mode},
       showSelectedIcon: false,
-      style: const ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
-        padding: WidgetStatePropertyAll(
-          EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        ),
-      ),
+      expandedInsets: EdgeInsets.zero,
+      style: const ButtonStyle(visualDensity: VisualDensity.compact),
       onSelectionChanged: (sel) {
         final next = sel.first;
         if (next == _mode) return;
@@ -662,9 +661,9 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
       // Online mode has a single fellowship filter — keep it inline.
       return Padding(
         padding: const EdgeInsets.fromLTRB(
-          AppSpacing.xl,
+          AppSpacing.lg,
           0,
-          AppSpacing.xl,
+          AppSpacing.lg,
           AppSpacing.md,
         ),
         child: _filterRow(
@@ -681,9 +680,9 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
+        AppSpacing.lg,
         0,
-        AppSpacing.xl,
+        AppSpacing.lg,
         AppSpacing.sm,
       ),
       child: Column(
@@ -738,8 +737,8 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
               opacity: _locationIsPlaceholder ? 0.7 : 1,
               child: Row(
                 children: [
-                  const Icon(Icons.place_outlined,
-                      size: 14, color: AppColors.accent),
+                  Icon(Icons.place_outlined,
+                      size: 14, color: theme.colorScheme.primary),
                   const SizedBox(width: AppSpacing.xs),
                   Expanded(
                     child: Text(
@@ -822,10 +821,13 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
                 'any': 'Any day',
               },
               selected: _range,
-              onSelected: (v) => setState(() {
-                _range = v;
-                _resetCarousel();
-              }),
+              onSelected: (v) {
+                setState(() {
+                  _range = v;
+                  _resetCarousel();
+                });
+                _fetchAndRender();
+              },
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -841,10 +843,13 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
                 'late': 'Late night',
               },
               selected: _timeOfDay,
-              onSelected: (v) => setState(() {
-                _timeOfDay = v;
-                _resetCarousel();
-              }),
+              onSelected: (v) {
+                setState(() {
+                  _timeOfDay = v;
+                  _resetCarousel();
+                });
+                _fetchAndRender();
+              },
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -921,8 +926,8 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.place_outlined,
-                size: 40, color: AppColors.accent),
+            Icon(Icons.place_outlined,
+                size: 40, color: theme.colorScheme.primary),
             const SizedBox(height: AppSpacing.md),
             Text(
               'Enter a ZIP code or use your location to find meetings nearby.',
@@ -987,7 +992,7 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off, size: 36, color: AppColors.error),
+            Icon(Icons.cloud_off, size: 36, color: theme.colorScheme.error),
             const SizedBox(height: AppSpacing.md),
             Text(
               _error ?? 'Something went wrong.',
@@ -1083,9 +1088,9 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(
-            AppSpacing.xl,
+            AppSpacing.lg,
             AppSpacing.sm,
-            AppSpacing.xl,
+            AppSpacing.lg,
             AppSpacing.sm,
           ),
           child: Text(
@@ -1222,6 +1227,28 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
   }
 
   /// Compact swipeable card: when + distance, name, address, actions.
+  /// "Listed by (office)" — credits the intergroup whose feed this came
+  /// from and links to it (the office is the source of truth for changes).
+  Widget _sourceLine(ThemeData theme, Meeting m) {
+    if (m.source.isEmpty) return const SizedBox.shrink();
+    final style = theme.textTheme.bodySmall?.copyWith(
+      fontSize: 10.5,
+      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.65),
+    );
+    final label = Text(
+      'Listed by ${m.source}',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: m.sourceHome.isEmpty
+          ? label
+          : InkWell(onTap: () => _open(m.sourceHome), child: label),
+    );
+  }
+
   Widget _carouselCard(ThemeData theme, Meeting m, {required bool active}) {
     final where = m.address.isNotEmpty ? m.address : m.location;
     final t =
@@ -1247,7 +1274,7 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
                 _distanceLabel(m),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: m.isOnline && !m.isInperson
-                      ? AppColors.accent
+                      ? theme.colorScheme.primary
                       : theme.textTheme.bodySmall?.color,
                 ),
               ),
@@ -1280,6 +1307,7 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
               style: theme.textTheme.bodySmall,
             ),
           ),
+        _sourceLine(theme, m),
         const Spacer(),
         _actionsRow(m),
       ],
@@ -1355,6 +1383,7 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
               style: theme.textTheme.bodySmall,
             ),
           ),
+        _sourceLine(theme, m),
         const Spacer(),
         _actionsRow(m),
       ],
@@ -1369,9 +1398,9 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
         vertical: AppSpacing.xs,
       ),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppSpacing.radius),
         side: active
-            ? const BorderSide(color: AppColors.accent, width: 1.5)
+            ? BorderSide(color: theme.colorScheme.primary, width: 1.5)
             : BorderSide(
                 color: theme.dividerColor.withValues(alpha: 0.3),
               ),
@@ -1495,28 +1524,9 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
                   ),
                 ),
                 if (startsLabel.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: m.isLiveNow
-                          ? Colors.green.withValues(alpha: 0.15)
-                          : AppColors.accentSoft,
-                      border: Border.all(
-                        color: m.isLiveNow ? Colors.green : AppColors.accent,
-                      ),
-                      borderRadius: BorderRadius.circular(AppSpacing.sm),
-                    ),
-                    child: Text(
-                      startsLabel,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: m.isLiveNow ? Colors.green : AppColors.accent,
-                      ),
-                    ),
+                  StatusTag(
+                    startsLabel,
+                    tone: m.isLiveNow ? AppTone.success : AppTone.info,
                   ),
                 PopupMenuButton<String>(
                   padding: EdgeInsets.zero,
@@ -1613,24 +1623,9 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
   Widget _fellowshipPill(Meeting m) {
     final fellow =
         (m.fellowship.isEmpty ? 'AA' : m.fellowship).toUpperCase();
-    final isNa = fellow == 'NA';
-    final color = isNa ? const Color(0xFFB4654A) : AppColors.accent;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        border: Border.all(color: color),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        fellow,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.5,
-        ),
-      ),
+    return StatusTag(
+      fellow,
+      tone: fellow == 'NA' ? AppTone.warning : AppTone.info,
     );
   }
 
@@ -1666,25 +1661,7 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
   }
 
   Widget _tag(String text, {bool online = false}) {
-    final color = online ? AppColors.accent : null;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: online
-            ? AppColors.accentSoft
-            : Colors.grey.withValues(alpha: 0.12),
-        border: online ? Border.all(color: AppColors.accent) : null,
-        borderRadius: BorderRadius.circular(AppSpacing.sm),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 11,
-          color: color,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
+    return StatusTag(text, tone: online ? AppTone.info : AppTone.neutral);
   }
 
   List<Widget> _actions(Meeting m) {
@@ -1750,7 +1727,7 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
         padding:
             const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
         minimumSize: const Size(0, 32),
-        textStyle: const TextStyle(fontSize: 12),
+        textStyle: Theme.of(context).textTheme.labelMedium,
         visualDensity: VisualDensity.compact,
       ),
     );
@@ -1782,7 +1759,7 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
                     _distanceLabel(m),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: m.isOnline && !m.isInperson
-                          ? AppColors.accent
+                          ? theme.colorScheme.primary
                           : theme.textTheme.bodySmall?.color,
                     ),
                   ),
@@ -1830,6 +1807,7 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
                   ),
                 ),
               ),
+            _sourceLine(theme, m),
             if (_tags(m).isNotEmpty) ...[
               const SizedBox(height: AppSpacing.sm),
               Wrap(spacing: AppSpacing.xs, runSpacing: AppSpacing.xs, children: _tags(m)),
@@ -1908,6 +1886,7 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(where, style: theme.textTheme.bodySmall),
               ),
+            _sourceLine(theme, m),
             if (_tags(m).isNotEmpty) ...[
               const SizedBox(height: AppSpacing.sm),
               Wrap(spacing: AppSpacing.xs, runSpacing: AppSpacing.xs, children: _tags(m)),

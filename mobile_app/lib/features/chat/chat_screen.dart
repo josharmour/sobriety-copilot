@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sobriety_copilot_mobile/features/personal_memory/memory_snapshot.dart';
 import 'package:sobriety_copilot_mobile/features/tts/tts_service.dart';
 import 'package:sobriety_copilot_mobile/features/chat/ocr_scanner.dart';
 import 'package:image_picker/image_picker.dart';
@@ -32,6 +34,10 @@ import 'package:sobriety_copilot_mobile/features/meditation/meditation_sheet.dar
 import 'package:sobriety_copilot_mobile/features/daily/today_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
 import 'package:sobriety_copilot_mobile/features/graph/rag_graph_view.dart';
+import 'package:sobriety_copilot_mobile/features/personal_memory/memory_distiller.dart'
+    show distillerProvider, kDistillWindowTurns;
+import 'package:sobriety_copilot_mobile/features/personal_memory/memory_sheet.dart';
+import 'package:sobriety_copilot_mobile/features/personal_memory/personal_memory.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/widgets.dart';
@@ -60,10 +66,67 @@ enum _MenuAction {
   about,
 }
 
+/// Overflow-menu entries, in order. Labels match each sheet's title and the
+/// icons come from [AppIcons], so an entry looks like the sheet it opens.
+const List<({_MenuAction action, IconData icon, String label})> _kMenuItems = [
+  (action: _MenuAction.today, icon: AppIcons.today, label: 'Today'),
+  (
+    action: _MenuAction.meditation,
+    icon: AppIcons.meditation,
+    label: 'Meditation',
+  ),
+  (action: _MenuAction.saved, icon: AppIcons.saved, label: 'Saved passages'),
+  (action: _MenuAction.graph, icon: AppIcons.graph, label: 'Knowledge Graph'),
+  (
+    action: _MenuAction.meetings,
+    icon: AppIcons.meetings,
+    label: 'Find a meeting',
+  ),
+  (
+    action: _MenuAction.crisis,
+    icon: AppIcons.crisis,
+    label: 'Crisis resources',
+  ),
+  (
+    action: _MenuAction.altRecovery,
+    icon: AppIcons.altPaths,
+    label: 'Other recovery paths',
+  ),
+  (action: _MenuAction.settings, icon: AppIcons.settings, label: 'Settings'),
+  (action: _MenuAction.about, icon: AppIcons.about, label: 'About'),
+];
+
+/// FR11.1 'Remember this': target length for the dialog's prefilled text
+/// (under [kFactTextMax] so the word-boundary cut, not a hard cap, does the
+/// trimming).
+const int _rememberPrefillTarget = 110;
+
+/// FR11.1 'Remember this': normalizes a message into the dialog's prefilled
+/// suggestion — collapsed whitespace, ideally <=_rememberPrefillTarget
+/// chars, cut at a word boundary so no fact text ever ends mid-word.
+String normalizeRememberPrefill(String raw) {
+  final flat = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (flat.length <= _rememberPrefillTarget) return flat;
+  var cut = flat.substring(0, _rememberPrefillTarget);
+  final lastSpace = cut.lastIndexOf(' ');
+  if (lastSpace > 0) cut = cut.substring(0, lastSpace);
+  // A degenerate single-word blob (no space to cut at) hard-caps at 120;
+  // withFactAdded would do the same anyway.
+  var out = cut.trimRight();
+  if (out.length > kFactTextMax) out = out.substring(0, kFactTextMax);
+  return out;
+}
+
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final FocusNode _inputFocus = FocusNode();
+
+  /// Bare focus node consumed by the composer's KeyboardListener. It does not
+  /// steal focus — KeyboardListener nodes are transparent pass-throughs — it
+  /// just says "forward key events here while the text field (a child of it
+  /// in the focus tree) is focused".
+  final FocusNode _keyboardFocus = FocusNode();
   late final AppTts _tts;
 
   Timer? _debounce;
@@ -105,6 +168,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _input.dispose();
     _scroll.dispose();
     _inputFocus.dispose();
+    _keyboardFocus.dispose();
     _recorder.dispose();
     _tts.onDone = null;
     _tts.stop();
@@ -116,6 +180,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   // ── Sending ───────────────────────────────────────────────────────────────
+
+  /// Composer key handling: Enter (and numpad Enter) sends on web/desktop,
+  /// Shift+Enter inserts a newline. IME-composition input (e.g. Asian
+  /// keyboards' candidates) is left alone so Enter can confirm a candidate.
+  void _composerKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return;
+    if (!kIsWeb) {
+      // Touch keyboards: key events from soft keyboards are unreliable;
+      // the newline action + send button is the contract there.
+      return;
+    }
+    // Enter during IME composition must not send (candidate confirmation).
+    if (_input.value.composing != TextRange.empty) return;
+    final key = event.physicalKey;
+    if (key == PhysicalKeyboardKey.enter ||
+        key == PhysicalKeyboardKey.numpadEnter) {
+      final isShift =
+          HardwareKeyboard.instance.isShiftPressed ||
+          HardwareKeyboard.instance.isControlPressed ||
+          HardwareKeyboard.instance.isAltPressed ||
+          HardwareKeyboard.instance.isMetaPressed;
+      if (!isShift) {
+        _send();
+      }
+    }
+  }
 
   Future<void> _send([String? text]) async {
     final value = (text ?? _input.text).trim();
@@ -130,9 +220,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     FocusScope.of(context).unfocus();
 
     // Fire and forget; the notifier folds the SSE stream into state.
-    unawaited(ref
-        .read(chatNotifierProvider.notifier)
-        .sendMessage(value, images: images));
+    unawaited(
+      ref
+          .read(chatNotifierProvider.notifier)
+          .sendMessage(value, images: images),
+    );
     _scrollToBottomSoon();
   }
 
@@ -203,16 +295,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } on PlatformException catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.code.contains('access_denied')
-              ? 'Camera access is turned off for Sobriety Copilot. You can '
-                  'enable it in your device Settings.'
-              : 'Could not scan text — please try again.'),
+          content: Text(
+            e.code.contains('access_denied')
+                ? 'Camera access is turned off for Sobriety Copilot. You can '
+                    'enable it in your device Settings.'
+                : 'Could not scan text — please try again.',
+          ),
         ),
       );
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(
-            content: Text('Could not scan text — please try again.')),
+          content: Text('Could not scan text — please try again.'),
+        ),
       );
     }
   }
@@ -222,34 +317,45 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Attach menu: take/choose a photo (sent to the model), or scan text (OCR
   /// into the input box).
   Future<void> _showAttachSheet() async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (supportsCameraAndOcr)
-              ListTile(
-                leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Take a photo'),
-                subtitle: const Text('Ask about what the photo shows'),
-                onTap: () => Navigator.pop(ctx, 'camera'),
+    final action = await showAppSheet<String>(
+      context,
+      Builder(
+        builder:
+            (ctx) => AppSheet(
+              header: const SheetHeader(
+                icon: AppIcons.attach,
+                title: 'Add to your message',
               ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose a photo'),
-              onTap: () => Navigator.pop(ctx, 'gallery'),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sm,
+                AppSpacing.xs,
+                AppSpacing.sm,
+                AppSpacing.lg,
+              ),
+              children: [
+                if (supportsCameraAndOcr)
+                  ListTile(
+                    leading: const Icon(Icons.photo_camera_outlined),
+                    title: const Text('Take a photo'),
+                    subtitle: const Text('Ask about what the photo shows'),
+                    onTap: () => Navigator.pop(ctx, 'camera'),
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: const Text('Choose a photo'),
+                  onTap: () => Navigator.pop(ctx, 'gallery'),
+                ),
+                if (supportsCameraAndOcr)
+                  ListTile(
+                    leading: const Icon(Icons.document_scanner_outlined),
+                    title: const Text('Scan text'),
+                    subtitle: const Text('Read text from a page into the box'),
+                    onTap: () => Navigator.pop(ctx, 'scan'),
+                  ),
+              ],
             ),
-            if (supportsCameraAndOcr)
-              ListTile(
-                leading: const Icon(Icons.document_scanner_outlined),
-                title: const Text('Scan text'),
-                subtitle: const Text('Read text from a page into the box'),
-                onTap: () => Navigator.pop(ctx, 'scan'),
-              ),
-          ],
-        ),
       ),
+      fitContent: true,
     );
     switch (action) {
       case 'camera':
@@ -289,16 +395,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } on PlatformException catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.code.contains('access_denied')
-              ? 'Camera or photo access is turned off for Sobriety Copilot. '
-                  'You can enable it in your device Settings.'
-              : 'Could not attach photo — please try again.'),
+          content: Text(
+            e.code.contains('access_denied')
+                ? 'Camera or photo access is turned off for Sobriety Copilot. '
+                    'You can enable it in your device Settings.'
+                : 'Could not attach photo — please try again.',
+          ),
         ),
       );
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(
-            content: Text('Could not attach photo — please try again.')),
+          content: Text('Could not attach photo — please try again.'),
+        ),
       );
     }
   }
@@ -353,7 +462,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(
-            content: Text('Could not start recording — please try again.')),
+          content: Text('Could not start recording — please try again.'),
+        ),
       );
     }
   }
@@ -388,8 +498,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (text.isNotEmpty) {
         final existing = _input.text.trim();
         _input.text = existing.isEmpty ? text : '$existing $text';
-        _input.selection =
-            TextSelection.collapsed(offset: _input.text.length);
+        _input.selection = TextSelection.collapsed(offset: _input.text.length);
         _inputFocus.requestFocus();
         _onInputChanged(_input.text);
       } else {
@@ -400,7 +509,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(
-            content: Text('Could not transcribe that — please try again.')),
+          content: Text('Could not transcribe that — please try again.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isTranscribing = false);
@@ -415,10 +525,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     out = out.replaceAll(RegExp(r'```[\s\S]*?```'), ' ');
     out = out.replaceAllMapped(RegExp(r'`([^`]+)`'), (m) => m[1]!);
     out = out.replaceAll(RegExp(r'!\[[^\]]*\]\([^)]*\)'), ' ');
-    out = out.replaceAllMapped(
-      RegExp(r'\[([^\]]+)\]\([^)]+\)'),
-      (m) => m[1]!,
-    );
+    out = out.replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^)]+\)'), (m) => m[1]!);
     out = out.replaceAll(RegExp(r'(\*\*\*|___|\*\*|__|\*|_|~~)'), '');
     out = out.replaceAll(RegExp(r'^\s{0,3}#{1,6}\s+', multiLine: true), '');
     out = out.replaceAll(RegExp(r'^\s{0,3}>\s?', multiLine: true), '');
@@ -460,7 +567,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _openMenu(_MenuAction action) async {
     switch (action) {
       case _MenuAction.today:
-        await showAppSheet(context, const TodaySheet());
+        await showAppSheet(context, const TodaySheet(), initialSize: 0.9);
       case _MenuAction.meditation:
         await showAppSheet(context, const MeditationSheet());
       case _MenuAction.saved:
@@ -468,21 +575,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       case _MenuAction.graph:
         await Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => RagGraphScreen(
-              initialQuery: '',
-              onSelectPrompt: (prompt) => _send(prompt),
-            ),
+            builder:
+                (_) => RagGraphScreen(
+                  initialQuery: '',
+                  onSelectPrompt: (prompt) => _send(prompt),
+                ),
           ),
         );
       case _MenuAction.meetings:
         // Map + results want the full screen.
         await showAppSheet(context, const MeetingsSheet(), initialSize: 0.95);
       case _MenuAction.crisis:
-        await showAppSheet(context, const CrisisSheet());
+        await CrisisSheet.show(context);
       case _MenuAction.altRecovery:
-        await showAppSheet(context, const AltRecoverySheet());
+        await showAppSheet(
+          context,
+          const AltRecoverySheet(),
+          fitContent: true,
+        );
       case _MenuAction.settings:
-        await showAppSheet(context, const SettingsSheet());
+        await showAppSheet(context, const SettingsSheet(), initialSize: 0.9);
       case _MenuAction.about:
         await showAppSheet(context, const AboutSheet());
     }
@@ -514,6 +626,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         baseUrl: baseUrl,
         savedNotifier: saved,
       ),
+      fitContent: true,
     );
   }
 
@@ -535,6 +648,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final config = ref.watch(appConfigProvider);
     final chat = ref.watch(chatNotifierProvider);
+    final memoryEnabled = ref.watch(memoryEnabledProvider);
+    final memory = ref.watch(personalMemoryProvider);
 
     // Auto-scroll + auto-read on new content.
     ref.listen<ChatState>(chatNotifierProvider, (prev, next) {
@@ -563,35 +678,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   message:
                       'Private Mode — answering on this phone. Nothing leaves the device.',
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                    customBorder: const StadiumBorder(),
                     onTap: () => _openMenu(_MenuAction.settings),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withValues(alpha: 0.15),
-                        border: Border.all(color: AppColors.accent),
-                        borderRadius:
-                            BorderRadius.circular(AppSpacing.radiusLg),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.shield_outlined,
-                              size: 13, color: AppColors.accent),
-                          SizedBox(width: 3),
-                          Text(
-                            'Private',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.accent,
-                            ),
-                          ),
-                        ],
-                      ),
+                    child: const StatusTag(
+                      'Private',
+                      icon: AppIcons.privateMode,
+                      tone: AppTone.info,
                     ),
                   ),
                 ),
@@ -600,20 +692,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ),
         actions: [
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.25),
-              borderRadius: BorderRadius.circular(AppSpacing.radius),
-              border: Border.all(color: AppColors.accent, width: 1.2),
-            ),
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              icon: const Icon(Icons.bubble_chart, color: AppColors.accent, size: 20),
-              tooltip: 'Knowledge Graph',
-              onPressed: () => _openMenu(_MenuAction.graph),
-            ),
+          IconButton.filledTonal(
+            icon: const Icon(AppIcons.graph),
+            tooltip: 'Knowledge Graph',
+            onPressed: () => _openMenu(_MenuAction.graph),
           ),
           IconButton(
             icon: const Icon(Icons.add_comment_outlined),
@@ -622,80 +704,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           PopupMenuButton<_MenuAction>(
             onSelected: _openMenu,
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: _MenuAction.today,
-                child: ListTile(
-                  leading: Icon(Icons.wb_twilight_outlined),
-                  title: Text('Today'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.meditation,
-                child: ListTile(
-                  leading: Icon(Icons.self_improvement_outlined),
-                  title: Text('Meditation'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.saved,
-                child: ListTile(
-                  leading: Icon(Icons.bookmark_outline),
-                  title: Text('Saved passages'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.graph,
-                child: ListTile(
-                  leading: Icon(Icons.hub_outlined),
-                  title: Text('Knowledge Graph'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.meetings,
-                child: ListTile(
-                  leading: Icon(Icons.groups_outlined),
-                  title: Text('Find meetings'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.crisis,
-                child: ListTile(
-                  leading: Icon(Icons.health_and_safety_outlined),
-                  title: Text('Crisis resources'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.altRecovery,
-                child: ListTile(
-                  leading: Icon(Icons.alt_route_outlined),
-                  title: Text('Other recovery paths'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.settings,
-                child: ListTile(
-                  leading: Icon(Icons.settings_outlined),
-                  title: Text('Settings'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: _MenuAction.about,
-                child: ListTile(
-                  leading: Icon(Icons.info_outline),
-                  title: Text('About'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ],
+            tooltip: 'Show menu',
+            itemBuilder:
+                (context) => [
+                  for (final item in _kMenuItems)
+                    PopupMenuItem(
+                      value: item.action,
+                      child: ListTile(
+                        leading: Icon(item.icon),
+                        title: Text(item.label),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                ],
           ),
         ],
       ),
@@ -705,15 +726,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           child: Column(
             children: [
               Expanded(
-                child: chat.isEmpty
-                    ? _StarterView(
-                        key: ValueKey(_starterGeneration),
-                        onPick: _send,
-                        studySuggestions: ref.watch(studySuggestionsProvider),
-                      )
-                    : _buildMessageList(chat, config),
+                child:
+                    chat.isEmpty
+                        ? _StarterView(
+                          key: ValueKey(_starterGeneration),
+                          onPick: _send,
+                          studySuggestions: ref.watch(studySuggestionsProvider),
+                          resumeThread: _resumeChipCandidate(
+                            memoryEnabled,
+                            memory,
+                            chat.resumedThread,
+                          ),
+                          onResume: _resumeFromThread,
+                        )
+                        : _buildMessageList(chat, config),
               ),
               if (_suggestVisible) _buildSuggestions(config),
+              _buildMemoryHint(memoryEnabled: memoryEnabled, memory: memory),
               _buildInputBar(chat, config),
             ],
           ),
@@ -742,10 +771,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           showRetry: isLast && m.isAssistant && m.isError,
           onSpeak: () => _toggleSpeak(m),
           onCopy: () => _copy(m.text),
-          onRetry: () =>
-              ref.read(chatNotifierProvider.notifier).retryLast(),
-          onSourceTap: (source, allSources) =>
-              _showSourceDetail(source, allSources),
+          onRetry: () => ref.read(chatNotifierProvider.notifier).retryLast(),
+          onRemember: (normalized) => _remember(m.text, normalized),
+          onSourceTap:
+              (source, allSources) => _showSourceDetail(source, allSources),
           onFollowup: _send,
           onLinkTap: _openUrl,
         );
@@ -756,10 +785,156 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _copy(String text) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Copied')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Copied')));
     }
+  }
+
+  Future<void> _remember(String rawText, String normalized) async {
+    HapticFeedback.selectionClick();
+    final messenger = ScaffoldMessenger.of(context);
+    // FR11.4: a lingering confirmation bar can block the long-press menu in
+    // a lane it overlays — start every Remember flow fresh.
+    messenger.clearSnackBars();
+    final text = await promptRememberFact(context, prefilled: normalized);
+    if (text == null || text.isEmpty || !mounted) return;
+    final convId = ref.read(chatNotifierProvider).conversationId ?? 'manual';
+    final added = await ref
+        .read(personalMemoryProvider.notifier)
+        .addFact(text, convId);
+    if (!mounted) return;
+    // FR11.4: dismiss-before-show so a repeat save REPLACES the old bar
+    // instead of queueing behind it, and give it a fixed 4s window (Flutter's
+    // auto-dismiss pauses while the pointer hovers the bar, which on web sits
+    // right over the composer row's Remember button).
+    messenger.clearSnackBars();
+    if (added == null) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Already in your memory'),
+          duration: Duration(seconds: 4),
+          persist: false,
+        ),
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('Saved to your memory'),
+        duration: const Duration(seconds: 4),
+        // Vendored Flutter defaults persist to TRUE when an action is set,
+        // which stranded this bar over the composer's Remember button on web
+        // (no close icon, no swipe) — FR11.4.
+        persist: false,
+        action: SnackBarAction(
+          label: 'UNDO',
+          onPressed: () async {
+            await ref
+                .read(personalMemoryProvider.notifier)
+                .removeFact(added.id);
+          },
+        ),
+      ),
+    );
+  }
+
+  // ── FR11 Wave C: memory resume chip + inline memory hint ────────────────────
+
+  /// The MOST-RECENT unresolved thread, when the chip should show: memory
+  /// enabled, no thread already resumed in this chat, and at least one open
+  /// thread. Returns exactly one thread or null (chip hidden).
+  MemoryThread? _resumeChipCandidate(
+    bool memoryEnabled,
+    PersonalMemory memory,
+    ThreadRef? resumedThread,
+  ) {
+    if (!memoryEnabled) return null;
+    if (resumedThread != null) return null;
+    MemoryThread? best;
+    for (final t in memory.threads) {
+      if (t.resolved || t.title.trim().isEmpty) continue;
+      if (best == null || t.updatedAt.isAfter(best.updatedAt)) best = t;
+    }
+    return best;
+  }
+
+  /// Chip / card resume action: seed a NEW chat that carries the thread
+  /// (startNew -> resumeThread -> send the resume prompt as message #1).
+  void _resumeFromThread(MemoryThread thread) {
+    final notifier = ref.read(chatNotifierProvider.notifier);
+    notifier.startNew();
+    notifier.resumeThread(thread);
+    // Fire and forget, mirroring _send().
+    unawaited(
+      notifier.sendMessage(
+        resumePromptFor(
+          ThreadRef(
+            title: thread.title,
+            lastDetail: thread.lastDetail,
+            updatedAt: thread.updatedAt,
+            resolved: thread.resolved,
+          ),
+        ),
+      ),
+    );
+    _input.clear();
+    _hideSuggestions();
+    _scrollToBottomSoon();
+  }
+
+  /// Subtle one-line hint above the input when there is anything to inject:
+  /// "Personal memory on · (n) things remembered · manage".
+  /// Renders NOTHING when memory is off OR has nothing meaningful.
+  Widget _buildMemoryHint({
+    required bool memoryEnabled,
+    required PersonalMemory memory,
+  }) {
+    if (!memoryEnabled) return const SizedBox.shrink();
+    final threadCount =
+        memory.threads
+            .where((t) => !t.resolved && t.title.trim().isNotEmpty)
+            .length;
+    final n =
+        memory.profile.triggers.length +
+        (memory.profile.goal?.trim().isEmpty ?? true ? 0 : 1) +
+        memory.facts.length +
+        threadCount;
+    if (n == 0) return const SizedBox.shrink(); // no visual noise
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surface,
+      child: InkWell(
+        onTap: () => showAppSheet(context, const MemorySheet(), initialSize: 0.9),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: 2,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                AppIcons.memory,
+                size: 12,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Flexible(
+                child: Text(
+                  'Personal memory on · $n things remembered · manage',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildSuggestions(AppConfig config) {
@@ -782,14 +957,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               dense: true,
               leading: const Icon(Icons.north_west, size: 16),
               title: Text(s.text, maxLines: 2, overflow: TextOverflow.ellipsis),
-              subtitle: s.source.isEmpty
-                  ? null
-                  : Text(
-                      s.source,
-                      style: theme.textTheme.bodySmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+              subtitle:
+                  s.source.isEmpty
+                      ? null
+                      : Text(
+                        s.source,
+                        style: theme.textTheme.bodySmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
               onTap: () => _applySuggestion(s),
             );
           },
@@ -825,47 +1001,56 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  icon: const Icon(AppIcons.attach),
                   tooltip: 'Attach a photo or scan text',
                   onPressed: _showAttachSheet,
                 ),
                 if (supportsMicInput)
                   _isTranscribing
                       ? const IconButton(
-                          onPressed: null,
-                          icon: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : IconButton(
-                          icon:
-                              Icon(_isRecording ? Icons.stop : Icons.mic_none),
-                          color:
-                              _isRecording ? theme.colorScheme.error : null,
-                          tooltip:
-                              _isRecording ? 'Stop recording' : 'Voice input',
-                          onPressed: _toggleMic,
+                        onPressed: null,
+                        icon: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
+                      )
+                      : IconButton(
+                        icon: Icon(_isRecording ? Icons.stop : Icons.mic_none),
+                        color: _isRecording ? theme.colorScheme.error : null,
+                        tooltip:
+                            _isRecording ? 'Stop recording' : 'Voice input',
+                        onPressed: _toggleMic,
+                      ),
                 Expanded(
-                  child: TextField(
+                  // Enter sends on desktop/web (Shift+Enter = newline), as
+                  // expected for a desktop chat composer. Touch keyboards
+                  // keep the default newline action (their key events are
+                  // unreliable); mobile users send via the send button.
+                  child: KeyboardListener(
+                    focusNode: _keyboardFocus,
+                    onKeyEvent: _composerKeyEvent,
+                    child: TextField(
                     controller: _input,
                     focusNode: _inputFocus,
                     minLines: 1,
                     maxLines: 5,
-                    textInputAction: TextInputAction.newline,
+                    textInputAction: kIsWeb
+                        ? TextInputAction.done
+                        : TextInputAction.newline,
                     onChanged: _onInputChanged,
                     decoration: InputDecoration(
-                      hintText: _isRecording
-                          ? 'Listening…'
-                          : 'Ask about recovery, share what is going on...',
+                      hintText:
+                          _isRecording
+                              ? 'Listening…'
+                              : 'Ask about recovery, share what is going on...',
                       filled: true,
                       fillColor: theme.colorScheme.surfaceContainerHighest
                           .withValues(alpha: 0.5),
                       border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppSpacing.radiusLg),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusLg,
+                        ),
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(
@@ -874,20 +1059,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       ),
                     ),
                   ),
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
                 chat.isSending
                     ? IconButton.filled(
-                        icon: const Icon(Icons.stop),
-                        tooltip: 'Stop',
-                        onPressed: () =>
-                            ref.read(chatNotifierProvider.notifier).stop(),
-                      )
+                      icon: const Icon(Icons.stop),
+                      tooltip: 'Stop',
+                      onPressed:
+                          () => ref.read(chatNotifierProvider.notifier).stop(),
+                    )
                     : IconButton.filled(
-                        icon: const Icon(Icons.send),
-                        tooltip: 'Send',
-                        onPressed: canSend ? () => _send() : null,
-                      ),
+                      icon: const Icon(Icons.send),
+                      tooltip: 'Send',
+                      onPressed: canSend ? () => _send() : null,
+                    ),
               ],
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -895,30 +1081,158 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 TextButton.icon(
-                  icon: const Icon(Icons.groups_outlined, size: 14),
+                  icon: const Icon(AppIcons.meetings, size: 14),
                   label: const Text('Find a meeting'),
                   style: TextButton.styleFrom(
                     foregroundColor: theme.colorScheme.onSurfaceVariant,
                     minimumSize: Size.zero,
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 8,
+                    ),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     textStyle: theme.textTheme.bodySmall,
                   ),
                   onPressed: () => _openMenu(_MenuAction.meetings),
                 ),
                 TextButton.icon(
-                  icon: const Icon(Icons.wb_twilight_outlined, size: 14),
+                  icon: const Icon(AppIcons.today, size: 14),
                   label: const Text('Today'),
                   style: TextButton.styleFrom(
                     foregroundColor: theme.colorScheme.onSurfaceVariant,
                     minimumSize: Size.zero,
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 8,
+                    ),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     textStyle: theme.textTheme.bodySmall,
                   ),
                   onPressed: () => _openMenu(_MenuAction.today),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.bookmark_add_outlined, size: 14),
+                  label: const Text('Remember this'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.onSurfaceVariant,
+                    minimumSize: Size.zero,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 8,
+                    ),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: theme.textTheme.bodySmall,
+                  ),
+                  onPressed: () async {
+                    HapticFeedback.selectionClick();
+                    // FR11.2: suggestion mode — prefill from what the model
+                    // thinks this conversation is worth remembering, falling
+                    // back to the composer text. Best-effort: any failure ->
+                    // the plain empty editable field.
+                    final convState = ref.read(chatNotifierProvider);
+                    final inputText = normalizeRememberPrefill(_input.text);
+                    Future<String?> Function()? suggester;
+                    final turns = <ChatMessage>[
+                      for (final m in convState.messages)
+                        if ((m.isUser || m.isAssistant) &&
+                            !m.isError &&
+                            m.text.trim().isNotEmpty)
+                          m,
+                    ];
+                    if (turns.length >= 2) {
+                      final transcript = turns.length <= kDistillWindowTurns
+                          ? turns
+                          : turns.sublist(turns.length - kDistillWindowTurns);
+                      final memory = ref.read(personalMemoryProvider);
+                      final digest = <String, dynamic>{
+                        'facts': [
+                          for (final f in memory.facts.reversed.take(20)) f.text,
+                        ],
+                        'threads': [
+                          for (final t in memory.threads)
+                            if (!t.resolved) t.title,
+                        ],
+                      };
+                      // Runs CONCURRENTLY with the open dialog (the dialog
+                      // awaits it internally); the call site never awaits it.
+                      Future<String?> suggest() async {
+                        try {
+                          final result = await ref
+                              .read(distillerProvider)
+                              .distill(
+                                transcript,
+                                existingMemoryDigest: digest,
+                                suggestMode: true,
+                              );
+                          if (result.newFacts.isEmpty) return null;
+                          return result.newFacts.first;
+                        } catch (_) {
+                          return null; // suggestion is best-effort only
+                        }
+                      }
+
+                      suggester = suggest;
+                    }
+                    final messenger = ScaffoldMessenger.of(context);
+                    // FR11.4: a stale "Saved to your memory" bar parks over
+                    // this button (fixed bottom lane, no swipe on desktop)
+                    // and both eats the tap targets and queues behind future
+                    // bars — dismiss it as soon as the user acts again.
+                    messenger.clearSnackBars();
+                    final text = await promptRememberFact(
+                      context,
+                      prefilled: inputText,
+                      suggester: suggester,
+                    );
+                    if (text == null || text.isEmpty || !mounted) return;
+                    final convId =
+                        ref.read(chatNotifierProvider).conversationId ??
+                        'manual';
+                    final added = await ref
+                        .read(personalMemoryProvider.notifier)
+                        .addFact(text, convId);
+                    if (!mounted) return;
+                    // FR11.4: replace-not-queue on repeat saves, fixed 4s
+                    // window (hover pauses the auto-dismiss on web).
+                    messenger.clearSnackBars();
+                    if (added == null) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Already in your memory'),
+                          duration: Duration(seconds: 4),
+                          persist: false,
+                        ),
+                      );
+                    } else {
+                      var undone = false;
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: const Text('Saved to your memory'),
+                          duration: const Duration(seconds: 4),
+                          // Vendored Flutter: persist defaults to true with an
+                          // action -> bar stranded over the Remember button
+                          // (FR11.4).
+                          persist: false,
+                          action: SnackBarAction(
+                            label: 'UNDO',
+                            onPressed: () {
+                              undone = true;
+                              ref
+                                  .read(personalMemoryProvider.notifier)
+                                  .removeFact(added.id);
+                            },
+                          ),
+                        ),
+                      );
+                      if (undone) return;
+                      // Clear the composer only when its current text is
+                      // exactly what was saved (the common flow: type it,
+                      // remember, send later or not at all).
+                      if (_input.text.trim() == inputText) {
+                        _input.clear();
+                      }
+                    }
+                  },
                 ),
               ],
             ),
@@ -965,8 +1279,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     icon: const Icon(Icons.cancel),
                     color: theme.colorScheme.error,
                     tooltip: 'Remove',
-                    onPressed: () =>
-                        setState(() => _pendingImages.removeAt(i)),
+                    onPressed: () => setState(() => _pendingImages.removeAt(i)),
                   ),
                 ),
               ],
@@ -985,10 +1298,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 class _StarterView extends ConsumerStatefulWidget {
   final void Function(String prompt) onPick;
   final List<StudySuggestion> studySuggestions;
+
+  /// FR11 Wave C — when personal memory is enabled and there is an open
+  /// thread (and none already resumed), the MOST-RECENT unresolved thread
+  /// renders as a single "Continue: <title>" chip above the starters.
+  final MemoryThread? resumeThread;
+  final void Function(MemoryThread thread) onResume;
   const _StarterView({
     super.key,
     required this.onPick,
     this.studySuggestions = const [],
+    this.resumeThread,
+    required this.onResume,
   });
 
   @override
@@ -1013,47 +1334,54 @@ class _StarterViewState extends ConsumerState<_StarterView> {
     final prompts = _prompts;
     final reflection = reflectionForToday();
 
-    final bgDecoration = isLight
-        ? BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                theme.colorScheme.surface,
-                theme.colorScheme.surfaceContainerHighest.withAlpha(180),
-              ],
-            ),
-          )
-        : const BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage('assets/icon/app_icon.jpg'),
-              fit: BoxFit.cover,
-              alignment: Alignment.center,
-            ),
-          );
+    final bgDecoration =
+        isLight
+            ? BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  theme.colorScheme.surface,
+                  theme.colorScheme.surfaceContainerHighest.withAlpha(180),
+                ],
+              ),
+            )
+            : const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/icon/app_icon.jpg'),
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+              ),
+            );
 
-    final overlayDecoration = isLight
-        ? const BoxDecoration(color: Colors.transparent)
-        : BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black.withAlpha(20),
-                Colors.black.withAlpha(160),
-                Colors.black.withAlpha(240),
-              ],
-              stops: const [0.0, 0.5, 1.0],
-            ),
-          );
+    final overlayDecoration =
+        isLight
+            ? const BoxDecoration(color: Colors.transparent)
+            : BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withAlpha(20),
+                  Colors.black.withAlpha(160),
+                  Colors.black.withAlpha(240),
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+            );
 
     final titleColor = isLight ? theme.colorScheme.onSurface : Colors.white;
-    final cardBg = isLight ? theme.colorScheme.surface : Colors.black.withAlpha(120);
-    final cardBorder = isLight ? theme.colorScheme.outlineVariant : Colors.white24;
-    final reflectionTextColor = isLight ? theme.colorScheme.onSurface : Colors.white;
+    final cardBg =
+        isLight ? theme.colorScheme.surface : Colors.black.withAlpha(120);
+    final cardBorder =
+        isLight ? theme.colorScheme.outlineVariant : Colors.white24;
+    final reflectionTextColor =
+        isLight ? theme.colorScheme.onSurface : Colors.white;
     final btnFgColor = isLight ? theme.colorScheme.onSurface : Colors.white;
-    final btnBorderColor = isLight ? theme.colorScheme.outlineVariant : Colors.white54;
-    final btnBgColor = isLight ? theme.colorScheme.surface : Colors.black.withAlpha(120);
+    final btnBorderColor =
+        isLight ? theme.colorScheme.outlineVariant : Colors.white54;
+    final btnBgColor =
+        isLight ? theme.colorScheme.surface : Colors.black.withAlpha(120);
 
     return Container(
       decoration: bgDecoration,
@@ -1065,7 +1393,10 @@ class _StarterViewState extends ConsumerState<_StarterView> {
               padding: const EdgeInsets.all(AppSpacing.xl),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight > 80 ? constraints.maxHeight - 80 : 0,
+                  minHeight:
+                      constraints.maxHeight > 80
+                          ? constraints.maxHeight - 80
+                          : 0,
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -1077,15 +1408,16 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                       style: theme.textTheme.headlineMedium?.copyWith(
                         color: titleColor,
                         fontWeight: FontWeight.bold,
-                        shadows: isLight
-                            ? null
-                            : [
-                                const Shadow(
-                                  color: Colors.black87,
-                                  blurRadius: 8,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
+                        shadows:
+                            isLight
+                                ? null
+                                : [
+                                  const Shadow(
+                                    color: Colors.black87,
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -1096,17 +1428,20 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                           padding: const EdgeInsets.all(AppSpacing.lg),
                           decoration: BoxDecoration(
                             color: cardBg,
-                            borderRadius: BorderRadius.circular(AppSpacing.radius),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.radius,
+                            ),
                             border: Border.all(color: cardBorder),
-                            boxShadow: isLight
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black.withAlpha(12),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ]
-                                : null,
+                            boxShadow:
+                                isLight
+                                    ? [
+                                      BoxShadow(
+                                        color: Colors.black.withAlpha(12),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                    : null,
                           ),
                           child: Text(
                             reflection,
@@ -1122,6 +1457,48 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                     const SizedBox(height: AppSpacing.md),
                     const MilestoneCard(),
                     const SizedBox(height: AppSpacing.xl),
+                    if (widget.resumeThread != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 600),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  alignment: Alignment.centerLeft,
+                                  foregroundColor: btnFgColor,
+                                  side: BorderSide(color: btnBorderColor),
+                                  backgroundColor: btnBgColor,
+                                  // Prompts are content, not button labels.
+                                  textStyle: theme.textTheme.bodyMedium,
+                                  padding: const EdgeInsets.all(AppSpacing.lg),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      AppSpacing.radius,
+                                    ),
+                                  ),
+                                  elevation: isLight ? 1 : 0,
+                                ),
+                                icon: Icon(
+                                  Icons.history,
+                                  size: 18,
+                                  color: theme.colorScheme.primary,
+                                ),
+                                label: Text(
+                                  'Continue: ${widget.resumeThread!.title}',
+                                  textAlign: TextAlign.left,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                onPressed:
+                                    () => widget.onResume(widget.resumeThread!),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ...prompts.map(
                       (p) => Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -1136,9 +1513,13 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                                   foregroundColor: btnFgColor,
                                   side: BorderSide(color: btnBorderColor),
                                   backgroundColor: btnBgColor,
+                                  // Prompts are content, not button labels.
+                                  textStyle: theme.textTheme.bodyMedium,
                                   padding: const EdgeInsets.all(AppSpacing.lg),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(AppSpacing.radius),
+                                    borderRadius: BorderRadius.circular(
+                                      AppSpacing.radius,
+                                    ),
                                   ),
                                   elevation: isLight ? 1 : 0,
                                 ),
@@ -1154,7 +1535,7 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                 ),
               ),
             );
-          }
+          },
         ),
       ),
     );
@@ -1180,16 +1561,16 @@ class _DenoisingProgress extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.auto_awesome,
                 size: 14,
-                color: AppColors.accent,
+                color: theme.colorScheme.primary,
               ),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 'denoising — pass ${step + 1}/$total',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.accent,
+                  color: theme.colorScheme.primary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1202,7 +1583,7 @@ class _DenoisingProgress extends StatelessWidget {
               value: cleanPercent,
               minHeight: 4,
               backgroundColor: theme.colorScheme.outlineVariant,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accent),
+              valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
             ),
           ),
         ],
@@ -1224,6 +1605,11 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback onSpeak;
   final VoidCallback onCopy;
   final VoidCallback onRetry;
+
+  /// FR11.1 'Remember this': long-press-to-save affordance, available on
+  /// BOTH user and assistant bubbles ([onRemember] receives the
+  /// whitespace-normalized prefill; the handler opens the edit dialog).
+  final void Function(String normalizedPrefill) onRemember;
   final void Function(Source, List<Source>) onSourceTap;
   final void Function(String) onFollowup;
   final void Function(String) onLinkTap;
@@ -1238,6 +1624,7 @@ class _MessageBubble extends StatelessWidget {
     required this.onSpeak,
     required this.onCopy,
     required this.onRetry,
+    required this.onRemember,
     required this.onSourceTap,
     required this.onFollowup,
     required this.onLinkTap,
@@ -1256,50 +1643,74 @@ class _MessageBubble extends StatelessWidget {
     final hasText = message.text.trim().isNotEmpty;
     return Align(
       alignment: Alignment.centerRight,
-      child: Container(
-        margin: const EdgeInsets.only(
-          bottom: AppSpacing.md,
-          left: AppSpacing.xxl,
-        ),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.md,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.accent,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (hasImages)
-              Padding(
-                padding: EdgeInsets.only(bottom: hasText ? AppSpacing.sm : 0),
-                child: Wrap(
-                  spacing: AppSpacing.xs,
-                  runSpacing: AppSpacing.xs,
-                  alignment: WrapAlignment.end,
-                  children: [
-                    for (final url in message.imageThumbs)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(AppSpacing.radius),
-                        child: Image.memory(
-                          base64Decode(url.split(',').last),
-                          width: 140,
-                          height: 140,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            if (hasText)
-              Text(
-                message.text,
-                style: const TextStyle(color: Colors.white),
-              ),
-          ],
+      child: Tooltip(
+        message: 'Remember this',
+        triggerMode: TooltipTriggerMode.longPress,
+        child: GestureDetector(
+          onLongPress:
+              hasText
+                  ? () => onRemember(normalizeRememberPrefill(message.text))
+                  : null,
+          onDoubleTap:
+              hasText
+                  ? () => onRemember(normalizeRememberPrefill(message.text))
+                  : null,
+          onSecondaryTapUp:
+              hasText
+                  ? (_) => onRemember(normalizeRememberPrefill(message.text))
+                  : null,
+          child: Container(
+            margin: const EdgeInsets.only(
+              bottom: AppSpacing.md,
+              left: AppSpacing.xxl,
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasImages)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: hasText ? AppSpacing.sm : 0,
+                    ),
+                    child: Wrap(
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xs,
+                      alignment: WrapAlignment.end,
+                      children: [
+                        for (final url in message.imageThumbs)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.radius,
+                            ),
+                            child: Image.memory(
+                              base64Decode(url.split(',').last),
+                              width: 140,
+                              height: 140,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                if (hasText)
+                  Text(
+                    message.text,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1307,52 +1718,74 @@ class _MessageBubble extends StatelessWidget {
 
   Widget _assistantBubble(BuildContext context) {
     final hasText = message.text.trim().isNotEmpty;
-    final hasDiffusion = message.isDenoising && message.diffusionContent != null && message.diffusionContent!.trim().isNotEmpty;
+    final hasDiffusion =
+        message.isDenoising &&
+        message.diffusionContent != null &&
+        message.diffusionContent!.trim().isNotEmpty;
     final streamingEmpty = message.isStreaming && !hasText && !hasDiffusion;
 
     return Align(
       alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(
-          bottom: AppSpacing.lg,
-          right: AppSpacing.xl,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (showThinking && message.thinking.trim().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: ThinkingPanel(
-                  thinking: message.thinking,
-                  initiallyExpanded: streamingEmpty,
-                ),
-              ),
-            if (message.isDenoising && message.diffusionStep != null && message.diffusionTotal != null)
-              _DenoisingProgress(
-                step: message.diffusionStep!,
-                total: message.diffusionTotal!,
-              ),
-            if (streamingEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                child: LoadingDots(),
-              )
-            else if (hasDiffusion)
-              _diffusionBody(context)
-            else if (hasText)
-              _markdown(context),
-            if (message.sources.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              _sourceChips(context),
-            ],
-            if (!message.isStreaming && hasText)
-              _actions(context),
-            if (message.followups.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              _followups(context),
-            ],
-          ],
+      child: Tooltip(
+        message: 'Remember this',
+        triggerMode: TooltipTriggerMode.longPress,
+        child: GestureDetector(
+          onLongPress:
+              hasText
+                  ? () => onRemember(normalizeRememberPrefill(message.text))
+                  : null,
+          onDoubleTap:
+              hasText
+                  ? () => onRemember(normalizeRememberPrefill(message.text))
+                  : null,
+          onSecondaryTapUp:
+              hasText
+                  ? (_) => onRemember(normalizeRememberPrefill(message.text))
+                  : null,
+          child: Container(
+            margin: const EdgeInsets.only(
+              bottom: AppSpacing.lg,
+              right: AppSpacing.xl,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (showThinking && message.thinking.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: ThinkingPanel(
+                      thinking: message.thinking,
+                      initiallyExpanded: streamingEmpty,
+                    ),
+                  ),
+                if (message.isDenoising &&
+                    message.diffusionStep != null &&
+                    message.diffusionTotal != null)
+                  _DenoisingProgress(
+                    step: message.diffusionStep!,
+                    total: message.diffusionTotal!,
+                  ),
+                if (streamingEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                    child: LoadingDots(),
+                  )
+                else if (hasDiffusion)
+                  _diffusionBody(context)
+                else if (hasText)
+                  _markdown(context),
+                if (message.sources.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _sourceChips(context),
+                ],
+                if (!message.isStreaming && hasText) _actions(context),
+                if (message.followups.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _followups(context),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1385,8 +1818,8 @@ class _MessageBubble extends StatelessWidget {
       }
     }
 
-    final sortedTitles = unique.keys.toList()
-      ..sort((a, b) => b.length.compareTo(a.length));
+    final sortedTitles =
+        unique.keys.toList()..sort((a, b) => b.length.compareTo(a.length));
 
     for (final title in sortedTitles) {
       final source = unique[title]!;
@@ -1414,33 +1847,31 @@ class _MessageBubble extends StatelessWidget {
   Widget _markdown(BuildContext context) {
     final theme = Theme.of(context);
     if (message.isError) {
-      return Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.error.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(AppSpacing.radius),
-          border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
-        ),
-        child: Text(
-          message.text,
-          style: const TextStyle(color: AppColors.error),
-        ),
+      return NoticeCard(
+        icon: Icons.error_outline,
+        tone: AppTone.danger,
+        child: Text(message.text),
       );
     }
-    final enrichedData = _enrichTextWithSourceLinks(message.text, message.sources);
+    final enrichedData = _enrichTextWithSourceLinks(
+      message.text,
+      message.sources,
+    );
     return MarkdownBody(
       data: enrichedData,
       selectable: true,
       styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
         p: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
         a: TextStyle(
-          color: AppColors.accent,
+          color: theme.colorScheme.primary,
           decoration: TextDecoration.underline,
         ),
       ),
       onTapLink: (text, href, title) {
         if (href != null && href.startsWith('source://')) {
-          final docKey = Uri.decodeComponent(href.replaceFirst('source://', ''));
+          final docKey = Uri.decodeComponent(
+            href.replaceFirst('source://', ''),
+          );
           final seen = <String>{};
           final unique = <Source>[];
           for (final s in message.sources) {
@@ -1494,7 +1925,7 @@ class _MessageBubble extends StatelessWidget {
             IconButton(
               visualDensity: VisualDensity.compact,
               iconSize: 18,
-              color: isSpeaking ? AppColors.accent : color,
+              color: isSpeaking ? theme.colorScheme.primary : color,
               tooltip: isSpeaking ? 'Stop' : 'Read aloud',
               icon: Icon(isSpeaking ? Icons.stop : Icons.volume_up_outlined),
               onPressed: onSpeak,
@@ -1560,7 +1991,9 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
   @override
   void initState() {
     super.initState();
-    final idx = widget.allSources.indexWhere((s) => s.documentKey == widget.initialSource.documentKey);
+    final idx = widget.allSources.indexWhere(
+      (s) => s.documentKey == widget.initialSource.documentKey,
+    );
     _currentPage = idx >= 0 ? idx : 0;
     _pageController = PageController(initialPage: _currentPage);
     for (var i = 0; i < widget.allSources.length; i++) {
@@ -1598,21 +2031,19 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => OfflineReaderScreen(
-              docId: s.docId!,
-              title: s.title,
-              highlightBlockIds: s.blockIds,
-            ),
+            builder:
+                (context) => OfflineReaderScreen(
+                  docId: s.docId!,
+                  title: s.title,
+                  highlightBlockIds: s.blockIds,
+                ),
           ),
         );
         return;
       }
     }
 
-    final url = s.renderUrl(
-      widget.baseUrl,
-      highlight: s.excerpt,
-    );
+    final url = s.renderUrl(widget.baseUrl, highlight: s.excerpt);
     final uri = Uri.tryParse(url);
     if (uri != null) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -1625,55 +2056,71 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
     final total = widget.allSources.length;
 
     return SafeArea(
-      child: Container(
-        height: 450,
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Column(
-          children: [
-            if (total > 1)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left),
-                      onPressed: _currentPage > 0
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SheetHeader(
+            icon: AppIcons.source,
+            title: total > 1 ? 'Source ${_currentPage + 1} of $total' : 'Source',
+            actions: [
+              if (total > 1) ...[
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  tooltip: 'Previous source',
+                  onPressed:
+                      _currentPage > 0
                           ? () => _pageController.previousPage(
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeInOut,
-                              )
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          )
                           : null,
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(total, (index) {
-                        final isCurrent = index == _currentPage;
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          width: isCurrent ? 12 : 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: isCurrent ? AppColors.accent : theme.colorScheme.outlineVariant,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        );
-                      }),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right),
-                      onPressed: _currentPage < total - 1
-                          ? () => _pageController.nextPage(
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeInOut,
-                              )
-                          : null,
-                    ),
-                  ],
                 ),
-              ),
-            Expanded(
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  tooltip: 'Next source',
+                  onPressed:
+                      _currentPage < total - 1
+                          ? () => _pageController.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          )
+                          : null,
+                ),
+              ],
+            ],
+            bottom:
+                total > 1
+                    ? Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(total, (index) {
+                          final isCurrent = index == _currentPage;
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: isCurrent ? 12 : 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color:
+                                  isCurrent
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.outlineVariant,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          );
+                        }),
+                      ),
+                    )
+                    : null,
+          ),
+          Flexible(
+            // PageView needs a bounded height; the sheet caps it on short
+            // screens.
+            child: SizedBox(
+              height: 380,
               child: PageView.builder(
                 controller: _pageController,
                 onPageChanged: (page) {
@@ -1684,7 +2131,9 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                   final s = widget.allSources[index];
                   final isSaved = _savedMap[index] ?? false;
                   return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1696,7 +2145,7 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          'Relevance ${(s.similarity * 100).round()}% | Source ${index + 1} of $total',
+                          'Relevance ${(s.similarity * 100).round()}%',
                           style: theme.textTheme.bodySmall,
                         ),
                         const SizedBox(height: AppSpacing.md),
@@ -1704,7 +2153,9 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                           child: SingleChildScrollView(
                             child: Text(
                               s.excerpt,
-                              style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                height: 1.4,
+                              ),
                             ),
                           ),
                         ),
@@ -1715,7 +2166,9 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                               child: OutlinedButton.icon(
                                 onPressed: () => _toggleSave(index),
                                 icon: Icon(
-                                  isSaved ? Icons.bookmark : Icons.bookmark_outline,
+                                  isSaved
+                                      ? Icons.bookmark
+                                      : Icons.bookmark_outline,
                                 ),
                                 label: Text(isSaved ? 'Saved' : 'Save passage'),
                               ),
@@ -1736,8 +2189,8 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                 },
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

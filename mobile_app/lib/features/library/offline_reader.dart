@@ -143,7 +143,7 @@ class _OfflineReaderScreenState extends ConsumerState<OfflineReaderScreen> {
           child: Text(
             _error!,
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge?.copyWith(color: AppColors.error),
+            style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.error),
           ),
         ),
       );
@@ -272,7 +272,7 @@ class _OfflineReaderScreenState extends ConsumerState<OfflineReaderScreen> {
       case 'heading':
         style = theme.textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w700,
-          color: AppColors.accent,
+          color: theme.colorScheme.primary,
         );
         padding = const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.sm);
       case 'epigraph':

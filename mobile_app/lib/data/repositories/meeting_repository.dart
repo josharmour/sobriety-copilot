@@ -56,8 +56,12 @@ class MeetingRepository {
   }
 
   /// GET /api/meetings?lat=&lng=&radius_mi=&max=&day=&attendance=&fellowship=
+  ///     &range=&tod=&now_day=&now_min=
   ///
   /// [attendance] in {inperson, online, all}; [fellowship] in {aa, na, all}.
+  /// [range] / [timeOfDay] mirror the sheet's Day/Time chips; with them the
+  /// server selects against the device's local clock (soonest first) so a
+  /// dense metro returns tonight's meetings, not just the nearest 100.
   Future<MeetingSearchResult> meetings({
     required double lat,
     required double lng,
@@ -66,6 +70,9 @@ class MeetingRepository {
     int? day,
     String? attendance,
     String? fellowship,
+    String? range,
+    String? timeOfDay,
+    DateTime? now,
   }) async {
     final params = <String, String>{
       'lat': lat.toString(),
@@ -74,6 +81,13 @@ class MeetingRepository {
       'max': max.toString(),
     };
     if (day != null) params['day'] = day.toString();
+    if (range != null || timeOfDay != null) {
+      final clock = now ?? DateTime.now();
+      if (range != null) params['range'] = range;
+      if (timeOfDay != null) params['tod'] = timeOfDay;
+      params['now_day'] = (clock.weekday % 7).toString(); // Sun=0..Sat=6
+      params['now_min'] = (clock.hour * 60 + clock.minute).toString();
+    }
     if (attendance != null && attendance.isNotEmpty) {
       params['attendance'] = attendance;
     }

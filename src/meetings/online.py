@@ -26,6 +26,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from .feeds import USER_AGENT
+
 # OIAA's public directory feed (Meeting Guide format, served via
 # code4recovery's Central). Hash-named app feed — courteous use is a long
 # cache, not live per-user queries.
@@ -208,7 +210,7 @@ async def _fetch_source(
         resp = await client.get(
             url,
             timeout=FETCH_TIMEOUT,
-            headers={"User-Agent": "sobriety-copilot/1.0 (+meeting-aggregator)"},
+            headers={"User-Agent": USER_AGENT},
             follow_redirects=True,
         )
         resp.raise_for_status()

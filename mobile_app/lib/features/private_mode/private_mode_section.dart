@@ -15,55 +15,31 @@ class PrivateModeSection extends ConsumerWidget {
   const PrivateModeSection({super.key});
 
   Future<void> _confirmDownload(BuildContext context, WidgetRef ref) async {
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Download the on-device model?'),
-        content: const Text(
-          '$kPrivateModelName is a 2.6 GB one-time download — Wi-Fi '
+    final proceed = await confirmDialog(
+      context,
+      title: 'Download the on-device model?',
+      message: '$kPrivateModelName is a 2.6 GB one-time download — Wi-Fi '
           'strongly recommended. Once installed, Private Mode answers '
           'entirely on this phone: your questions never leave the device.\n\n'
           'Works best on recent phones with 8 GB of memory or more.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Not now'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Download'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Download',
+      cancelLabel: 'Not now',
     );
-    if (proceed == true) {
+    if (proceed) {
       ref.read(privateModelProvider.notifier).download();
     }
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Remove the on-device model?'),
-        content: const Text(
-          'Frees 2.6 GB. Chat falls back to the server until you download '
-          'it again.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+    final proceed = await confirmDialog(
+      context,
+      title: 'Remove the on-device model?',
+      message: 'Frees 2.6 GB. Chat falls back to the server until you '
+          'download it again.',
+      confirmLabel: 'Remove',
+      destructive: true,
     );
-    if (proceed == true) {
+    if (proceed) {
       await ref.read(appConfigProvider.notifier).setPrivateMode(false);
       await LocalChatRepository.releaseModel();
       await ref.read(privateModelProvider.notifier).delete();
@@ -129,7 +105,7 @@ class PrivateModeSection extends ConsumerWidget {
             ),
           PrivateModelPhase.error => ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.error_outline, color: AppColors.error),
+              leading: Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error),
               title: const Text('Download failed'),
               subtitle: Text(
                 model.error ?? 'Unknown error',
@@ -164,8 +140,8 @@ class PrivateModeSection extends ConsumerWidget {
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                     child: Row(
                       children: [
-                        const Icon(Icons.info_outline,
-                            size: 16, color: AppColors.gold),
+                        Icon(Icons.info_outline,
+                            size: 16, color: theme.colorScheme.tertiary),
                         const SizedBox(width: AppSpacing.xs),
                         Expanded(
                           child: Text(
@@ -222,7 +198,7 @@ class _SemanticSearchTile extends ConsumerWidget {
         return ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Icon(err ? Icons.error_outline : Icons.auto_awesome_outlined,
-              color: err ? AppColors.error : null),
+              color: err ? Theme.of(context).colorScheme.error : null),
           title: const Text('Smarter search (semantic)'),
           subtitle: Text(
             err
@@ -256,7 +232,7 @@ class _SemanticSearchTile extends ConsumerWidget {
         return ListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
-          leading: const Icon(Icons.auto_awesome, color: AppColors.accent),
+          leading: Icon(Icons.auto_awesome, color: Theme.of(context).colorScheme.primary),
           title: const Text('Semantic search on'),
           subtitle: Text(
             'Private answers match by meaning',
@@ -298,7 +274,9 @@ class _VoiceDictationTile extends ConsumerWidget {
             asr.state == AsrInstallState.error
                 ? Icons.error_outline
                 : Icons.mic_none,
-            color: asr.state == AsrInstallState.error ? AppColors.error : null,
+            color: asr.state == AsrInstallState.error
+                ? Theme.of(context).colorScheme.error
+                : null,
           ),
           title: const Text('On-device voice dictation'),
           subtitle: Text(
@@ -340,7 +318,7 @@ class _VoiceDictationTile extends ConsumerWidget {
         return ListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
-          leading: const Icon(Icons.mic, color: AppColors.accent),
+          leading: Icon(Icons.mic, color: Theme.of(context).colorScheme.primary),
           title: const Text('Voice dictation on-device'),
           subtitle: const Text('The mic transcribes locally · tap to remove'),
           trailing: IconButton(

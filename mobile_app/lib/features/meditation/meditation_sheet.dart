@@ -94,49 +94,17 @@ class _LibraryView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return AppSheet(
+      header: const SheetHeader(
+        icon: AppIcons.meditation,
+        title: 'Meditation',
+        subtitle: 'Guided breathing & grounding sessions',
+      ),
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.sm,
-            AppSpacing.lg,
-            AppSpacing.sm,
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.self_improvement_outlined),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text('Meditation', style: theme.textTheme.titleLarge),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Close',
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.md,
-              AppSpacing.lg,
-              AppSpacing.xxl,
-            ),
-            children: [
-              for (final s in kMeditations) ...[
-                _SessionTile(session: s),
-                const SizedBox(height: AppSpacing.md),
-              ],
-            ],
-          ),
-        ),
+        for (final s in kMeditations) ...[
+          _SessionTile(session: s),
+          const SizedBox(height: AppSpacing.sm),
+        ],
       ],
     );
   }
@@ -148,19 +116,17 @@ class _SessionTile extends ConsumerWidget {
 
   void _openCrisis(BuildContext context) {
     Navigator.of(context).pop();
-    showAppSheet(context, const CrisisSheet());
+    CrisisSheet.show(context);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isSurf = session.id == 'surf_urge';
-    final icon =
-        isSurf ? Icons.waves : Icons.self_improvement_outlined;
+    final icon = isSurf ? Icons.waves : AppIcons.meditation;
 
     return Card(
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppSpacing.radius),
         // Load and start explicitly — the player view never auto-starts, so a
         // paused or completed session can't be restarted by a mere rebuild.
         onTap: () {
@@ -169,21 +135,16 @@ class _SessionTile extends ConsumerWidget {
           p.start();
         },
         child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+          padding: const EdgeInsets.all(AppSpacing.md),
           child: Row(
             children: [
-              Icon(icon, size: 28, color: theme.colorScheme.primary),
+              ToneIcon(icon),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      session.title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    Text(session.title, style: theme.textTheme.titleSmall),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
                       session.description,
@@ -295,32 +256,15 @@ class _PlayerViewState extends ConsumerState<_PlayerView>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.sm,
-            AppSpacing.lg,
-            AppSpacing.sm,
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.self_improvement_outlined),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(session.title, style: theme.textTheme.titleLarge),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Close',
-                onPressed: () async {
-                  await ref.read(meditationPlayerProvider.notifier).stop();
-                  if (context.mounted) Navigator.of(context).maybePop();
-                },
-              ),
-            ],
-          ),
+        SheetHeader(
+          icon: isSurf ? Icons.waves : AppIcons.meditation,
+          title: session.title,
+          subtitle: 'Meditation',
+          onClose: () async {
+            await ref.read(meditationPlayerProvider.notifier).stop();
+            if (context.mounted) Navigator.of(context).maybePop();
+          },
         ),
-        const Divider(height: 1),
         Expanded(
           // The inner column's tallest frame (circle at max + texts +
           // controls) must never overflow: the circle is sized from the
@@ -405,7 +349,7 @@ class _PlayerViewState extends ConsumerState<_PlayerView>
                             icon: const Icon(Icons.support_agent, size: 18),
                             label: const Text('Still riding it? Get support'),
                             onPressed: () =>
-                                showAppSheet(context, const CrisisSheet()),
+                                CrisisSheet.show(context),
                           ),
                         ],
                       ] else ...[
@@ -463,7 +407,7 @@ class _PlayerViewState extends ConsumerState<_PlayerView>
                               ref
                                   .read(meditationPlayerProvider.notifier)
                                   .pause();
-                              showAppSheet(context, const CrisisSheet());
+                              CrisisSheet.show(context);
                             },
                           ),
                         ],

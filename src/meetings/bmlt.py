@@ -15,10 +15,24 @@ from typing import Any
 
 import httpx
 
+from .feeds import USER_AGENT
+
 # Aggregator root that federates regional NA BMLT servers.
 BMLT_AGGREGATOR = "https://aggregator.bmltenabled.org/main_server/client_interface/json/"
-BMLT_TIMEOUT = 6.0
+# A 30 mi search around NYC is ~900 meetings / ~0.5 MB and takes 5-8 s
+# upstream, so 6 s timed out in exactly the dense areas that matter most.
+BMLT_TIMEOUT = 15.0
 BMLT_CACHE_TTL = 60 * 60  # 1h
+
+# Only the fields _normalize_bmlt reads — halves the payload.
+BMLT_FIELDS = ",".join([
+    "id_bigint", "worldid_mixed", "meeting_name", "weekday_tinyint",
+    "start_time", "duration_time", "time_zone", "formats",
+    "latitude", "longitude", "location_text", "location_street",
+    "location_municipality", "location_province", "location_postal_code_1",
+    "service_body_bigint", "virtual_meeting_link",
+    "virtual_meeting_additional_info", "phone_meeting_number",
+])
 
 # (lat, lng, radius_mi) -> (timestamp, results)
 _cache: dict[tuple[float, float, float], tuple[float, list[dict[str, Any]]]] = {}
@@ -55,6 +69,19 @@ def _normalize_time(value: Any) -> str:
     return f"{parts[0].zfill(2)}:{parts[1].zfill(2)}"
 
 
+def _end_time(start: str, duration: Any) -> str:
+    """start 'HH:MM' + BMLT duration_time 'HH:MM[:SS]' -> 'HH:MM' (wraps midnight)."""
+    dur = _normalize_time(duration)
+    if not start or not dur:
+        return ""
+    try:
+        total = int(start[:2]) * 60 + int(start[3:5]) + int(dur[:2]) * 60 + int(dur[3:5])
+    except ValueError:
+        return ""
+    total %= 24 * 60
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
 def _normalize_bmlt(raw: dict[str, Any]) -> dict[str, Any] | None:
     lat = _coerce_float(raw.get("latitude"))
     lng = _coerce_float(raw.get("longitude"))
@@ -76,15 +103,16 @@ def _normalize_bmlt(raw: dict[str, Any]) -> dict[str, Any] | None:
     formatted = ", ".join(p for p in (str(s).strip() for s in address_parts if s) if p)
 
     name = (raw.get("meeting_name") or "").strip()
+    start = _normalize_time(raw.get("start_time"))
     return {
         "slug": str(raw.get("id_bigint") or "").strip() or None,
         "name": name,
         "group": "",
         "group_id": str(raw.get("worldid_mixed") or "").strip() or None,
         "day": _coerce_day_bmlt(raw.get("weekday_tinyint")),
-        "time": _normalize_time(raw.get("start_time")),
+        "time": start,
         "time_formatted": "",
-        "end_time": _normalize_time(raw.get("end_time")) if raw.get("end_time") else "",
+        "end_time": _end_time(start, raw.get("duration_time")),
         "formatted_address": formatted,
         "region": (raw.get("service_body_name") or "").strip(),
         "sub_region": (raw.get("location_municipality") or "").strip(),
@@ -105,6 +133,7 @@ def _normalize_bmlt(raw: dict[str, Any]) -> dict[str, Any] | None:
         "source": "BMLT (NA aggregator)",
         "source_home": "https://bmlt.app",
         "fellowship": "NA",
+        "timezone": (raw.get("time_zone") or "").strip(),
     }
 
 
@@ -121,12 +150,15 @@ async def fetch_na_meetings(lat: float, lng: float, radius_mi: float) -> list[di
         if cached and now - cached[0] < BMLT_CACHE_TTL:
             return cached[1]
 
-    # geo_width: negative value = radius in miles
+    # geo_width is a radius in miles. A NEGATIVE value is BMLT's
+    # "auto-radius": find roughly N nearest meetings — the old "-30" returned
+    # ~30 meetings within half a mile of downtown Chicago instead of ~240.
     params = {
         "switcher": "GetSearchResults",
         "lat_val": f"{lat}",
         "long_val": f"{lng}",
-        "geo_width": f"-{int(radius_mi)}",
+        "geo_width": f"{max(1, int(round(radius_mi)))}",
+        "data_field_key": BMLT_FIELDS,
     }
     try:
         async with httpx.AsyncClient() as client:
@@ -134,7 +166,7 @@ async def fetch_na_meetings(lat: float, lng: float, radius_mi: float) -> list[di
                 BMLT_AGGREGATOR,
                 params=params,
                 timeout=BMLT_TIMEOUT,
-                headers={"User-Agent": "sobriety-copilot/1.0 (+meeting-aggregator)"},
+                headers={"User-Agent": USER_AGENT},
                 follow_redirects=True,
             )
             resp.raise_for_status()

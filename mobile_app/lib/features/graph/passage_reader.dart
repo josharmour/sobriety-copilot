@@ -13,6 +13,7 @@ import 'package:sobriety_copilot_mobile/data/models/chat_models.dart';
 import 'package:sobriety_copilot_mobile/features/library/offline_reader.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
+import 'package:sobriety_copilot_mobile/widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'graph_api.dart';
@@ -178,52 +179,24 @@ class _PassageReaderSheetState extends ConsumerState<PassageReaderSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // ── Header ─────────────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.sm, AppSpacing.sm),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(top: 3),
-                child: Icon(Icons.menu_book_outlined, color: AppColors.accent, size: 22),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      w?.title ?? p.bookTitle,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      [
-                        if ((w?.author ?? '').isNotEmpty) w!.author,
-                        if ((w?.heading ?? p.section ?? '').isNotEmpty) (w?.heading ?? p.section)!,
-                        if (p.printedPage != null) 'p. ${p.printedPage}',
-                      ].join(' · '),
-                      style: theme.textTheme.bodySmall,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: _saved ? 'Remove from saved passages' : 'Save passage',
-                icon: Icon(_saved ? Icons.bookmark : Icons.bookmark_outline,
-                    color: _saved ? AppColors.gold : null),
-                onPressed: _toggleSave,
-              ),
-              IconButton(
-                tooltip: 'Close',
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
+        SheetHeader(
+          icon: AppIcons.source,
+          title: w?.title ?? p.bookTitle,
+          titleMaxLines: 2,
+          subtitle: [
+            if ((w?.author ?? '').isNotEmpty) w!.author,
+            if ((w?.heading ?? p.section ?? '').isNotEmpty) (w?.heading ?? p.section)!,
+            if (p.printedPage != null) 'p. ${p.printedPage}',
+          ].join(' · '),
+          divider: false,
+          actions: [
+            IconButton(
+              tooltip: _saved ? 'Remove from saved passages' : 'Save passage',
+              icon: Icon(_saved ? Icons.bookmark : Icons.bookmark_outline,
+                  color: _saved ? theme.colorScheme.tertiary : null),
+              onPressed: _toggleSave,
+            ),
+          ],
         ),
 
         // ── Topic hops ─────────────────────────────────────────────────────
@@ -371,7 +344,7 @@ class _ReaderBlock extends StatelessWidget {
           ? BoxDecoration(
               color: AppColors.highlightBg(isDark),
               borderRadius: BorderRadius.circular(8),
-              border: Border(left: BorderSide(color: AppColors.accent, width: 3)),
+              border: Border(left: BorderSide(color: theme.colorScheme.primary, width: 3)),
             )
           : null,
       child: child,
