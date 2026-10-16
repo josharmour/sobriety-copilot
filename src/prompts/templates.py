@@ -1,9 +1,22 @@
 """Prompt templates for recovery-focused RAG chat."""
 
+# How the crisis rule points people to a meeting. The app has a meetings
+# button; an SMS thread has no UI at all, so system_message_for_tone swaps
+# this sentence out for the "sms" channel.
+_MEETING_POINTER_APP = (
+    "instruct them to tap the \"Find a meeting\" button at the bottom of the "
+    "screen to find a local meeting"
+)
+_MEETING_POINTER_SMS = (
+    "tell them they can find a local or online meeting at sobrietycopilot.com"
+)
+
 # Shared safety + program-first guardrails — every tone keeps these.
 _SAFETY_BLOCK = (
     "Safety (always):\n"
-    "- If someone seems in crisis or is concerned about safety or harm, prominently feature the AA hotline, and instruct them to tap the \"Find a meeting\" button at the bottom of the screen to find a local meeting. Suggest 911 only if danger is immediate. Do NOT suggest SAMHSA or other generic helplines.\n"
+    "- If someone seems in crisis or is concerned about safety or harm, prominently feature the AA hotline, and "
+    + _MEETING_POINTER_APP
+    + ". Suggest 911 only if danger is immediate. Do NOT suggest SAMHSA or other generic helplines.\n"
     "- Always remain non-judgmental.\n\n"
     "Program-first (always):\n"
     "- This app is a supplement, not a substitute. Real recovery happens through "
@@ -113,12 +126,18 @@ TONE_VARIANTS: dict[str, str] = {
 SYSTEM_MESSAGE = WARM_SYSTEM_MESSAGE
 
 
-def system_message_for_tone(tone: str | None) -> str:
-    """Return the system prompt for the requested tone (with current date), falling back to warm."""
+def system_message_for_tone(tone: str | None, channel: str = "app") -> str:
+    """Return the system prompt for the requested tone (with current date), falling back to warm.
+
+    ``channel="sms"`` strips references to app UI (buttons, screens) that make
+    no sense in a text message.
+    """
     import datetime as _dt
     from zoneinfo import ZoneInfo
 
     base = WARM_SYSTEM_MESSAGE if not tone else TONE_VARIANTS.get(tone.lower(), WARM_SYSTEM_MESSAGE)
+    if channel == "sms":
+        base = base.replace(_MEETING_POINTER_APP, _MEETING_POINTER_SMS)
     now_local = _dt.datetime.now(ZoneInfo("America/Los_Angeles"))
     today_full = now_local.strftime("%A, %B %-d, %Y")
     today_short = now_local.strftime("%B %-d")

@@ -1641,10 +1641,14 @@ async def incoming_sms(request: Request):
                 prompt = NO_CONTEXT_TEMPLATE.format(question=body_text)
 
             sms_sys_msg = (
-                system_message_for_tone("warm")
+                system_message_for_tone("warm", channel="sms")
                 + "\n\nSMS Delivery Guidelines:\n"
                 "- You are replying via SMS text message in a continuous conversation thread. "
-                "Provide the exact same literature breadth (Big Book, Twelve Steps and Twelve "
+                "The person is reading plain text on their phone: there are no buttons, screens, "
+                "tabs, menus, or app features. Never tell them to tap, click, press, or open "
+                "anything; when pointing to a resource, give a phone number or a plain web address "
+                "such as sobrietycopilot.com.\n"
+                "- Provide the exact same literature breadth (Big Book, Twelve Steps and Twelve "
                 "Traditions, As Bill Sees It, Living Sober, and the full recovery library), "
                 "depth of insight, and directness as the main web/mobile app.\n"
                 "- Maintain a coherent ongoing conversation when the person follows up or continues "
