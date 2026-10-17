@@ -123,7 +123,8 @@ if [ "$SKIP_ANDROID" = false ]; then
   "$FLUTTER_BIN" build appbundle --release
   AAB_PATH="$MOBILE_DIR/build/app/outputs/bundle/release/app-release.aab"
   mkdir -p "$(dirname "$AAB_PATH")"
-  cp build/app/outputs/bundle/release/app-release.aab "$AAB_PATH"
+  # cat, not cp: macOS cp copies extended attributes, which SMB rejects.
+  cat build/app/outputs/bundle/release/app-release.aab > "$AAB_PATH"
   echo "==> [Android] Successfully built: $AAB_PATH"
 
   # Check if Google Play API credentials exist

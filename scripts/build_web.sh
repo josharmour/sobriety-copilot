@@ -22,7 +22,8 @@ rsync -a --exclude build --exclude .dart_tool --exclude ios/Pods --exclude '._*'
   "$REPO_ROOT/mobile_app/" "$BUILD_ROOT/mobile_app/"
 (cd "$BUILD_ROOT/mobile_app" && "$FLUTTER_BIN" build web --release)
 
-# cp, not rsync --delete: keeps the hand-maintained pages in static/
-# (privacy.html, terms.html, sms-optin.html).
-cp -R "$BUILD_ROOT/mobile_app/build/web/." "$REPO_ROOT/static/"
+# No --delete: keeps the hand-maintained pages in static/ (privacy.html,
+# terms.html, sms-optin.html). -rlt, not -a/cp -R: the SMB share rejects
+# copied permissions and macOS extended attributes.
+rsync -rlt "$BUILD_ROOT/mobile_app/build/web/" "$REPO_ROOT/static/"
 echo "==> static/ updated: $(cat "$REPO_ROOT/static/version.json")"
