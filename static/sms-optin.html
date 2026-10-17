@@ -485,7 +485,7 @@
         <div class="checkbox-container">
           <input type="checkbox" id="sms-consent" name="consent">
           <label for="sms-consent" class="consent-text">
-            <strong>Optional Consent:</strong> I agree to receive recurring automated daily recovery readings and conversational SMS text messages from <strong>Sobriety Copilot</strong> at the mobile phone number provided above. Consent is 100% voluntary and is not a condition of purchase, subscription, or using the app. Message and data rates may apply. Message frequency varies. Reply <strong>STOP</strong> to cancel at any time, <strong>PAUSE</strong> to pause daily readings, or <strong>HELP</strong> for help. View our <a href="/terms.html">Terms of Service</a> and <a href="/privacy.html">Privacy Policy</a>.
+            <strong>Optional Consent:</strong> I agree to receive recurring automated daily recovery readings and conversational SMS text messages from <strong>Sobriety Copilot</strong> at the mobile phone number provided above. We'll text you once to confirm; your readings start when you reply <strong>YES</strong>. Consent is 100% voluntary and is not a condition of purchase, subscription, or using the app. Message and data rates may apply. Message frequency varies. Reply <strong>STOP</strong> to cancel at any time, <strong>PAUSE</strong> to pause daily readings, or <strong>HELP</strong> for help. View our <a href="/terms.html">Terms of Service</a> and <a href="/privacy.html">Privacy Policy</a>.
           </label>
         </div>
 
@@ -633,42 +633,13 @@
       }
     }
 
-    async function lookupSubscription(silent) {
-      var phone = phoneInput.value.trim();
-      if (!phone) {
-        if (!silent) {
-          feedback.className = 'error';
-          feedback.textContent = 'Please enter your mobile phone number first to check your schedule.';
-        }
-        return;
-      }
-      try {
-        var res = await fetch('/api/sms/subscription?phone=' + encodeURIComponent(phone));
-        var data = await res.json();
-        if (!res.ok) {
-          if (!silent) {
-            feedback.className = 'error';
-            feedback.textContent = data.error || data.detail || 'Invalid phone number.';
-          }
-          return;
-        }
-        if (data.subscription) {
-          applySubscriptionToForm(data.subscription);
-          if (!silent) {
-            feedback.className = 'success';
-            feedback.textContent = 'Loaded your saved daily SMS schedule.';
-          }
-        } else if (!silent) {
-          statusBanner.style.display = 'none';
-          feedback.className = 'success';
-          feedback.textContent = 'No existing schedule found for that number—choose your time and books below to subscribe!';
-        }
-      } catch (err) {
-        if (!silent) {
-          feedback.className = 'error';
-          feedback.textContent = 'Could not check subscription status right now.';
-        }
-      }
+    // Schedules can't be looked up by phone number: that would tell anyone who
+    // knows a number that its owner is in recovery. Point to SCHEDULE instead.
+    function lookupSubscription(silent) {
+      if (silent) return;
+      feedback.className = 'success';
+      feedback.textContent = "For privacy, schedules can't be looked up by phone number. " +
+        'Text SCHEDULE to (762) 376-9696 to see yours.';
     }
 
     async function handlePauseClick() {

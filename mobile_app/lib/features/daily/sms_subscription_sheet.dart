@@ -256,9 +256,6 @@ class _SmsSubscriptionSheetState extends ConsumerState<SmsSubscriptionSheet> {
         _consent = _enabled;
       } catch (_) {}
     }
-    if (_phoneController.text.trim().isNotEmpty) {
-      _lookupServerSchedule(silent: true);
-    }
   }
 
   Future<void> _saveLocal(Map<String, dynamic> sub) async {
@@ -305,58 +302,14 @@ class _SmsSubscriptionSheetState extends ConsumerState<SmsSubscriptionSheet> {
     });
   }
 
-  Future<void> _lookupServerSchedule({bool silent = false}) async {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
-      if (!silent) {
-        setState(() {
-          _isError = true;
-          _statusMessage = 'Enter your mobile phone number first.';
-        });
-      }
-      return;
-    }
-    final client = ref.read(httpClientProvider);
-    final baseUrl = ref.read(appConfigProvider).baseUrl;
-    final uri = Uri.parse(
-      '$baseUrl/api/sms/subscription?phone=${Uri.encodeQueryComponent(phone)}',
-    );
-    try {
-      final res = await client.get(uri).timeout(const Duration(seconds: 10));
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        final sub = data['subscription'];
-        if (sub is Map<String, dynamic>) {
-          _applyServerSubscription(sub);
-          if (!silent) {
-            setState(() {
-              _isError = false;
-              _statusMessage = 'Loaded your saved daily SMS schedule.';
-            });
-          }
-        } else if (!silent) {
-          setState(() {
-            _isError = false;
-            _statusMessage =
-                'No active schedule found for this number yet. Choose your time below to subscribe!';
-          });
-        }
-      } else if (!silent) {
-        setState(() {
-          _isError = true;
-          _statusMessage =
-              (data['error'] ?? data['detail'] ?? 'Invalid phone number.')
-                  .toString();
-        });
-      }
-    } catch (_) {
-      if (!silent) {
-        setState(() {
-          _isError = true;
-          _statusMessage = 'Could not reach server. Check your connection.';
-        });
-      }
-    }
+  /// Schedules can't be looked up by phone number: that would tell anyone who
+  /// knows a number that its owner is in recovery. Point to SCHEDULE instead.
+  void _showScheduleHelp() {
+    setState(() {
+      _isError = false;
+      _statusMessage = "For privacy, schedules can't be looked up by phone "
+          'number. Text SCHEDULE to (762) 376-9696 to see yours.';
+    });
   }
 
   Future<void> _submitSchedule() async {
@@ -671,9 +624,7 @@ class _SmsSubscriptionSheetState extends ConsumerState<SmsSubscriptionSheet> {
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         OutlinedButton(
-                          onPressed: _busy
-                              ? null
-                              : () => _lookupServerSchedule(silent: false),
+                          onPressed: _busy ? null : _showScheduleHelp,
                           child: const Text('Check'),
                         ),
                       ],
@@ -804,7 +755,7 @@ class _SmsSubscriptionSheetState extends ConsumerState<SmsSubscriptionSheet> {
                       controlAffinity: ListTileControlAffinity.leading,
                       value: _consent,
                       title: Text(
-                        'Optional SMS Consent: I agree to receive recurring automated daily recovery readings and conversational SMS messages from Sobriety Copilot at the phone number above. Consent is optional. Msg & data rates may apply. Msg frequency varies. Reply STOP to cancel, PAUSE to pause daily readings, or HELP for help.',
+                        'Optional SMS Consent: I agree to receive recurring automated daily recovery readings and conversational SMS messages from Sobriety Copilot at the phone number above. We will text once to confirm; readings start when you reply YES. Consent is optional. Msg & data rates may apply. Msg frequency varies. Reply STOP to cancel, PAUSE to pause daily readings, or HELP for help.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),

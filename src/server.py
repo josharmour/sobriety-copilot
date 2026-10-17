@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import hmac
 import json
@@ -13,6 +14,7 @@ from collections import OrderedDict
 from contextlib import asynccontextmanager
 from threading import Lock
 from typing import Any
+from urllib.parse import parse_qs, urlparse, urlunparse
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
@@ -1636,18 +1638,111 @@ _SMS_FIRST_CONTACT_FOOTER = (
     "\n\nReply STOP to opt out or HELP for help. Msg & data rates may apply."
 )
 
+# Twilio signs every webhook request. Without checking, anyone could post a
+# spoofed From and read that number's conversation or change its settings.
+# Must match the URL configured in Twilio exactly (number and Messaging Service).
+_TWILIO_SMS_WEBHOOK_URL = os.environ.get(
+    "TWILIO_SMS_WEBHOOK_URL", "https://sobrietycopilot.com/api/sms"
+)
+_TWILIO_VALIDATE_SIGNATURE = os.environ.get("TWILIO_VALIDATE_SIGNATURE", "1") != "0"
+# Web/app sign-ups wait here until the phone itself replies YES (double opt-in).
+_SMS_PENDING_OPTIN_TTL = 48 * 3600
+
+
+def _sms_display_number() -> str:
+    digits = re.sub(r"\D", "", os.environ.get("TWILIO_PHONE_NUMBER", "")) or "17623769696"
+    d = digits[-10:]
+    return f"({d[:3]}) {d[3:6]}-{d[6:]}"
+
+
+def _phone_hash(phone: str) -> str:
+    """Redis key suffix for long-lived per-number state; holds no raw number."""
+    return hashlib.sha256(phone.encode()).hexdigest()[:32]
+
+
+def _twilio_signature_valid(signature: str, params: dict[str, list[str]]) -> bool:
+    """Twilio's scheme: base64(HMAC-SHA1(auth token, URL + every param name
+    followed by its values, names and values sorted)). Like Twilio's own
+    validators, accept the URL with or without an explicit default port."""
+    token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    if not token or not signature:
+        return False
+    tail = "".join(
+        name + value for name in sorted(params) for value in sorted(set(params[name]))
+    )
+    url = urlparse(_TWILIO_SMS_WEBHOOK_URL)
+    host = url.hostname or ""
+    port = url.port or (443 if url.scheme == "https" else 80)
+    candidates = {
+        _TWILIO_SMS_WEBHOOK_URL,
+        urlunparse(url._replace(netloc=host)),
+        urlunparse(url._replace(netloc=f"{host}:{port}")),
+    }
+    for candidate in candidates:
+        digest = hmac.new(token.encode(), (candidate + tail).encode(), hashlib.sha1).digest()
+        if hmac.compare_digest(base64.b64encode(digest).decode(), signature):
+            return True
+    return False
+
+
+def _client_ip(request: Request) -> str:
+    ip = (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        or (request.client.host if request.client else "unknown")
+    )
+    return re.sub(r"[^0-9a-fA-F.:_-]", "", ip)[:48] or "unknown"
+
+
+def _allow_web_triggered_sms(phone: str, kind: str, cooldown_s: int, per_day: int) -> bool:
+    """Throttle texts the web/app endpoints send. Anyone can call those with any
+    number, so this caps what a stranger can make us send. Fails closed."""
+    h = _phone_hash(phone)
+    try:
+        rc = get_redis_client()
+        if not rc.set(f"sc:sms:{kind}:cool:{h}", "1", nx=True, ex=cooldown_s):
+            return False
+        day_key = f"sc:sms:{kind}:day:{h}"
+        sent_today = rc.incr(day_key)
+        if sent_today == 1:
+            rc.expire(day_key, 86400)
+        return sent_today <= per_day
+    except Exception:
+        return False
+
+
+def _pop_pending_optin(phone: str) -> dict[str, Any] | None:
+    key = f"sc:sms:pending_optin:{_phone_hash(phone)}"
+    try:
+        rc = get_redis_client()
+        raw = rc.get(key)
+        if not raw:
+            return None
+        rc.delete(key)
+        pending = json.loads(raw)
+        return pending if isinstance(pending, dict) else None
+    except Exception:
+        return None
+
 
 @app.post("/api/sms")
 async def incoming_sms(request: Request):
     """Webhook for Twilio SMS interactions with carrier-compliant HELP/STOP handling."""
-    from urllib.parse import parse_qs
     import datetime as _dt
     from zoneinfo import ZoneInfo
+
+    raw_bytes = await request.body()
+    if _TWILIO_VALIDATE_SIGNATURE and not _twilio_signature_valid(
+        request.headers.get("x-twilio-signature", ""),
+        # keep_blank_values: Twilio signs empty params too (e.g. FromCity=).
+        parse_qs(raw_bytes.decode("utf-8", errors="ignore"), keep_blank_values=True),
+    ):
+        print("[SMS-AUTH] rejected /api/sms request without a valid Twilio signature", flush=True)
+        return Response(status_code=403)
 
     body_text = ""
     from_phone = "default_sms"
     try:
-        raw_bytes = await request.body()
         content_type = request.headers.get("content-type", "")
         if "application/json" in content_type:
             try:
@@ -1692,6 +1787,40 @@ async def incoming_sms(request: Request):
             "Sobriety Copilot: You have been unsubscribed and will receive no further messages. "
             "Reply START to resubscribe. Msg & data rates may apply."
         )
+    elif upper_body in {"START", "YES", "UNSTOP"} and (pending := _pop_pending_optin(from_phone)):
+        # Confirms a sign-up started on the website or in the app.
+        send_now = bool(pending.get("send_now"))
+        sub = upsert_subscriber(
+            phone=from_phone,
+            enabled=True,
+            delivery_time=pending.get("delivery_time"),
+            timezone=pending.get("timezone"),
+            books=pending.get("books"),
+            mark_sent_today=send_now,
+        )
+        if sub:
+            twiml_reply = (
+                f"Sobriety Copilot: You're subscribed to {format_books_label(sub['books'])} daily at "
+                f"{format_time_12h(sub['delivery_time'])} {format_tz_short(sub['timezone'])}. "
+                "Reply to any reading to chat about it, SEND NOW for today's reading, PAUSE to "
+                "pause, or STOP to cancel. Msg & data rates may apply."
+            )
+            if send_now:
+                local_today = _dt.datetime.now(ZoneInfo(sub["timezone"])).date()
+                today_str = local_today.strftime("%Y-%m-%d")
+                mark_subscriber_sent(from_phone, today_str)
+                try:
+                    get_redis_client().setex(
+                        f"sc:sms:daily_sent:{from_phone}:{today_str}", 172800, "1"
+                    )
+                except Exception:
+                    pass
+                await asyncio.to_thread(send_daily_readings_for_subscriber, sub, local_today)
+        else:
+            twiml_reply = (
+                "Sobriety Copilot: Could not save your subscription. Reply DAILY 7:00 AM PT "
+                "to subscribe by text instead."
+            )
     elif upper_body in {"START", "YES", "UNSTOP"}:
         try:
             if get_subscriber(from_phone):
@@ -1850,7 +1979,7 @@ async def incoming_sms(request: Request):
 
             # Lifetime exchange count (outlives the 7-day history and NEW resets).
             # Hashed key: this long-lived counter holds no raw phone number.
-            seen_key = "sc:sms:seen:" + hashlib.sha256(from_phone.encode()).hexdigest()[:32]
+            seen_key = "sc:sms:seen:" + _phone_hash(from_phone)
             try:
                 prior_exchanges = int(get_redis_client().get(seen_key) or 0)
             except Exception:
@@ -2001,32 +2130,35 @@ async def incoming_sms(request: Request):
 
 @app.get("/api/sms/subscription")
 def get_sms_subscription(phone: str = Query(default="")):
-    """Look up current SMS daily reading subscription status and available books catalog."""
+    """Daily-reading books catalog.
+
+    Never reports whether a phone number is subscribed: that would tell anyone
+    who knows a number that its owner is in recovery. Subscribers text SCHEDULE
+    to see theirs. ``phone`` is accepted (and ignored) for older app builds.
+    """
     catalog = [
         {"id": k, "label": v["label"], "fellowship": v["fellowship"]}
         for k, v in DAILY_BOOKS_CATALOG.items()
     ]
-    raw = (phone or "").strip()
-    if not raw:
-        return {"status": "ok", "subscription": None, "catalog": catalog}
-    norm = normalize_phone(raw)
-    if not norm:
-        raise HTTPException(
-            status_code=400,
-            detail="Please enter a valid 10-digit US/Canada phone number.",
-        )
-    sub = get_subscriber(norm)
     return {
         "status": "ok",
-        "phone": norm,
-        "subscription": sub,
+        "subscription": None,
         "catalog": catalog,
+        "message": (
+            "For privacy, schedules can't be looked up by phone number. "
+            f"Text SCHEDULE to {_sms_display_number()} to see yours."
+        ),
     }
 
 
 @app.post("/api/sms/optin")
 async def web_sms_optin(request: Request):
-    """Records voluntary web/mobile SMS opt-in and daily reading schedule preferences."""
+    """Web/app SMS sign-up, pause and send-now.
+
+    Anyone can call this with any number, so it never confirms whether a number
+    is subscribed, and a sign-up only texts a "Reply YES" confirmation; the
+    schedule starts when that phone replies YES (handled in /api/sms).
+    """
     import datetime as _dt
     from zoneinfo import ZoneInfo
 
@@ -2044,46 +2176,54 @@ async def web_sms_optin(request: Request):
     timezone = data.get("timezone")
     books = data.get("books")
 
-    if action in {"pause", "unsubscribe"} or enabled_flag is False:
-        norm = normalize_phone(raw_phone)
-        if not norm:
-            raise HTTPException(
-                status_code=400,
-                detail="Please enter a valid phone number to pause or unsubscribe.",
-            )
-        sub = set_subscriber_enabled(norm, False)
-        return {
-            "status": "ok",
-            "enrolled": False,
-            "subscription": sub,
-            "message": "Your daily SMS readings have been paused. You can re-enable them anytime.",
-        }
+    try:
+        rl_key = f"sc:smsweb:rl:{_client_ip(request)}"
+        rc = get_redis_client()
+        calls = rc.incr(rl_key)
+        if calls == 1:
+            rc.expire(rl_key, 3600)
+        if calls > 20:
+            raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
 
-    if action == "send_now":
+    def _valid_phone() -> str:
         norm = normalize_phone(raw_phone)
         if not norm:
             raise HTTPException(
                 status_code=400,
                 detail="Please enter a valid 10-digit US/Canada phone number.",
             )
-        sub = get_subscriber(norm) or {
-            "phone": norm,
-            "timezone": normalize_timezone(str(timezone) if timezone else None),
-            "books": normalize_books(books if isinstance(books, list) else ([str(books)] if books else None)),
-        }
-        local_today = _dt.datetime.now(ZoneInfo(sub["timezone"])).date()
-        sent_cnt = await asyncio.to_thread(
-            send_daily_readings_for_subscriber, sub, local_today
-        )
+        return norm
+
+    if action in {"pause", "unsubscribe"} or enabled_flag is False:
+        # Opting out stays one step; the reply reveals nothing about the number.
+        norm = _valid_phone()
+        set_subscriber_enabled(norm, False)
+        _pop_pending_optin(norm)
         return {
             "status": "ok",
-            "enrolled": bool(sub.get("enabled", False)),
-            "sent_now_count": sent_cnt,
-            "subscription": get_subscriber(norm),
+            "enrolled": False,
+            "subscription": None,
+            "message": "Daily SMS readings are paused for that number. Text DAILY to resume anytime.",
+        }
+
+    if action == "send_now":
+        norm = _valid_phone()
+        sub = get_subscriber(norm)
+        if sub and sub.get("enabled") and _allow_web_triggered_sms(norm, "sendnow", 3600, 3):
+            local_today = _dt.datetime.now(ZoneInfo(sub["timezone"])).date()
+            await asyncio.to_thread(send_daily_readings_for_subscriber, sub, local_today)
+        return {
+            "status": "ok",
+            "enrolled": False,
+            "subscription": None,
             "message": (
-                "Today's reading has been texted to your phone!"
-                if sent_cnt > 0
-                else "Unable to send SMS right now. Please check your phone number and try again."
+                "If this number has active daily readings, today's is on its way. "
+                "Not subscribed yet? Subscribe above, or text SEND NOW to "
+                f"{_sms_display_number()}."
             ),
         }
 
@@ -2095,57 +2235,53 @@ async def web_sms_optin(request: Request):
             "message": "Preferences saved. SMS enrollment skipped (phone and consent are required to subscribe).",
         }
 
-    norm = normalize_phone(raw_phone)
-    if not norm:
-        raise HTTPException(
-            status_code=400,
-            detail="Please enter a valid 10-digit US/Canada phone number.",
-        )
-
-    sub = upsert_subscriber(
-        phone=norm,
-        enabled=True,
-        delivery_time=str(delivery_time) if delivery_time is not None else None,
-        timezone=str(timezone) if timezone is not None else None,
-        books=books if isinstance(books, list) else ([str(books)] if books else None),
-        mark_sent_today=send_now,
+    norm = _valid_phone()
+    final_time = normalize_delivery_time(str(delivery_time) if delivery_time is not None else None)
+    final_tz = normalize_timezone(str(timezone) if timezone is not None else None)
+    final_books = normalize_books(
+        books if isinstance(books, list) else ([str(books)] if books else None)
     )
-    if not sub:
-        raise HTTPException(status_code=500, detail="Unable to save subscription.")
-
-    t_label = format_time_12h(sub["delivery_time"])
-    tz_label = format_tz_short(sub["timezone"])
-    b_label = format_books_label(sub["books"])
-
-    welcome_msg = (
-        f"Sobriety Copilot: Welcome! You're subscribed to {b_label} delivered daily at "
-        f"{t_label} {tz_label}. Reply to any reading to chat about it, text SEND NOW for "
-        f"today's reading, PAUSE to pause, or STOP to cancel. Msg & data rates may apply."
+    pending_msg = (
+        f"Almost done! We texted the number ending in {norm[-4:]}. Reply YES to that "
+        "text to start your daily readings."
     )
-    await asyncio.to_thread(send_twilio_sms, norm, welcome_msg, False)
-
-    sent_now_count = 0
-    if send_now:
-        local_today = _dt.datetime.now(ZoneInfo(sub["timezone"])).date()
-        today_str = local_today.strftime("%Y-%m-%d")
-        mark_subscriber_sent(norm, today_str)
-        try:
-            get_redis_client().setex(f"sc:sms:daily_sent:{norm}:{today_str}", 172800, "1")
-        except Exception:
-            pass
-        sent_now_count = await asyncio.to_thread(
-            send_daily_readings_for_subscriber, sub, local_today
+    if not _allow_web_triggered_sms(norm, "optin", 600, 3):
+        # Already sent a confirmation recently; don't let the form spam a phone.
+        return {
+            "status": "ok",
+            "enrolled": False,
+            "pending_confirmation": True,
+            "subscription": None,
+            "message": pending_msg,
+        }
+    try:
+        get_redis_client().setex(
+            f"sc:sms:pending_optin:{_phone_hash(norm)}",
+            _SMS_PENDING_OPTIN_TTL,
+            json.dumps(
+                {
+                    "delivery_time": final_time,
+                    "timezone": final_tz,
+                    "books": final_books,
+                    "send_now": send_now,
+                }
+            ),
         )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Unable to start SMS sign-up right now.") from exc
 
+    confirm_msg = (
+        f"Sobriety Copilot: Reply YES to get {format_books_label(final_books)} by text daily at "
+        f"{format_time_12h(final_time)} {format_tz_short(final_tz)}. Reply STOP to opt out, "
+        "HELP for help. Msg & data rates may apply."
+    )
+    await asyncio.to_thread(send_twilio_sms, norm, confirm_msg, False)
     return {
         "status": "ok",
-        "enrolled": True,
-        "sent_now_count": sent_now_count,
-        "subscription": sub,
-        "message": (
-            f"Subscribed! You'll receive {b_label} daily at {t_label} {tz_label}."
-            + (" Today's reading has also been texted to your phone!" if sent_now_count > 0 else "")
-        ),
+        "enrolled": False,
+        "pending_confirmation": True,
+        "subscription": None,
+        "message": pending_msg,
     }
 
 
@@ -2217,12 +2353,7 @@ def chat(payload: ChatRequest, request: Request):
         raise HTTPException(status_code=400, detail="missing 'message' field")
 
     # Per-IP sliding rate limit (max 30 chat queries per 10 minutes)
-    client_ip = (
-        request.headers.get("cf-connecting-ip")
-        or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        or (request.client.host if request.client else "unknown")
-    )
-    client_ip = re.sub(r"[^0-9a-fA-F.:_-]", "", client_ip)[:48] or "unknown"
+    client_ip = _client_ip(request)
     try:
         rl_key = f"sc:chat:rl:{client_ip}"
         rc = get_redis_client()

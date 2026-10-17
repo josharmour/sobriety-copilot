@@ -7,8 +7,12 @@ drives the REAL webhook with a fake engine and an in-memory Redis.
 Run:  python3 -m pytest tests/test_sms_reply.py -q
 """
 
+import base64
+import hashlib
+import hmac
 import html
 import re
+from urllib.parse import urlencode
 
 import pytest
 
@@ -17,6 +21,25 @@ import src.server as server
 from fastapi.testclient import TestClient
 
 PHONE = "+15555550123"
+TWILIO_TOKEN = "test-twilio-token"
+
+
+def sign(params: dict[str, str], url: str | None = None) -> str:
+    """X-Twilio-Signature as Twilio computes it (independent of the server's code)."""
+    data = (url or server._TWILIO_SMS_WEBHOOK_URL) + "".join(k + params[k] for k in sorted(params))
+    digest = hmac.new(TWILIO_TOKEN.encode(), data.encode(), hashlib.sha1).digest()
+    return base64.b64encode(digest).decode()
+
+
+def post_sms(client, params: dict[str, str], signature: str | None = None):
+    return client.post(
+        "/api/sms",
+        content=urlencode(params),
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-Twilio-Signature": sign(params) if signature is None else signature,
+        },
+    )
 
 
 class _Engine:
@@ -35,6 +58,12 @@ class _Redis:
 
     def get(self, key):
         return self.data.get(key)
+
+    def set(self, key, value, nx=False, ex=None):
+        if nx and key in self.data:
+            return None
+        self.data[key] = value
+        return True
 
     def setex(self, key, ttl, value):
         self.data[key] = value
@@ -59,11 +88,12 @@ def env(monkeypatch):
     monkeypatch.setattr(server, "get_redis_client", lambda: redis)
     monkeypatch.setattr(server, "_safe_get_retriever", lambda: None)
     monkeypatch.setattr(server, "get_subscriber", lambda phone: None)
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", TWILIO_TOKEN)
     return TestClient(server.app), engine, redis
 
 
 def _text(client, body: str) -> str:
-    resp = client.post("/api/sms", data={"From": PHONE, "Body": body})
+    resp = post_sms(client, {"From": PHONE, "Body": body})
     assert resp.status_code == 200
     return html.unescape(re.search(r"<Message>(.*)</Message>", resp.text, re.S).group(1))
 
