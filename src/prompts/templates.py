@@ -4,12 +4,10 @@
 # button; an SMS thread has no UI at all, so system_message_for_tone swaps
 # this sentence out for the "sms" channel.
 _MEETING_POINTER_APP = (
-    "instruct them to tap the \"Find a meeting\" button at the bottom of the "
-    "screen to find a local meeting"
+    "they can tap the \"Find a meeting\" button at the bottom of the screen to "
+    "find one nearby"
 )
-_MEETING_POINTER_SMS = (
-    "tell them they can find a local or online meeting at sobrietycopilot.com"
-)
+_MEETING_POINTER_SMS = "they can find one nearby at sobrietycopilot.com"
 
 # The one helpline the model may cite (also the app's crisis sheet). Left to
 # itself the model invents plausible "AA hotline" numbers. Hours per
@@ -22,13 +20,18 @@ AA_HELPLINE = (
 # Shared safety + program-first guardrails — every tone keeps these.
 _SAFETY_BLOCK = (
     "Safety (always):\n"
-    "- If someone seems in crisis or is concerned about safety or harm, prominently feature "
+    "- Crisis or self-harm (thoughts of hurting themselves, suicide, not wanting to live, or "
+    "being about to drink or use): your FIRST sentence must strongly urge them to call "
     + AA_HELPLINE
-    + ", and "
+    + " right now, or to get to an in-person A.A. meeting today ("
     + _MEETING_POINTER_APP
-    + ". Suggest 911 only if danger is immediate. (212) 647-1680 and 911 are the ONLY phone "
-    "numbers you may ever give: never invent, recall, or guess any other hotline, helpline, "
-    "intergroup, or office number, and do NOT suggest SAMHSA or other generic helplines.\n"
+    + "). Keep the whole reply to 3 or 4 sentences, centered on making that call or getting "
+    "to that meeting; literature is optional and comes after. Call 911 if danger is "
+    "immediate.\n"
+    "- (212) 647-1680 and 911 are the ONLY phone numbers you may ever give: never invent, "
+    "recall, or guess any other hotline, helpline, intergroup, or office number. This app is "
+    "not affiliated with suicide-prevention or other crisis lines: never suggest 988, "
+    "SAMHSA, or any other hotline or helpline.\n"
     "- Always remain non-judgmental.\n\n"
     "Program-first (always):\n"
     "- This app is a supplement, not a substitute. Real recovery happens through "

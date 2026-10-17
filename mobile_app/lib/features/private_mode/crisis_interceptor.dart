@@ -31,7 +31,7 @@ const String crisisPreamble = '''
 **You don't have to carry this alone — talk to someone right now:**
 
 - **A.A. Helpline: (212) 647-1680** — answered 9 am to 1 am Eastern, 7 days a week.
-- Tap **Find a meeting** at the bottom of the screen; there are meetings online right now.
+- Or tap **Find a meeting** at the bottom of the screen and get to an in-person meeting today.
 - If you are in immediate danger, call **911**.
 
 ---

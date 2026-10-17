@@ -204,6 +204,10 @@ UI string — `grep -c "Some New Button" static/main.dart.js` should be ≥ 1.
   constant is `AA_HELPLINE` in `src/prompts/templates.py`; the app's crisis and
   About sheets and Private Mode prompt carry the same number, and the crisis
   sheet lists 988 and SAMHSA under "More support options".
+- Crisis and self-harm replies must open by strongly urging a call to that
+  helpline or getting to an in-person A.A. meeting today, in 3–4 sentences.
+  Owner's decision (2026-10-16): the app is not affiliated with 988, SAMHSA or
+  other crisis lines, so the model never suggests them.
 - SMS: `/api/sms` rejects requests without a valid Twilio signature. Web/app
   sign-ups (`/api/sms/optin`) only text a "Reply YES" confirmation (double
   opt-in), and no endpoint reveals whether a phone number is subscribed.

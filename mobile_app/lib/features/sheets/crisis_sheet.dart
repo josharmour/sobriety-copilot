@@ -42,8 +42,8 @@ class CrisisSheet extends StatelessWidget {
       header: const SheetHeader(
         icon: AppIcons.crisis,
         title: 'Need to talk now?',
-        subtitle: 'Call the A.A. helpline, 9 am to 1 am Eastern, 7 days a week. '
-            'At other hours, see More support options below.',
+        subtitle: 'Call the A.A. helpline (9 am to 1 am Eastern, 7 days a week), '
+            'or get to an in-person A.A. meeting today.',
       ),
       children: [
         ActionCard(
