@@ -4,6 +4,11 @@
 # Builds and uploads iOS directly to TestFlight & App Store Connect,
 # builds the signed Android App Bundle (AAB) for Google Play,
 # bumps the build number, syncs Xcode targets, and pushes to GitHub.
+#
+# Run it straight from the NAS repo — never from a separate clone. Flutter and
+# Xcode can't build on the SMB share (no POSIX byte-range locks), so the build
+# itself happens in a throwaway local copy that is deleted on exit; version
+# bumps are made, committed and pushed in the NAS repo.
 
 set -euo pipefail
 
@@ -86,7 +91,14 @@ fi
 echo "==> Syncing Xcode targets..."
 (cd ios && ruby sync_versions.rb)
 
-# 3. Dependencies
+# 3. Throwaway local build copy (working tree, so signing keys come along)
+BUILD_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/sc-mobile-build.XXXXXX")"
+trap 'rm -rf "$BUILD_ROOT"' EXIT
+echo "==> Copying mobile_app to $BUILD_ROOT for the build..."
+rsync -a --exclude build --exclude .dart_tool --exclude ios/Pods --exclude '._*' \
+  "$MOBILE_DIR/" "$BUILD_ROOT/mobile_app/"
+cd "$BUILD_ROOT/mobile_app"
+
 echo "==> Running flutter pub get..."
 "$FLUTTER_BIN" pub get
 
@@ -109,6 +121,8 @@ if [ "$SKIP_ANDROID" = false ]; then
   echo "==> [Android] Building signed release App Bundle (AAB)..."
   "$FLUTTER_BIN" build appbundle --release
   AAB_PATH="$MOBILE_DIR/build/app/outputs/bundle/release/app-release.aab"
+  mkdir -p "$(dirname "$AAB_PATH")"
+  cp build/app/outputs/bundle/release/app-release.aab "$AAB_PATH"
   echo "==> [Android] Successfully built: $AAB_PATH"
 
   # Check if Google Play API credentials exist
@@ -124,14 +138,13 @@ if [ "$SKIP_ANDROID" = false ]; then
   fi
 fi
 
-# 6. Commit and push version bump
+# 6. Commit and push version bump (in the NAS repo; fsmonitor hangs on SMB)
 echo "==> Committing and pushing version ${NEW_FULL_VERSION}..."
-git add pubspec.yaml ios/Runner.xcodeproj/project.pbxproj ios/sync_versions.rb
-git commit -m "chore(release): bump mobile app to ${NEW_FULL_VERSION}" || true
-
-REMOTE_NAME=$(git remote | grep -E "^(github|origin)$" | head -n1 || echo "origin")
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-git push "$REMOTE_NAME" "$CURRENT_BRANCH" || true
+cd "$MOBILE_DIR"
+GIT="git -c core.fsmonitor=false"
+$GIT add pubspec.yaml ios/Runner.xcodeproj/project.pbxproj ios/sync_versions.rb
+$GIT commit -m "chore(release): bump mobile app to ${NEW_FULL_VERSION}" || true
+$GIT push origin "$($GIT rev-parse --abbrev-ref HEAD)" || true
 
 echo ""
 echo "=========================================================="

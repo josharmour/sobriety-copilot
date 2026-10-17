@@ -43,23 +43,32 @@ docker compose down
 # Release mobile app to App Store Connect / TestFlight & Google Play:
 # Automatically bumps build number, syncs Xcode targets, builds & uploads
 # iOS archive directly to TestFlight, builds signed release AAB, and pushes to git.
+# Builds in a throwaway local copy (Flutter/Xcode can't build on SMB).
 ./scripts/release_mobile.sh
 ```
 
+**One repo.** The repo lives on the NAS (`/Volumes/repos/sobriety-copilot`,
+mapped on every dev machine) with GitHub as its origin. Edit, commit and run
+every script there — never in another clone, worktree or copy. Builds that
+can't run on the SMB share (`scripts/build_web.sh`, `scripts/release_mobile.sh`)
+copy `mobile_app/` to a temp dir, build, copy the output back and delete the
+copy. (2026-10-16: a long-lived `~/development` build clone collected two
+months of commits, split the history, and a hand-copied commit silently
+reverted FR11 `/api/distill`, the meetings expansion and the UI pass in
+production.)
+
 **What `deploy.sh` does and does *not* do.** It tars `src static nginx
-docker-compose.yml Dockerfile requirements.txt .env` to the remote, copies it
-into place, and runs `docker compose build app nginx && docker compose up -d`.
-That is all. It does **not** verify health, report `.env` drift, or normalize
-permissions — verify those yourself:
+docker-compose.yml Dockerfile requirements.txt documents/.manifests` (never
+`.env`) to the remote (`NAS_HOST`, default the `litellm` ssh alias for
+`joshu@10.0.0.100`), copies it into place, `chmod -R a+rX`'s it, then runs
+`docker compose build app nginx` and force-recreates `app nginx worker`. It
+never deletes files on the server and does **not** verify health — verify
+that yourself:
 
 - **Production `.env` diverges deliberately** (custom `LLM_MODEL` /
-  `EMBEDDING_MODEL`, among others) and must never be clobbered. It *is* in the
-  tar, and survives only because the script's `cp -R deploy_temp/*` does not
-  glob dotfiles — an accident, not a safeguard. After deploying, confirm
-  `/api/health` still reports the production models (`sc-generator`,
-  `fine-tuned-embeddinggemma`) rather than the repo defaults.
-- **File modes are shipped as-is by tar.** Deploy from a local-disk clone;
-  the SMB `/Volumes` copy carries `rwx------` modes that make nginx 403.
+  `EMBEDDING_MODEL`, among others) and must never be clobbered. After
+  deploying, confirm `/api/health` still reports the production models
+  (currently `dsv4`, `fine-tuned-embeddinggemma`) rather than the repo defaults.
 - **Verify what is actually being served** (a deploy log looks identical
   whether or not the bundle changed):
   ```bash
@@ -162,12 +171,12 @@ deploy would have silently shipped the old UI.
 ```bash
 # 1. Bump mobile_app/pubspec.yaml `version:` so the served version.json
 #    distinguishes this build from the one already live.
-# 2. Rebuild. On macOS use the flutter-mac SDK — the vendored flutter/ is
-#    Linux-only. Build from a local-disk clone, never the SMB /Volumes copy.
-cd mobile_app
-/Users/joshu/development/flutter-mac/bin/flutter build web --release
-cp -R build/web/. ../static/   # cp, NOT rsync --delete: preserves the
-                               # hand-maintained static/privacy.html
+# 2. Rebuild from the NAS repo. Builds in a throwaway local copy (Flutter
+#    can't build on SMB) with the flutter-mac SDK (the vendored flutter/ is
+#    Linux-only; override with FLUTTER_BIN), then cp's build/web/. into
+#    static/ — cp, not rsync --delete, so the hand-maintained privacy.html,
+#    terms.html and sms-optin.html survive.
+./scripts/build_web.sh
 # 3. Commit static/, then deploy and verify (see the Commands section).
 ```
 
