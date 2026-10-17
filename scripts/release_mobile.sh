@@ -106,7 +106,10 @@ echo "==> Running flutter pub get..."
 # 4. iOS Build & TestFlight Upload
 if [ "$SKIP_IOS" = false ]; then
   echo "==> [iOS] Building archive..."
-  "$FLUTTER_BIN" build ipa --export-options-plist=ios/ExportOptions-upload.plist
+  # Export locally; the xcodebuild step below is the one upload. (Handing the
+  # upload ExportOptions to flutter uploads from inside `flutter build ipa`,
+  # which then crashes listing the build/ios/ipa dir an upload never creates.)
+  "$FLUTTER_BIN" build ipa --export-method app-store
 
   echo "==> [iOS] Uploading to App Store Connect / TestFlight..."
   xcodebuild -exportArchive \
