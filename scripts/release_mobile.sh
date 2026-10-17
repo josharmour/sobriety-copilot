@@ -121,10 +121,12 @@ fi
 if [ "$SKIP_ANDROID" = false ]; then
   echo "==> [Android] Building signed release App Bundle (AAB)..."
   "$FLUTTER_BIN" build appbundle --release
-  AAB_PATH="$MOBILE_DIR/build/app/outputs/bundle/release/app-release.aab"
-  mkdir -p "$(dirname "$AAB_PATH")"
-  # cat, not cp: macOS cp copies extended attributes, which SMB rejects.
-  cat build/app/outputs/bundle/release/app-release.aab > "$AAB_PATH"
+  # Keep the AAB outside the repo: the build copy is deleted on exit, and
+  # mobile_app/build on the NAS may be a symlink to another machine's /tmp.
+  AAB_DIR="${RELEASE_OUT_DIR:-$HOME/Downloads}"
+  AAB_PATH="$AAB_DIR/sobriety-copilot-${NEW_FULL_VERSION}.aab"
+  mkdir -p "$AAB_DIR"
+  cp build/app/outputs/bundle/release/app-release.aab "$AAB_PATH"
   echo "==> [Android] Successfully built: $AAB_PATH"
 
   # Check if Google Play API credentials exist
@@ -152,5 +154,5 @@ echo ""
 echo "=========================================================="
 echo " ✅ Mobile Release ${NEW_FULL_VERSION} Complete!"
 echo " - iOS: Uploaded to TestFlight & available for App Store"
-echo " - Android: Signed AAB ready at $MOBILE_DIR/build/app/outputs/bundle/release/app-release.aab"
+echo " - Android: Signed AAB ready at ${AAB_PATH:-(skipped)}"
 echo "=========================================================="
