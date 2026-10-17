@@ -1864,12 +1864,15 @@ async def incoming_sms(request: Request):
                     pass
 
             if prior_exchanges < _SMS_NEWCOMER_EXCHANGES:
+                # Phrased as overriding: the base prompt's "think it through, name the
+                # source, suggest a meeting" otherwise doubles the length.
                 sms_length_rule = (
-                    "- This person is new to texting Sobriety Copilot. Be brief and to the point: "
-                    "1 to 3 short sentences, under about 320 characters. Answer directly; skip "
-                    "background, lists, and extra suggestions. They can always ask for more. "
-                    "Only go longer if they ask for a complete list (such as all Twelve Steps) or "
-                    "a full daily reading; in a crisis, stay short but still give the safety guidance."
+                    "- LENGTH LIMIT (overrides every other instruction about depth, citing sources, "
+                    "or suggesting next steps): this person is new to texting Sobriety Copilot, so "
+                    "reply in at most 2 short sentences, under 250 characters total. One idea only: "
+                    "answer directly and stop. Mention a source or a next step only if it fits inside "
+                    "the limit. Exceptions: a request for a complete list (such as all Twelve Steps) "
+                    "or a full daily reading; in a crisis, still give the safety guidance, briefly."
                 )
             else:
                 sms_length_rule = (
