@@ -15,6 +15,13 @@ x-app-env: &app-env
   # Off by default to preserve existing retrieval behavior; enable for concept
   # tags on citation chips.
   RAG_CONCEPT_LABELS: "${RAG_CONCEPT_LABELS:-0}"
+  # Research-capable chat (src/research/): what answers /api/chat and SMS
+  # questions — "classic" or "research"; see CLAUDE.md.
+  CHAT_ENGINE: "${CHAT_ENGINE:-classic}"
+  SMS_ENGINE: "${SMS_ENGINE:-classic}"
+  CHAT_ROUTER: "${CHAT_ROUTER:-auto}"
+  RESEARCH_RATE_LIMIT: "${RESEARCH_RATE_LIMIT:-90}"
+  RESEARCH_MAX_CONCURRENT: "${RESEARCH_MAX_CONCURRENT:-2}"
   # LLM_BASE_URL_DIFFUSION removed — single model on 10.0.0.10:8002
   # LLM_MODEL_DIFFUSION removed — single model on 10.0.0.10:8002
   LLM_BASE_URL_STANDARD: "${LLM_BASE_URL_STANDARD:-http://10.0.0.10:8002/v1}"
