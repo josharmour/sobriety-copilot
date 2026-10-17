@@ -29,7 +29,7 @@ from src.render_cache import (
 
 from src.inference.engine import InferenceEngine
 from src.meetings.online import search_online_meetings, warmup_online_feeds
-from src.meetings.service import search_meetings, warmup_feeds as warmup_meeting_feeds
+from src.meetings.service import feed_health, run_refresh_loop as run_meeting_refresh_loop, search_meetings
 from src.prompts.templates import NO_CONTEXT_TEMPLATE, USER_MESSAGE_TEMPLATE, system_message_for_tone
 from src.rag.chroma_client import find_largest_collection_with_prefix
 from src.rag.embeddings import warmup as warmup_embeddings
@@ -984,15 +984,15 @@ async def _warmup_models() -> None:
         pass
 
 
-async def _warmup_meetings() -> None:
-    try:
-        await warmup_meeting_feeds()
-    except Exception:
-        pass
-    try:
-        await warmup_online_feeds()
-    except Exception:
-        pass
+async def _refresh_online_meetings_forever() -> None:
+    # Cheap when fresh (cache hit); re-downloads once the 6h TTL lapses, so a
+    # user request never waits on the multi-MB directory feeds.
+    while True:
+        try:
+            await warmup_online_feeds()
+        except Exception:
+            pass
+        await asyncio.sleep(30 * 60)
 
 
 async def _daily_sms_scheduler_loop() -> None:
@@ -1007,13 +1007,17 @@ async def _daily_sms_scheduler_loop() -> None:
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(app_: FastAPI):
     try:
         _refresh_retriever(force=True)
     except Exception:
         pass
     asyncio.create_task(_warmup_models())
-    asyncio.create_task(_warmup_meetings())
+    # Keep strong references: the loop only holds weak refs to tasks.
+    app_.state.background_tasks = [
+        asyncio.create_task(run_meeting_refresh_loop()),
+        asyncio.create_task(_refresh_online_meetings_forever()),
+    ]
     scheduler_task = asyncio.create_task(_daily_sms_scheduler_loop())
     try:
         yield
@@ -1281,6 +1285,218 @@ BATCH_EXPLAIN_PROMPT = (
     "  KEY: <the single most directly relevant phrase from the passage, "
     "verbatim, max 15 words. Empty if nothing is directly on point.>"
 )
+
+# ---------------------------------------------------------------------------
+# FR11 — /api/distill: on-device memory-distillation passthrough.
+#
+# The Flutter app runs a one-shot LLM extraction at conversation END to turn
+# the last turns into durable facts + open threads (FR11 Task 2/3). In server
+# mode the app POSTs the transcript tail here and we forward ONLY the built
+# prompt to the SHARED inference engine (the same engine /api/chat uses). The
+# product server stores NOTHING: the transcript exists only within this single
+# request — nothing is written to disk, SQLite, or Redis — mirroring
+# /api/chat's non-persistence default. The model's reply is parsed and
+# validated defensively here (same caps as the client) and returned as
+# {new_facts, threads}; the app re-applies its own caps before anything
+# reaches on-device storage.
+#
+# SYNC NOTE: DISTILL_INSTRUCTION is a faithful replica of the Flutter constant
+# kMemoryDistillPrompt in
+# mobile_app/lib/features/personal_memory/memory_distiller.dart (values
+# inlined: 12 turns, 3 facts, 2 threads, 120/50/120 chars). Keep the two in
+# lockstep — the client builds the identical prompt text when distilling
+# locally.
+# ---------------------------------------------------------------------------
+
+DISTILL_SYSTEM_MESSAGE = (
+    "You extract durable personal facts and unfinished topics from a "
+    "recovery-support chat. Reply with STRICT JSON only, exactly matching the "
+    "requested schema. No markdown fences, no prose, no commentary."
+)
+
+DISTILL_INSTRUCTION = (
+    "You are reading the last 12 turns of a finished recovery-support chat\n"
+    "between a person and their sober-companion assistant. Extract only what is\n"
+    "worth the assistant remembering in FUTURE conversations. Keep the person's\n"
+    "dignity; never use judgment phrasing about them or their recovery.\n"
+    "\n"
+    "Reply with STRICT JSON only — no markdown fences, no prose, no commentary —\n"
+    "matching EXACTLY this schema:\n"
+    '{"new_facts": ["..."], "threads": [{"id": "kebab-case-slug", "title": "...", "detail": "...", "resolved": false}]}\n'
+    "\n"
+    "Rules:\n"
+    "- new_facts: up to 3 durable traits, preferences, or plans about the\n"
+    "  person that would matter later, written in the THIRD person (e.g. \"Prefers\n"
+    "  evening meetings over morning ones\"). Max 120 chars each.\n"
+    "  NEVER copy message bodies verbatim. No medical or diagnostic claims.\n"
+    "- threads: up to 2 UNFINISHED topics from this conversation worth\n"
+    "  resuming. \"id\" is a kebab-case slug; \"title\" max 50 chars;\n"
+    "  \"detail\" max 120 chars (where it left off / natural next\n"
+    "  step). \"resolved\" is always false.\n"
+    "- If nothing is worth remembering, return empty arrays.\n"
+    "\n"
+    "Existing memory is listed below ONLY to prevent duplicates — never re-issue a\n"
+    "fact or thread already recorded there."
+)
+
+# Suggest-mode variant for the "Remember this" button (FR11.2): proposes the
+# ONE most memory-worthy fact from the recent conversation as a prefilled
+# suggestion the user confirms/edits. Kept in lockstep with the Flutter
+# constant kMemorySuggestPrompt (memory_distiller.dart). Same caps/sync rules
+# as DISTILL_INSTRUCTION above.
+DISTILL_SUGGEST_INSTRUCTION = (
+    "You are reading the recent turns of an ongoing recovery-support chat\n"
+    "between a person and their sober-companion assistant. The person just\n"
+    "tapped \"Remember this\" — propose the SINGLE fact from this conversation\n"
+    "they most plausibly want remembered for future chats. Keep the person's\n"
+    "dignity; never use judgment phrasing about them or their recovery.\n"
+    "\n"
+    "Reply with STRICT JSON only — no markdown fences, no prose, no commentary —\n"
+    "matching EXACTLY this schema:\n"
+    '{"new_facts": ["..."], "threads": []}\n'
+    "\n"
+    "Rules:\n"
+    "- new_facts contains EXACTLY ONE string: the best candidate, written in\n"
+    '  the THIRD person (e.g. "Got sober on September 21, 2001"), max 120\n'
+    "  chars. Prefer durable personal facts the user stated (dates, people,\n"
+    "  triggers, plans, preferences) over literature content the assistant\n"
+    "  said. NEVER copy a message body verbatim. No medical or diagnostic\n"
+    "  claims.\n"
+    "- threads is ALWAYS an empty array.\n"
+    '- If nothing personal is memory-worthy, return {"new_facts": [],\n'
+    '  "threads": []} and the UI will fall back to an empty editable field.\n'
+)
+
+
+class DistillRequest(BaseModel):
+    """FR11 memory-distillation passthrough payload.
+
+    transcript: the conversation tail as {role, content} turns (user/assistant
+    only). Capped server-side: the LAST 12 turns are kept and each content is
+    truncated at 2000 chars. Junk turns (unknown role / blank content) are
+    dropped defensively; a transcript with zero usable turns is a 422.
+    existing: optional {"facts": [titles], "threads": [titles]} digest of what
+    the app already remembers, folded into the prompt so the model dedupes.
+    suggest_mode: switches the prompt to the single-fact suggestion variant
+    used by the "Remember this" prefill flow (same caps, same parsing).
+    """
+
+    transcript: list[dict[str, str]] = Field(default_factory=list)
+    existing: dict[str, Any] | None = None
+    suggest_mode: bool = False
+
+
+def _distill_existing_titles(existing: dict[str, Any] | None, key: str) -> str:
+    if not existing:
+        return "(none)"
+    value = existing.get(key)
+    if not isinstance(value, list) or not value:
+        return "(none)"
+    titles = [str(t).strip() for t in value if str(t).strip()]
+    if not titles:
+        return "(none)"
+    return "[" + " | ".join(titles) + "]"
+
+
+def _build_distill_prompt(
+    turns: list[tuple[str, str]],
+    existing: dict[str, Any] | None,
+    suggest_mode: bool = False,
+) -> str:
+    """Mirrors MemoryDistiller._buildPrompt on the Flutter side: instruction +
+    known-memory digest lines + the conversation tail rendered with roles.
+    suggest_mode swaps in the single-fact suggestion instruction."""
+    lines = [
+        DISTILL_SUGGEST_INSTRUCTION if suggest_mode else DISTILL_INSTRUCTION,
+        "",
+        f"Existing memory — facts: {_distill_existing_titles(existing, 'facts')}",
+        f"Existing memory — open threads: {_distill_existing_titles(existing, 'threads')}",
+        "",
+        f"Conversation (last {len(turns)} turns):",
+    ]
+    for role, content in turns:
+        lines.append(f"{role.capitalize()}: {content.strip()}")
+    return "\n".join(lines)
+
+
+def _distill_slugify(title: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+
+
+def _parse_distill_response(raw: str) -> dict[str, Any]:
+    """Defensively parse the model's completion into {new_facts, threads}.
+
+    Tolerates markdown fences and prose-wrapped JSON (first {...} block),
+    drops non-string/non-map garbage, and applies the SAME caps as the Flutter
+    parser: 3 facts / 2 threads, fact 120 chars, title 50, detail 120.
+    Raises ValueError on anything unparseable (mapped to HTTP 502 by the
+    endpoint).
+    """
+    text = (raw or "").strip()
+    if not text:
+        raise ValueError("malformed model output: empty response")
+
+    # Strip ```json ... ``` fences (with or without a language tag).
+    if text.startswith("```"):
+        first_nl = text.find("\n")
+        if first_nl >= 0:
+            text = text[first_nl + 1 :].strip()
+        else:
+            text = re.sub(r"^```[a-zA-Z0-9_-]*", "", text).strip()
+        if text.endswith("```"):
+            text = text[: -3].strip()
+
+    def _decode(blob: str) -> Any:
+        return json.loads(blob)
+
+    obj: Any = None
+    try:
+        obj = _decode(text)
+    except Exception:
+        start, end = text.find("{"), text.rfind("}")
+        if start < 0 or end <= start:
+            raise ValueError("malformed model output: no JSON object found")
+        try:
+            obj = _decode(text[start : end + 1])
+        except Exception as exc:
+            raise ValueError("malformed model output: invalid JSON") from exc
+    if not isinstance(obj, dict):
+        raise ValueError("malformed model output: not a JSON object")
+
+    facts: list[str] = []
+    raw_facts = obj.get("new_facts")
+    if isinstance(raw_facts, list):
+        for item in raw_facts:
+            if len(facts) >= 3:
+                break
+            if not isinstance(item, str):
+                continue
+            t = item.strip()
+            if not t:
+                continue
+            facts.append(t[:120])
+
+    threads: list[dict[str, Any]] = []
+    raw_threads = obj.get("threads")
+    if isinstance(raw_threads, list):
+        for item in raw_threads:
+            if len(threads) >= 2:
+                break
+            if not isinstance(item, dict):
+                continue
+            tid = str(item.get("id") or "").strip()
+            title = str(item.get("title") or "").strip()[:50]
+            detail = str(item.get("detail") or "").strip()[:120]
+            resolved = item.get("resolved") is True
+            if not tid and not title:
+                continue
+            if not tid:
+                tid = _distill_slugify(title) or "thread"
+            threads.append(
+                {"id": tid, "title": title, "detail": detail, "resolved": resolved}
+            )
+
+    return {"new_facts": facts, "threads": threads}
 
 
 def _parse_batch_explanations(text: str, n: int) -> list[dict[str, str]]:
@@ -1887,6 +2103,55 @@ _PROMPT_INJECTION_RE = re.compile(
 )
 
 
+@app.post("/api/distill")
+def distill(payload: DistillRequest):
+    """FR11 memory-distillation passthrough (one-shot, stateless).
+
+    Privacy contract: this endpoint forwards ONLY the built distillation prompt
+    to the shared inference engine and returns parsed facts/threads. The
+    transcript exists only within this single request — NOTHING is written to
+    disk, SQLite, or Redis, mirroring /api/chat's non-persistence default.
+    Caps: last 12 turns, each content truncated at 2000 chars; the response is
+    re-capped at 3 facts / 2 threads / 120 / 50 / 120 chars before it leaves.
+    Engine failure -> 502; malformed model output -> 502 with detail.
+    """
+    turns = payload.transcript or []
+    # Server-side caps: keep the LAST 12 turns, truncate each content at 2000.
+    turns = turns[-12:]
+    cleaned: list[tuple[str, str]] = []
+    for turn in turns:
+        if not isinstance(turn, dict):
+            continue
+        role = str(turn.get("role") or "").strip().lower()
+        content = str(turn.get("content") or "").strip()
+        if role not in ("user", "assistant") or not content:
+            continue  # drop junk turns defensively rather than failing the call
+        cleaned.append((role, content[:2000]))
+    if not cleaned:
+        raise HTTPException(
+            status_code=422,
+            detail="transcript must contain at least one {role, content} turn",
+        )
+
+    prompt = _build_distill_prompt(cleaned, payload.existing, payload.suggest_mode)
+    try:
+        raw = engine.generate(
+            prompt=prompt,
+            history=[],
+            max_tokens=400,
+            system_message=DISTILL_SYSTEM_MESSAGE,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"inference engine failure: {exc}"
+        ) from exc
+
+    try:
+        return _parse_distill_response(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @app.post("/api/chat")
 def chat(payload: ChatRequest, request: Request):
     import time as _chat_time
@@ -2027,7 +2292,11 @@ def chat(payload: ChatRequest, request: Request):
         sys_msg = f"{sys_msg}\n\n{user_state_note}" if sys_msg else user_state_note
     client_note = (payload.client_context or "").strip()
     if client_note:
-        client_note = client_note.replace("\n", " ")[:300]
+        # FR11: the client now merges the sobriety day-count line with the
+        # personal-memory snapshot (<= 400 chars by construction), so the
+        # injection clamp is widened to 600 to fit both. It only bounds the
+        # injected note length; nothing here is persisted.
+        client_note = client_note.replace("\n", " ")[:600]
         note_line = (
             "Personal context from their device for this reply only "
             f"(mention only if it fits what they're asking): {client_note}"
@@ -2470,16 +2739,36 @@ async def meetings(
     lat: float = Query(...),
     lng: float = Query(...),
     radius_mi: float = Query(25.0, ge=1.0, le=200.0),
-    max: int = Query(30, ge=1, le=100),
+    max: int = Query(30, ge=1, le=300),
     day: int | None = Query(None, ge=0, le=6),
     attendance: str | None = Query(None, pattern="^(inperson|online|all)$"),
     fellowship: str | None = Query(None, max_length=40),
+    range_: str | None = Query(None, alias="range", pattern="^(upcoming|today|tonight|tomorrow|week|any)$"),
+    tod: str | None = Query(None, pattern="^(any|morning|afternoon|evening|late)$"),
+    now_day: int | None = Query(None, ge=0, le=6),
+    now_min: int | None = Query(None, ge=0, le=1439),
 ):
+    """In-person/hybrid meetings near a point, from every intergroup feed plus
+    the NA BMLT aggregator.
+
+    `range`/`tod` with the client's local clock (`now_day` 0=Sun, `now_min`)
+    select server-side — soonest first for upcoming/today/tonight/tomorrow —
+    so a dense metro returns the right `max` meetings rather than the nearest.
+    Without them results are nearest-first (what app builds < 1.4.1 expect).
+    """
     return await search_meetings(
         lat=lat, lng=lng,
         radius_mi=radius_mi, max_results=max,
         day=day, attendance=attendance, fellowship=fellowship,
+        range_=range_, time_of_day=tod, now_day=now_day, now_min=now_min,
     )
+
+
+@app.get("/api/meetings/sources")
+async def meetings_sources():
+    """Per-feed health of the meeting catalog (status, meeting count, last
+    error), worst first — the place to spot a feed that stopped answering."""
+    return feed_health()
 
 
 @app.get("/api/meetings/online")
