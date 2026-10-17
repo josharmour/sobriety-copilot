@@ -117,6 +117,13 @@ class ChatMessage {
   final String? diffusionContent; // transient visual snapshot text
   final List<String> imageThumbs; // user-attached photo data URLs (for display)
 
+  // Research mode (/api/research): the steps taken, the current phase, and
+  // the check of the answer's quotes and pages against the text.
+  final bool isResearch;
+  final List<ResearchStep> researchSteps;
+  final String? researchPhase; // 'researching' | 'writing'
+  final ResearchCheck? researchCheck;
+
   const ChatMessage({
     required this.id,
     required this.role,
@@ -134,6 +141,10 @@ class ChatMessage {
     this.diffusionTotal,
     this.diffusionContent,
     this.imageThumbs = const [],
+    this.isResearch = false,
+    this.researchSteps = const [],
+    this.researchPhase,
+    this.researchCheck,
   });
 
   factory ChatMessage.user(String text, {List<String> images = const []}) =>
@@ -169,6 +180,10 @@ class ChatMessage {
     int? diffusionTotal,
     String? diffusionContent,
     List<String>? imageThumbs,
+    bool? isResearch,
+    List<ResearchStep>? researchSteps,
+    String? researchPhase,
+    ResearchCheck? researchCheck,
   }) {
     return ChatMessage(
       id: id,
@@ -187,6 +202,10 @@ class ChatMessage {
       diffusionTotal: diffusionTotal ?? this.diffusionTotal,
       diffusionContent: diffusionContent ?? this.diffusionContent,
       imageThumbs: imageThumbs ?? this.imageThumbs,
+      isResearch: isResearch ?? this.isResearch,
+      researchSteps: researchSteps ?? this.researchSteps,
+      researchPhase: researchPhase ?? this.researchPhase,
+      researchCheck: researchCheck ?? this.researchCheck,
     );
   }
 
@@ -215,6 +234,15 @@ class ChatMessage {
       imageThumbs: (json['imageThumbs'] as List<dynamic>? ?? const [])
           .map((e) => e.toString())
           .toList(),
+      isResearch: json['isResearch'] == true,
+      researchSteps: (json['researchSteps'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(ResearchStep.fromJson)
+          .toList(),
+      researchPhase: json['researchPhase']?.toString(),
+      researchCheck: json['researchCheck'] is Map<String, dynamic>
+          ? ResearchCheck.fromJson(json['researchCheck'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -235,13 +263,106 @@ class ChatMessage {
         if (diffusionTotal != null) 'diffusionTotal': diffusionTotal,
         if (diffusionContent != null) 'diffusionContent': diffusionContent,
         if (imageThumbs.isNotEmpty) 'imageThumbs': imageThumbs,
+        if (isResearch) 'isResearch': true,
+        if (researchSteps.isNotEmpty) 'researchSteps': researchSteps.map((e) => e.toJson()).toList(),
+        if (researchPhase != null) 'researchPhase': researchPhase,
+        if (researchCheck != null) 'researchCheck': researchCheck!.toJson(),
       };
 
   /// {"role": role, "content": text} for the /api/chat history array.
-  Map<String, String> toHistoryJson() => {'role': role, 'content': text};
+  ///
+  /// A research answer carries a short note of what was read, so a follow-up
+  /// research turn can build on it instead of starting over.
+  Map<String, String> toHistoryJson() {
+    if (!isResearch || researchSteps.isEmpty) return {'role': role, 'content': text};
+    final read = [
+      for (final s in researchSteps)
+        if (s.status == 'done' && s.tool != 'get_outline') s.label,
+    ];
+    if (read.isEmpty) return {'role': role, 'content': text};
+    return {'role': role, 'content': '$text\n\n[Research notes: ${read.take(12).join('; ')}]'};
+  }
 
   bool get isUser => role == 'user';
   bool get isAssistant => role == 'assistant';
+}
+
+/// One step of a research answer ("Reading “How It Works” — Big Book, pp. 58–71").
+class ResearchStep {
+  final int id;
+  final String tool;
+  final String label;
+  final String status; // running | done | error
+  final String? detail;
+  final int? done; // progress for multi-part steps
+  final int? total;
+
+  const ResearchStep({
+    required this.id,
+    required this.tool,
+    required this.label,
+    required this.status,
+    this.detail,
+    this.done,
+    this.total,
+  });
+
+  factory ResearchStep.fromJson(Map<String, dynamic> j) {
+    final progress = j['progress'] as List<dynamic>?;
+    return ResearchStep(
+      id: _asInt(j['id']),
+      tool: (j['tool'] ?? '').toString(),
+      label: (j['label'] ?? '').toString(),
+      status: (j['status'] ?? 'running').toString(),
+      detail: j['detail']?.toString(),
+      done: progress != null && progress.length == 2 ? _asInt(progress[0]) : null,
+      total: progress != null && progress.length == 2 ? _asInt(progress[1]) : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'tool': tool,
+        'label': label,
+        'status': status,
+        if (detail != null) 'detail': detail,
+        if (done != null && total != null) 'progress': [done, total],
+      };
+}
+
+/// How many of a research answer's quotes and page citations were found in the text.
+class ResearchCheck {
+  final int quotes;
+  final int quotesVerified;
+  final int pages;
+  final int pagesVerified;
+  final List<String> unverified;
+
+  const ResearchCheck({
+    required this.quotes,
+    required this.quotesVerified,
+    required this.pages,
+    required this.pagesVerified,
+    this.unverified = const [],
+  });
+
+  bool get allVerified => quotesVerified == quotes && pagesVerified == pages;
+
+  factory ResearchCheck.fromJson(Map<String, dynamic> j) => ResearchCheck(
+        quotes: _asInt(j['quotes']),
+        quotesVerified: _asInt(j['quotes_verified']),
+        pages: _asInt(j['pages']),
+        pagesVerified: _asInt(j['pages_verified']),
+        unverified: (j['unverified_quotes'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'quotes': quotes,
+        'quotes_verified': quotesVerified,
+        'pages': pages,
+        'pages_verified': pagesVerified,
+        if (unverified.isNotEmpty) 'unverified_quotes': unverified,
+      };
 }
 
 /// A saved/persisted conversation.
@@ -380,6 +501,9 @@ sealed class ChatEvent {
           .toList();
       return FollowupsEvent(items);
     }
+    if (json['research'] is Map<String, dynamic>) {
+      return ResearchEvent(json['research'] as Map<String, dynamic>);
+    }
     if (json.containsKey('diffusion')) {
       final diff = json['diffusion'] as Map<String, dynamic>? ?? const {};
       return DiffusionEvent(
@@ -430,6 +554,13 @@ class DiffusionEvent extends ChatEvent {
     required this.total,
     required this.content,
   });
+}
+
+/// Research-mode progress: a step, a phase change, or the answer's verification.
+class ResearchEvent extends ChatEvent {
+  final Map<String, dynamic> data;
+  const ResearchEvent(this.data);
+  String get type => (data['type'] ?? '').toString();
 }
 
 class ErrorEvent extends ChatEvent {

@@ -51,3 +51,4 @@ packs/embedder/
 # macOS metadata and AppleDouble files on SMB
 .DS_Store
 ._*
+tests/eval_research_results.json

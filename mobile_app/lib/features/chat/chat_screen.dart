@@ -34,6 +34,8 @@ import 'package:sobriety_copilot_mobile/features/meditation/meditation_sheet.dar
 import 'package:sobriety_copilot_mobile/features/daily/today_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
 import 'package:sobriety_copilot_mobile/features/graph/rag_graph_view.dart';
+import 'package:sobriety_copilot_mobile/features/graph2/concept_graph_screen.dart';
+import 'package:sobriety_copilot_mobile/features/chat/research_card.dart';
 import 'package:sobriety_copilot_mobile/features/personal_memory/memory_distiller.dart'
     show distillerProvider, kDistillWindowTurns;
 import 'package:sobriety_copilot_mobile/features/personal_memory/memory_sheet.dart';
@@ -573,12 +575,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       case _MenuAction.saved:
         await showAppSheet(context, const SavedPassagesSheet());
       case _MenuAction.graph:
-        await Navigator.of(context).push(
+        final navigator = Navigator.of(context);
+        await navigator.push(
           MaterialPageRoute(
             builder:
-                (_) => RagGraphScreen(
-                  initialQuery: '',
-                  onSelectPrompt: (prompt) => _send(prompt),
+                (_) => ConceptGraphScreen(
+                  onResearch: (prompt) => _send(prompt),
+                  // Older server without the concept graph: use the topic graph.
+                  onUnsupported:
+                      () => navigator.pushReplacement(
+                        MaterialPageRoute(
+                          builder:
+                              (_) => RagGraphScreen(
+                                initialQuery: '',
+                                onSelectPrompt: (prompt) => _send(prompt),
+                              ),
+                        ),
+                      ),
                 ),
           ),
         );
@@ -1750,6 +1763,9 @@ class _MessageBubble extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Only when the model actually read something; plain replies look like chat.
+                if (message.isResearch && (message.researchSteps.isNotEmpty || message.researchCheck != null))
+                  ResearchCard(message: message),
                 if (showThinking && message.thinking.trim().isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -2145,7 +2161,10 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          'Relevance ${(s.similarity * 100).round()}%',
+                          // Research sources are cited passages, not ranked matches.
+                          s.similarity > 0
+                              ? 'Relevance ${(s.similarity * 100).round()}%'
+                              : (s.page != null && '${s.page}' != 'None' ? 'Page ${s.page}' : 'Cited passage'),
                           style: theme.textTheme.bodySmall,
                         ),
                         const SizedBox(height: AppSpacing.md),

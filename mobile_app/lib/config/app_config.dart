@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -42,6 +43,18 @@ const Map<String, String> kCategoryLabels = {
 };
 
 const String kDefaultBaseUrl = 'https://sobrietycopilot.com';
+
+/// The server a fresh install talks to. A web build served by its own server
+/// (the website, or a staging/demo copy of it) uses that server; native apps
+/// and `flutter run` on localhost use the production site.
+String defaultBaseUrl() {
+  if (kIsWeb) {
+    final base = Uri.base;
+    final local = base.host.isEmpty || base.host == 'localhost' || base.host == '127.0.0.1';
+    if (!local && (base.scheme == 'http' || base.scheme == 'https')) return base.origin;
+  }
+  return kDefaultBaseUrl;
+}
 
 /// Generates a stable-ish, uuid-like identifier for this install.
 String _generateUserId() {
@@ -100,7 +113,7 @@ class AppConfig {
   factory AppConfig.defaults({String? userId}) {
     final id = (userId != null && userId.isNotEmpty) ? userId : _generateUserId();
     return AppConfig(
-      baseUrl: kDefaultBaseUrl,
+      baseUrl: defaultBaseUrl(),
       tone: kDefaultTone,
       enabledCategories: kAllCategories.toSet(),
       showThinking: false,
@@ -171,7 +184,7 @@ class AppConfig {
 
     return AppConfig(
       baseUrl: _normalizeBaseUrl(
-        (json['baseUrl'] as String?) ?? kDefaultBaseUrl,
+        (json['baseUrl'] as String?) ?? defaultBaseUrl(),
       ),
       tone: tone,
       enabledCategories: cats,

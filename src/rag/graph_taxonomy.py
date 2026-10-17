@@ -13,7 +13,7 @@ rebuilt.
 
 from __future__ import annotations
 
-TAXONOMY_VERSION = 4
+TAXONOMY_VERSION = 5  # 5: chapter outline rebuilt (src/rag/outline.py)
 
 # Group id -> human label. Order here is the order the UI shows the legend.
 GROUPS: list[tuple[str, str]] = [

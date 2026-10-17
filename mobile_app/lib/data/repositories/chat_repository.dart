@@ -20,7 +20,10 @@ class HttpChatRepository implements ChatRepository {
   /// so changing it in settings takes effect immediately.
   final String Function() baseUrl;
 
-  HttpChatRepository({required this.client, required this.baseUrl});
+  /// `/api/chat`, or `/api/research` for research mode (same events).
+  final String path;
+
+  HttpChatRepository({required this.client, required this.baseUrl, this.path = '/api/chat'});
 
   static const int _maxHistory = 10;
 
@@ -38,7 +41,7 @@ class HttpChatRepository implements ChatRepository {
     String? clientContext,
   }) async* {
     final root = baseUrl().replaceAll(RegExp(r'/+$'), '');
-    final uri = Uri.parse('$root/api/chat');
+    final uri = Uri.parse('$root$path');
 
     // Keep only the last ~10 turns, mapped to {role, content}.
     final trimmed = history.length > _maxHistory

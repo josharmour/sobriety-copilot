@@ -71,9 +71,12 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   if (ref.watch(privateModeActiveProvider)) {
     return LocalChatRepository(library: ref.watch(libraryRepositoryProvider));
   }
+  // The research-capable chat (/api/research): the model decides per message
+  // whether to just reply, look something up, or read whole chapters.
   return HttpChatRepository(
     client: ref.watch(httpClientProvider),
     baseUrl: () => _baseUrl(ref),
+    path: '/api/research',
   );
 });
 

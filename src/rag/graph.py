@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from src.rag.graph_taxonomy import GROUPS, TAXONOMY_VERSION, TOPICS
+from src.rag.outline import build_outline, clean_heading
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9']+")
 GRAPH_SCALE = os.environ.get("GRAPH_CHUNK_SCALE", "medium")
@@ -89,32 +90,8 @@ BOOK_OVERRIDES: dict[str, dict[str, str]] = {
     "aa-preamble": {"author": "A.A. World Services"},
     "decency-code": {"author": "Unknown"},
 }
-# Section headings shorter than this or made of a single letter (drop caps
-# mis-classified as headings) are not chapters.
-_SECTION_MIN_CONTENT_BLOCKS = 3
+# Daily readers have a heading per day; the graph keeps the longest sections.
 _SECTION_MAX_PER_BOOK = 160
-_DROP_CAP_RE = re.compile(r"^[\W\d]*[A-Za-z]?[\W\d]*$")
-# "6 BUILDING A NEW LIFE 476" — a contents line with chapter and page numbers.
-_TOC_LINE_RE = re.compile(r"^\d{1,3}\s+.+\s\d{1,4}$")
-_NOISE_HEADING_RE = re.compile(
-    r"copyright|©|isbn|printed in|all rights reserved|library of congress|www\.|\.com\b|"
-    r"^contents$|^chapter page$|^page$|^index$|world services|\binc\.|medical association",
-    re.IGNORECASE,
-)
-_SMALL_WORDS = {"a", "an", "and", "as", "at", "but", "by", "for", "in", "of", "on", "or", "the", "to", "vs", "with"}
-
-
-def _title_case(text: str) -> str:
-    words = text.lower().split()
-    out = []
-    for i, w in enumerate(words):
-        if i and w in _SMALL_WORDS:
-            out.append(w)
-        elif re.fullmatch(r"a\.a\.?|n\.a\.?|c\.a\.?|o\.a\.?", w):
-            out.append(w.upper())
-        else:
-            out.append(w[:1].upper() + w[1:])
-    return " ".join(out)
 _PAGE_HEADER_RE = re.compile(
     r"^(?:"
     r"[A-Z][A-Z\s\-\.',&]+\d+|"
@@ -261,57 +238,16 @@ class GraphBuilder:
     @staticmethod
     def _clean_heading(raw: str) -> str | None:
         """Normalise a manifest heading into a chapter title, or None if it's noise."""
-        text = re.sub(r"\s+", " ", (raw or "")).strip()
-        if len(text) < 3 or _DROP_CAP_RE.match(text):
-            return None
-        if _TOC_LINE_RE.match(text) or _NOISE_HEADING_RE.search(text):
-            return None
-        # Epigraph attributions ("—Jessica Stern"), index lines ("Step Twelve and, 50–52"),
-        # and sentence fragments that begin mid-sentence in lowercase.
-        if text[0] in "—–-" or not (text[0].isupper() or text[0].isdigit() or text[0] in "“\"'"):
-            return None
-        if re.search(r"\d+\s*[–-]\s*\d+$", text):
-            return None
-        # Sentence fragments mis-tagged as headings ("Step Five. As we took…").
-        if ". " in text and not re.search(r"\b[A-Z]\.\s?[A-Z]\.", text):
-            return None
-        if text.endswith((")", ",", ";")) or (text.endswith(".") and not re.search(r"[A-Z]\.[A-Z]\.$", text)):
-            return None
-        # Running-header page numbers: "22 STEP ONE" / "STEP ONE 22".
-        text = re.sub(r"^\d{1,4}\s+(?=[A-Za-z“\"'])", "", text)
-        text = re.sub(r"(?<=[A-Za-z.!?’'\"”])\s+\d{1,4}$", "", text)
-        if len(text) < 3 or not re.search(r"[A-Za-z]{2}", text):
-            return None
-        if text.isupper():
-            text = _title_case(text)
-        if len(text) > 80:
-            text = text[:77].rstrip() + "…"
-        return text
+        cleaned = clean_heading(raw)
+        return cleaned[0] if cleaned else None
 
     @staticmethod
     def _sections_from_blocks(blocks: list[dict[str, Any]]) -> tuple[list[Section], dict[str, int]]:
         block_index = {b.get("id"): i for i, b in enumerate(blocks) if b.get("id")}
-        heads: list[tuple[int, str, Any, str]] = []
-        for i, b in enumerate(blocks):
-            if b.get("type") != "heading":
-                continue
-            text = GraphBuilder._clean_heading(b.get("text") or "")
-            if text is None:
-                continue
-            # Count substantive blocks until the next heading.
-            n = 0
-            j = i + 1
-            while j < len(blocks) and blocks[j].get("type") != "heading":
-                if blocks[j].get("type") in ("paragraph", "epigraph", "list"):
-                    n += 1
-                j += 1
-            if n < _SECTION_MIN_CONTENT_BLOCKS:
-                continue
-            heads.append((i, text, b.get("printed_page"), b.get("id") or ""))
-        sections: list[Section] = []
-        for k, (start, title, page, bid) in enumerate(heads):
-            end = heads[k + 1][0] if k + 1 < len(heads) else len(blocks)
-            sections.append(Section(index=k, title=title, start=start, end=end, printed_page=page, block_id=bid))
+        sections = [
+            Section(index=k, title=e.title, start=e.start, end=e.end, printed_page=e.printed_page, block_id=e.block_id)
+            for k, e in enumerate(build_outline(blocks))
+        ]
         if len(sections) > _SECTION_MAX_PER_BOOK:
             # Keep the longest sections so daily-reader books (one heading per
             # day) collapse to something navigable.

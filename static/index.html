@@ -17,6 +17,33 @@
   <link rel="icon" type="image/png" href="favicon.png?v=1783391263"/>
 
   <title>Sobriety Copilot</title>
+  <script>
+    // Beta opt-in, shared by sobrietycopilot.com and beta.sobrietycopilot.com
+    // through a cookie on the parent domain. An opted-in visitor to the main
+    // site goes straight to the beta (only if the beta answers, so a beta
+    // outage never strands anyone); ?beta=off — the beta's "Back to the
+    // regular site" link — clears the choice.
+    (function () {
+      var MAIN = 'sobrietycopilot.com', BETA = 'beta.' + MAIN;
+      var host = location.hostname;
+      var onMain = host === MAIN || host === 'www.' + MAIN;
+      function remember(v) {
+        document.cookie = 'sc_beta=' + v + '; Domain=.' + MAIN + '; Path=/; Max-Age=31536000; SameSite=Lax; Secure';
+      }
+      var params = new URLSearchParams(location.search);
+      if (params.get('beta') === 'off') remember('0');
+      if (params.get('beta') === 'on') remember('1');
+      window.scBeta = { on: function () { remember('1'); }, host: host, main: MAIN, beta: BETA };
+      var optedIn = /(?:^|;\s*)sc_beta=1(?:;|$)/.test(document.cookie);
+      if (onMain && optedIn && params.get('beta') !== 'off') {
+        var img = new Image(), done = false;
+        img.onload = function () { if (!done) { done = true; location.replace('https://' + BETA + '/'); } };
+        img.onerror = function () { done = true; };
+        setTimeout(function () { done = true; }, 2500);
+        img.src = 'https://' + BETA + '/favicon.png?ping=' + Date.now();
+      }
+    })();
+  </script>
   <link rel="manifest" href="manifest.json">
   <style>
     flutter-view, flt-glass-pane {
@@ -46,14 +73,34 @@
     #carrier-compliance-footer a:hover {
       text-decoration: underline;
     }
+    #carrier-compliance-footer .beta-badge {
+      color: #f2c14e;
+      font-weight: 600;
+    }
+    @media (max-width: 480px) {
+      #carrier-compliance-footer { font-size: 10px; white-space: nowrap; overflow-x: auto; }
+      #carrier-compliance-footer a { margin: 0 4px; }
+    }
   </style>
 </head>
 <body>
   <footer id="carrier-compliance-footer">
     <a href="/sms-optin.html">Daily SMS &amp; Opt-In</a> &middot;
     <a href="/privacy.html">Privacy Policy</a> &middot;
-    <a href="/terms.html">Terms of Service</a>
+    <a href="/terms.html">Terms of Service</a><span id="beta-links"></span>
   </footer>
+  <script>
+    (function () {
+      var b = window.scBeta, el = document.getElementById('beta-links');
+      if (!b || !el) return;
+      if (b.host === b.beta) {
+        el.innerHTML = ' &middot; <span class="beta-badge">Beta</span>' +
+          '<a href="https://' + b.main + '/?beta=off">Back to the regular site</a>';
+      } else if (b.host === b.main || b.host === 'www.' + b.main) {
+        el.innerHTML = ' &middot; <a href="https://' + b.beta + '/" onclick="scBeta.on()">Try the beta</a>';
+      }
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

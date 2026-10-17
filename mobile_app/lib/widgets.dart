@@ -129,7 +129,9 @@ class SourceChip extends StatelessWidget {
                       const SizedBox(width: AppSpacing.xs),
                       Flexible(
                         child: Text(
-                          source.title,
+                          source.page != null && '${source.page}'.isNotEmpty && '${source.page}' != 'None'
+                              ? '${source.title} · p. ${source.page}'
+                              : source.title,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: cs.onSurface,

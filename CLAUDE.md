@@ -40,6 +40,13 @@ docker compose down
 # Watch files and auto-deploy to production on save
 ./watch_and_deploy.sh
 
+# Public beta of the WORKING TREE at https://beta.sobrietycopilot.com, beside
+# production (containers beta-app/beta-nginx on 10.0.0.100:5077; Cloudflare
+# tunnel route on the NAS's cloudflared, managed in the Cloudflare dashboard).
+# The main site's footer has "Try the beta" (cookie sc_beta on
+# .sobrietycopilot.com remembers it; the beta's footer links back).
+./scripts/deploy_beta.sh            # SKIP_WEB=1 to redeploy server code only
+
 # Release mobile app to App Store Connect / TestFlight & Google Play:
 # Automatically bumps build number, syncs Xcode targets, builds & uploads
 # iOS archive directly to TestFlight, builds signed release AAB, and pushes to git.
@@ -119,6 +126,10 @@ The full set lives in `docker-compose.yml` under `x-app-env`. The ones most wort
 | `USER_MEMORY_DB_PATH` | `/app/user_memory.db` | SQLite path for `UserMemoryManager` |
 | `TWILIO_SMS_WEBHOOK_URL` | `https://sobrietycopilot.com/api/sms` | Exact URL Twilio posts to; `/api/sms` checks `X-Twilio-Signature` against it |
 | `TWILIO_VALIDATE_SIGNATURE` | `1` | `0` disables the signature check (local testing only) |
+| `CHAT_ENGINE` | `classic` | What answers `/api/chat` (website + every installed app): `classic` retrieval chat, or `research` = the research-capable chat (router below). No app release needed to flip |
+| `CHAT_ROUTER` | `auto` | For research-capable chat: `auto` sends short, plainly conversational messages to the fast classic reply and anything touching the literature (or longer than ~14 words) to the agent; `agent` sends everything to the agent |
+| `RESEARCH_RATE_LIMIT` / `RESEARCH_MAX_CONCURRENT` | `90` / `2` | Agent messages per IP per hour / server-wide whole-chapter reading runs (ordinary messages never wait on the latter) |
+| `RESEARCH_EFFORT` | `low` | Reasoning effort for the agent's planning/answer turns (`medium` spent ~1 min deliberating per answer) |
 
 ## Performance Optimization
 
@@ -151,7 +162,43 @@ To make the app run faster, you can disable the CPU-heavy reranker and/or skip t
   cached graph will be served stale. The legacy per-query `/api/graph?q=` is kept
   for mobile builds < 1.3.0. Tests: `python -m unittest tests.test_graph`.
   Flutter side: `mobile_app/lib/features/graph/` (canvas + panels + in-app
-  passage reader).
+  passage reader). App builds with the concept graph (below) use it only as
+  the fallback when `/api/graph2/map` 404s.
+- **`src/rag/concept_graph.py` + `concept_text.py`** — the concept graph behind
+  `/api/graph2/{map,node,meet,book/{id},chapter/{id}/{n},search,status}`:
+  thousands of concepts (ideas, people, places, sayings, prayers) plus the ~90
+  topics as hubs, each with *all* its peers (NPMI over ~40k manifest passages),
+  books, chapters, and "where two concepts meet" passages. The concept list,
+  map positions and prominence (PageRank) are built **offline** by
+  `scripts/build_concepts.py mine|curate|dedupe|layout` (LLM curation via
+  structured output) into the committed `src/rag/data/graph_concepts.json`;
+  the server only matches concepts to passages (~15 s background build,
+  pickled as `concept_graph.pkl`, 202 + progress meanwhile). Re-run the script
+  when the manifests change. Tests: `tests/test_concept_graph.py`. Flutter:
+  `mobile_app/lib/features/graph2/` (word-cloud canvas with LOD labels).
+- **`src/rag/outline.py`** — chapter outline of a manifest (drop caps, running
+  headers, contents-page titles glued to paragraphs, oversize sections cut
+  into page ranges). Used by both graphs and research mode. Tests:
+  `tests/test_outline.py` (asserts every Big Book chapter and every 12&12
+  Step/Tradition).
+- **`src/research/`** — the research-capable chat, `POST /api/research` (same
+  request and SSE events as `/api/chat` plus `research` step/phase/verification
+  events). Since 2026-10-16 the app's chat repository posts here for every
+  message (Private Mode excepted): the router (`_wants_research` in
+  `server.py`) keeps plain conversation on the fast classic path, and the agent
+  decides per message whether to reply, look something up, or read chapters
+  (passages are prefetched up front; urgent/crisis wording skips the prefetch).
+  `agent.py` runs a tool loop on the chat model (GLM tool calling): outline,
+  read whole sections, exact `find_text` counts, search, and
+  `analyze_sections` (parallel per-chapter readers whose quotes are checked
+  against the text). The answer's quotes and page citations are verified
+  against what was read. `library.py` serves the manifests (drop caps rejoined,
+  ligature splits and embedded running headers repaired). Research requests
+  send vLLM `priority` > 0 so live chat goes first; `RESEARCH_RATE_LIMIT`
+  (per IP/hour) and `RESEARCH_MAX_CONCURRENT` bound load. Tests:
+  `tests/test_research.py` (fake LLM). Depth score against a live server:
+  `python -m tests.eval_research --base-url …` (expected answers computed from
+  the manifests).
 - **`src/rag/`** —
   - `retriever.py`: hybrid retrieval (cosine semantic + BM25 keyword + category boosts + scale diversity); optional cross-encoder reranking on the final candidates.
   - `reranker.py`: cross-encoder wrapper (`sentence-transformers`). Lazy-loaded so non-chat paths don't pay for it.

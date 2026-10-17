@@ -40,6 +40,8 @@ from src.rag.indexer import DEFAULT_COLLECTION
 from src.rag.memory import UserMemoryManager, format_state_note
 from src.rag.reranker import warmup as warmup_reranker
 from src.rag.retriever import RAGRetriever
+from src.research.agent import ResearchSession
+from src.research.library import Library as ResearchLibrary
 from src.tasks.indexing import index_documents_task, perform_shadow_index
 from src.tasks.job_store import (
     INDEX_ACTIVE_COLLECTION_KEY,
@@ -983,6 +985,11 @@ async def _warmup_models() -> None:
     try:
         from src.rag.graph import graph_service
         graph_service.ensure_building(_get_retriever(), DOCUMENTS_DIR)
+    except Exception:
+        pass
+    # The concept graph reads the manifests directly (no index needed).
+    try:
+        _concept_graph().ensure_building()
     except Exception:
         pass
 
@@ -2344,8 +2351,22 @@ def distill(payload: DistillRequest):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+# Which engine answers /api/chat — what the website and every installed app
+# call. "classic" = retrieve ~10 excerpts and answer (the original pipeline);
+# "research" = the research-capable chat (see /api/research below), with
+# plainly conversational messages still taking the fast classic path.
+# Flip in .env + restart; no app release is needed either way.
+CHAT_ENGINE = os.environ.get("CHAT_ENGINE", "classic").strip().lower()
+
+
 @app.post("/api/chat")
 def chat(payload: ChatRequest, request: Request):
+    if CHAT_ENGINE == "research":
+        return research(payload, request)
+    return _classic_chat(payload, request)
+
+
+def _classic_chat(payload: ChatRequest, request: Request):
     import time as _chat_time
     _chat_t0 = _chat_time.monotonic()
     
@@ -2680,6 +2701,181 @@ def chat(payload: ChatRequest, request: Request):
     )
 
 
+# ── Research mode ────────────────────────────────────────────────────────
+# The model gathers its own evidence (chapter outlines, whole chapters, exact
+# counts, per-chapter readers) before answering; see src/research/agent.py.
+# Same request and SSE events as /api/chat, plus "research" progress events.
+# Every message of the research-capable chat counts toward the per-IP limit
+# (chat allows 30 per 10 min); only whole-chapter reading takes a server-wide
+# slot, so ordinary messages never wait on someone else's deep research.
+RESEARCH_RATE_LIMIT = int(os.environ.get("RESEARCH_RATE_LIMIT", "90"))        # messages per IP per hour
+RESEARCH_MAX_CONCURRENT = int(os.environ.get("RESEARCH_MAX_CONCURRENT", "2"))  # deep-reading runs, server-wide
+_RESEARCH_ACTIVE_KEY = "sc:research:active"
+_research_library: ResearchLibrary | None = None
+
+
+def _get_research_library() -> ResearchLibrary:
+    global _research_library
+    if _research_library is None:
+        _research_library = ResearchLibrary(DOCUMENTS_DIR)
+    return _research_library
+
+
+# "auto": plainly conversational messages ("hi", "rough day today") take the
+# fast classic path; anything touching the literature goes to the research
+# agent. "agent": everything goes to the agent.
+CHAT_ROUTER = os.environ.get("CHAT_ROUTER", "auto").strip().lower()
+_LITERATURE_RE = re.compile(
+    r"\b(big ?book|bb|12 ?(?:&|and) ?12|twelve and twelve|basic text|as bill sees it|daily reflections?|living sober|"
+    r"came to believe|grapevine|language of the heart|pass it on|dr\.? bob|bill w|literature|book|books|chapter|page|"
+    r"stor(?:y|ies)|quote|passage|step ?(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)|"
+    r"(?:\d{1,2}(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth) step|"
+    r"steps|tradition|traditions|promises|prayer|prayers|slogan|saying|how many|how often|count|compare|comparison|"
+    r"difference|differ|versus|vs\.?|trace|where (?:does|is|in)|what does|what do|say about|says about|history|who (?:was|is|wrote)|"
+    r"when (?:did|was)|origin|meaning|mean by|explain|define|definition|list|every|each)\b",
+    re.IGNORECASE)
+
+
+# Someone who writes more than a short line is describing a real situation;
+# the agent's reading pays off there (e.g. Living Sober's chapter on drinking
+# occasions for "scared I'll drink at my sister's wedding").
+_ROUTER_SHORT_WORDS = 14
+
+
+def _wants_research(message: str) -> bool:
+    """Whether a message needs the research agent rather than the fast classic reply."""
+    if CHAT_ROUTER == "agent":
+        return True
+    text = message or ""
+    return bool(_LITERATURE_RE.search(text)) or len(text.split()) > _ROUTER_SHORT_WORDS
+
+
+@app.post("/api/research")
+def research(payload: ChatRequest, request: Request):
+    if not payload.message.strip():
+        raise HTTPException(status_code=400, detail="missing 'message' field")
+    query = payload.message.strip()[:2000]
+    if not _wants_research(query) and not _PROMPT_INJECTION_RE.search(query):
+        return _classic_chat(payload, request)
+
+    rc = None
+    try:
+        rc = get_redis_client()
+        rl_key = f"sc:research:rl:{_client_ip(request)}"
+        cnt = rc.incr(rl_key)
+        if cnt == 1:
+            rc.expire(rl_key, 3600)
+        if cnt > RESEARCH_RATE_LIMIT:
+            raise HTTPException(status_code=429, detail="Research limit reached for now. Please try again later.")
+    except HTTPException:
+        raise
+    except Exception:
+        rc = None
+
+    if _PROMPT_INJECTION_RE.search(query):
+        def _refuse_stream():
+            msg = (
+                "Sobriety Copilot is a 12-step recovery and literature companion. "
+                "Ask me about the Steps, Traditions, Daily Reflections, or recovery literature."
+            )
+            yield f"data: {json.dumps({'token': msg})}\n\n"
+            yield "data: {\"done\": true}\n\n"
+        return StreamingResponse(_refuse_stream(), media_type="text/event-stream")
+
+    # Deep reading holds the model for a minute or more; the agent asks for a
+    # slot only when it starts reading whole chapters.
+    slot = {"held": False}
+
+    def heavy_gate() -> bool:
+        if slot["held"] or rc is None:
+            slot["held"] = True
+            return True
+        try:
+            active = rc.incr(_RESEARCH_ACTIVE_KEY)
+            rc.expire(_RESEARCH_ACTIVE_KEY, 900)  # self-heals if a worker dies mid-run
+            if active > RESEARCH_MAX_CONCURRENT:
+                rc.decr(_RESEARCH_ACTIVE_KEY)
+                return False
+        except Exception:
+            pass
+        slot["held"] = True
+        return True
+
+    user_id = re.sub(r"[^0-9a-zA-Z_-]", "", (payload.user_id or "default_user").strip())[:64] or "default_user"
+    history = [
+        {"role": str(t.get("role", "user")), "content": str(t.get("content", ""))[:4000]}
+        for t in (payload.history or [])[-12:]
+        if isinstance(t, dict) and t.get("role") in ("user", "assistant")
+    ]
+    sys_msg = system_message_for_tone(payload.tone) + (
+        "\n\nLength: the tone's length guidance applies to conversational replies. A question that needed real "
+        "research gets a complete answer, however brief the chosen tone."
+    )
+    user_state_note = format_state_note(memory_manager.get_user_state(user_id))
+    if user_state_note:
+        sys_msg = f"{sys_msg}\n\n{user_state_note}"
+    client_note = (payload.client_context or "").strip().replace("\n", " ")[:600]
+    if client_note:
+        sys_msg += ("\n\nPersonal context from their device for this reply only "
+                    f"(mention only if it fits what they're asking): {client_note}")
+
+    try:
+        retriever_instance = _get_retriever()
+    except Exception:
+        retriever_instance = None  # research falls back to manifest keyword search
+    session = ResearchSession(
+        client=engine.client, model=engine.model, library=_get_research_library(),
+        extra_body=engine._extra_body(), retriever=retriever_instance,
+        show_thinking=bool(payload.show_thinking), use_priority=engine.backend == "vllm",
+        categories=_normalize_categories(payload.categories), heavy_gate=heavy_gate,
+    )
+
+    def generate():
+        yield ": primed\n\n"
+        yield f"data: {json.dumps({'research': {'type': 'phase', 'phase': 'researching'}})}\n\n"
+        answer: list[str] = []
+        t0 = time.monotonic()
+        try:
+            for event in session.run(query, history, sys_msg):
+                if event is None:
+                    yield ": keepalive\n\n"
+                    continue
+                if "token" in event:
+                    answer.append(event["token"])
+                yield f"data: {json.dumps(event)}\n\n"
+            try:
+                followups = _generate_followups(query, "".join(answer).strip())
+                if followups:
+                    yield f"data: {json.dumps({'followups': followups})}\n\n"
+            except Exception as fu_exc:
+                print(f"[RESEARCH-FOLLOWUPS-ERR] {type(fu_exc).__name__}: {fu_exc}", flush=True)
+            yield "data: {\"done\": true}\n\n"
+            print(f"[RESEARCH-DONE] {time.monotonic() - t0:.1f}s kind={session.answer_kind} steps={session.steps} "
+                  f"read={session.words_read} words", flush=True)
+        except Exception as exc:
+            print(f"[RESEARCH-ERR] {type(exc).__name__}: {exc}", flush=True)
+            yield f"data: {json.dumps({'error': 'Research failed partway through. Please try again.'})}\n\n"
+        finally:
+            if rc is not None and slot["held"]:
+                try:
+                    rc.decr(_RESEARCH_ACTIVE_KEY)
+                except Exception:
+                    pass
+            try:
+                if STORE_CHAT_HISTORY:
+                    memory_manager.save_interaction(user_id, query, "".join(answer).strip())
+                else:
+                    memory_manager.touch(user_id)
+            except Exception as mem_exc:
+                print(f"[MEM-ERR] {type(mem_exc).__name__}: {mem_exc}", flush=True)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
 BUG_REPORT_KEY = "sobriety_copilot:bugs"
 BUG_REPORT_TTL = 60 * 60 * 24 * 30  # 30 days
 
@@ -2834,6 +3030,101 @@ def graph_search(q: str = Query(default=""), top_k: int = Query(default=10, ge=1
     if pending is not None:
         return pending
     return search(g, r, q, top_k=top_k)
+
+
+# ── Concept graph (v2): thousands of concepts, every peer ─────────────────
+# Built from the manifests + src/rag/data/graph_concepts.json; see
+# src/rag/concept_graph.py. The /api/graph/* endpoints above stay for app
+# builds that predate it.
+_concept_graph_service = None
+
+
+def _concept_graph():
+    global _concept_graph_service
+    if _concept_graph_service is None:
+        from src.rag.concept_graph import ConceptGraphService
+        from src.rag.graph import _cache_dir
+        _concept_graph_service = ConceptGraphService(_get_research_library(), _cache_dir())
+    return _concept_graph_service
+
+
+def _cgraph_or_202():
+    svc = _concept_graph()
+    g = svc.get()
+    if g is None:
+        return None, JSONResponse(status_code=202, content=svc.status())
+    return g, None
+
+
+@app.get("/api/graph2/status")
+def concept_graph_status():
+    svc = _concept_graph()
+    svc.get()
+    return svc.status()
+
+
+@app.get("/api/graph2/map")
+def concept_graph_map():
+    from src.rag.concept_graph import map_payload
+    g, pending = _cgraph_or_202()
+    return pending if pending is not None else map_payload(g, _get_research_library())
+
+
+@app.get("/api/graph2/node")
+def concept_graph_node(id: str = Query(..., max_length=200), peers: int = Query(300, ge=1, le=800),
+                       passages: int = Query(12, ge=0, le=40)):
+    from src.rag.concept_graph import node_payload
+    g, pending = _cgraph_or_202()
+    if pending is not None:
+        return pending
+    out = node_payload(g, _get_research_library(), id, peers=peers, passages=passages)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Unknown concept")
+    return out
+
+
+@app.get("/api/graph2/meet")
+def concept_graph_meet(a: str = Query(..., max_length=200), b: str = Query(..., max_length=200),
+                       offset: int = Query(0, ge=0), limit: int = Query(12, ge=1, le=40)):
+    from src.rag.concept_graph import meet_payload
+    g, pending = _cgraph_or_202()
+    if pending is not None:
+        return pending
+    out = meet_payload(g, _get_research_library(), a, b, offset, limit)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Unknown concept")
+    return out
+
+
+@app.get("/api/graph2/book/{doc_id}")
+def concept_graph_book(doc_id: str):
+    from src.rag.concept_graph import book_payload
+    g, pending = _cgraph_or_202()
+    if pending is not None:
+        return pending
+    out = book_payload(g, _get_research_library(), doc_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Unknown book")
+    return out
+
+
+@app.get("/api/graph2/chapter/{doc_id}/{section}")
+def concept_graph_chapter(doc_id: str, section: int):
+    from src.rag.concept_graph import chapter_payload
+    g, pending = _cgraph_or_202()
+    if pending is not None:
+        return pending
+    out = chapter_payload(g, _get_research_library(), doc_id, section)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Unknown chapter")
+    return out
+
+
+@app.get("/api/graph2/search")
+def concept_graph_search(q: str = Query("", max_length=200)):
+    from src.rag.concept_graph import search_payload
+    g, pending = _cgraph_or_202()
+    return pending if pending is not None else search_payload(g, _get_research_library(), q)
 
 
 @app.get("/api/doc/{doc_id}/window")

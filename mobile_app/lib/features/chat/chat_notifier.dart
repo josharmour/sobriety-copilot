@@ -77,6 +77,29 @@ class ChatNotifier extends Notifier<ChatState> {
     return const ChatState();
   }
 
+  /// Folds a research progress event into the assistant message.
+  ChatMessage _foldResearch(ChatMessage msg, ResearchEvent e) {
+    final m = msg.isResearch ? msg : msg.copyWith(isResearch: true);
+    switch (e.type) {
+      case 'step':
+        final step = ResearchStep.fromJson(e.data);
+        final steps = [...m.researchSteps];
+        final i = steps.indexWhere((s) => s.id == step.id);
+        if (i >= 0) {
+          steps[i] = step;
+        } else {
+          steps.add(step);
+        }
+        return m.copyWith(researchSteps: steps);
+      case 'phase':
+        return m.copyWith(researchPhase: (e.data['phase'] ?? '').toString());
+      case 'verification':
+        return m.copyWith(researchCheck: ResearchCheck.fromJson(e.data));
+      default:
+        return m;
+    }
+  }
+
   /// Sends [text]: appends a user message + streaming assistant placeholder,
   /// consumes chatRepository.sendMessage(), folds Sources/Thinking/Token/
   /// Followups/Error/Done into the last assistant message, then persists the
@@ -233,6 +256,8 @@ class ChatNotifier extends Notifier<ChatState> {
                 diffusionContent: content,
               ),
             );
+          case ResearchEvent():
+            _updateById(assistantId, (m) => _foldResearch(m, event));
           case ErrorEvent(:final message):
             _updateById(
               assistantId,
