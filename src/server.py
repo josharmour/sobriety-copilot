@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import json
 import os
@@ -1625,6 +1626,17 @@ def explain_snippet(payload: ExplainSnippetRequest):
     return result
 
 
+# A texter's first few exchanges get short, to-the-point replies; longer ones
+# only once they're engaged (or explicitly ask for a full list/reading).
+_SMS_NEWCOMER_EXCHANGES = 3
+# Sent once, on the first reply to a number that never opted in via the web
+# form or DAILY: texting in starts the conversation, STOP ends it.
+_SMS_FIRST_CONTACT_PREFIX = "Sobriety Copilot: "
+_SMS_FIRST_CONTACT_FOOTER = (
+    "\n\nReply STOP to opt out or HELP for help. Msg & data rates may apply."
+)
+
+
 @app.post("/api/sms")
 async def incoming_sms(request: Request):
     """Webhook for Twilio SMS interactions with carrier-compliant HELP/STOP handling."""
@@ -1836,6 +1848,39 @@ async def incoming_sms(request: Request):
             except Exception:
                 sms_history = []
 
+            # Lifetime exchange count (outlives the 7-day history and NEW resets).
+            # Hashed key: this long-lived counter holds no raw phone number.
+            seen_key = "sc:sms:seen:" + hashlib.sha256(from_phone.encode()).hexdigest()[:32]
+            try:
+                prior_exchanges = int(get_redis_client().get(seen_key) or 0)
+            except Exception:
+                prior_exchanges = 0
+            first_contact = prior_exchanges == 0
+            if first_contact:
+                try:
+                    # Web/DAILY opt-ins already got a welcome text with STOP/HELP.
+                    first_contact = get_subscriber(from_phone) is None
+                except Exception:
+                    pass
+
+            if prior_exchanges < _SMS_NEWCOMER_EXCHANGES:
+                sms_length_rule = (
+                    "- This person is new to texting Sobriety Copilot. Be brief and to the point: "
+                    "1 to 3 short sentences, under about 320 characters. Answer directly; skip "
+                    "background, lists, and extra suggestions. They can always ask for more. "
+                    "Only go longer if they ask for a complete list (such as all Twelve Steps) or "
+                    "a full daily reading; in a crisis, stay short but still give the safety guidance."
+                )
+            else:
+                sms_length_rule = (
+                    "- Match the reply length to the person's engagement. Short or casual messages "
+                    "get 1 to 3 sentences. When they write at length, ask for more depth, or are "
+                    "working through a topic with you, go up to 2 to 3 tight paragraphs (around "
+                    "800 to 1,150 characters total) so the answer finishes cleanly without "
+                    "truncation. If they ask for a complete list (such as all Twelve Steps or "
+                    "Twelve Traditions) or a full daily reading, provide the complete text."
+                )
+
             retriever_instance = _safe_get_retriever()
             results = []
             retrieval_query = body_text
@@ -1864,18 +1909,15 @@ async def incoming_sms(request: Request):
                 "tabs, menus, or app features. Never tell them to tap, click, press, or open "
                 "anything; when pointing to a resource, give a phone number or a plain web address "
                 "such as sobrietycopilot.com.\n"
-                "- Provide the exact same literature breadth (Big Book, Twelve Steps and Twelve "
+                "- Draw on the same literature breadth (Big Book, Twelve Steps and Twelve "
                 "Traditions, As Bill Sees It, Living Sober, and the full recovery library), "
-                "depth of insight, and directness as the main web/mobile app.\n"
+                "accuracy, and directness as the main web/mobile app.\n"
                 "- Maintain a coherent ongoing conversation when the person follows up or continues "
                 "a thread, and pivot cleanly to the newly retrieved literature whenever they ask "
                 "about a new topic (never force an earlier turn's book, like Daily Reflections, "
                 "onto a new topic).\n"
                 "- Format as plain text only (no markdown asterisks ** or #, no bracketed [1] citations).\n"
-                "- Keep general responses to 2 to 3 tight paragraphs (around 800 to 1,150 characters total) "
-                "so the entire answer finishes cleanly without truncation, unless the user asks for a "
-                "complete list (such as all Twelve Steps or Twelve Traditions) or a full daily reading, "
-                "in which case provide the complete text."
+                + sms_length_rule
             )
             active_eng = engine
             if engine_fallback is not None:
@@ -1907,15 +1949,20 @@ async def incoming_sms(request: Request):
             # Normalize horizontal whitespace while preserving line breaks for lists
             clean_resp = "\n".join(re.sub(r"[ \t]+", " ", ln).strip() for ln in clean_resp.splitlines())
             clean_resp = re.sub(r"\n{3,}", "\n\n", clean_resp).strip()
-            # Twilio <Message> allows up to 1600 chars; cap at 1480 and prefer ending on a full sentence
-            if len(clean_resp) > 1480:
-                window = clean_resp[:1480]
+            prefix, footer = (
+                (_SMS_FIRST_CONTACT_PREFIX, _SMS_FIRST_CONTACT_FOOTER) if first_contact else ("", "")
+            )
+            # Twilio <Message> allows up to 1600 chars; cap at 1480 (including any
+            # first-contact framing) and prefer ending on a full sentence
+            limit = 1480 - len(prefix) - len(footer)
+            if len(clean_resp) > limit:
+                window = clean_resp[:limit]
                 sent_matches = list(re.finditer(r"[.!?](?:['\"\u201d\u2019])?(?=\s|$)", window))
                 if sent_matches and sent_matches[-1].end() >= 800:
                     clean_resp = window[: sent_matches[-1].end()].strip()
                 else:
-                    cut = window[:1475].rsplit(" ", 1)[0]
-                    clean_resp = (cut or window[:1475]) + "..."
+                    cut = window[: limit - 5].rsplit(" ", 1)[0]
+                    clean_resp = (cut or window[: limit - 5]) + "..."
 
             # Persist updated conversation turn to Redis (7-day TTL)
             try:
@@ -1924,8 +1971,14 @@ async def incoming_sms(request: Request):
                 get_redis_client().setex(hist_key, 604800, json.dumps(sms_history[-8:]))
             except Exception:
                 pass
+            try:
+                rc = get_redis_client()
+                rc.incr(seen_key)
+                rc.expire(seen_key, 365 * 86400)
+            except Exception:
+                pass
 
-            twiml_reply = clean_resp
+            twiml_reply = prefix + clean_resp + footer
         except Exception as e:
             print(f"[SMS-ERR] {type(e).__name__}: {e}", flush=True)
             twiml_reply = (
