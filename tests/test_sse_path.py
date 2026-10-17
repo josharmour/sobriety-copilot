@@ -14,8 +14,30 @@ import re
 import urllib.error
 import urllib.request
 
+import pytest
+
 BASE_URL = os.environ.get("SSE_TEST_BASE_URL", "http://localhost:5000")
 TIMEOUT = 60  # generous timeout for slow generations
+
+
+def _server_online() -> bool:
+    """Skip these live-server tests when no real app answers on BASE_URL.
+
+    A bare TCP connect is not enough: on macOS, ControlCenter (AirPlay
+    Receiver) squats on port 5000 and answers with 403. Only treat the
+    server as online if /api/health returns 200.
+    """
+    try:
+        with urllib.request.urlopen(f"{BASE_URL}/api/health", timeout=2) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _server_online(),
+    reason="live server (BASE_URL) not reachable — integration tests",
+)
 
 
 def _sse_events(response: urllib.request.http.client.HTTPResponse):
