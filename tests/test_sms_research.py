@@ -55,29 +55,39 @@ def sms(monkeypatch, tmp_path):
     return send, started
 
 
-def test_a_literature_question_is_acknowledged_and_researched(sms):
+def test_texts_go_to_the_research_agent_and_twilio_gets_an_empty_reply(sms):
     send, started = sms
-    reply = send("How many prayers are in each chapter of the Big Book?")
-    assert server._SMS_RESEARCH_ACK in reply
-    assert started and started[0][1].startswith("How many prayers")
+    for body in ("How many prayers are in each chapter of the Big Book?", "waht's serentiy", "rough day today"):
+        reply = send(body)
+        assert "<Message>" not in reply, "the answer is sent as its own SMS"
+    assert [a[1] for a in started] == ["How many prayers are in each chapter of the Big Book?",
+                                       "waht's serentiy", "rough day today"]
 
 
-def test_conversation_stays_instant(sms):
+@pytest.mark.parametrize("body", ["I want to drink tonight and the Big Book isn't helping",
+                                  "should I drink tonight", "thinking about using"])
+def test_crisis_wording_gets_the_instant_reply(sms, body):
     send, started = sms
-    assert "Classic reply." in send("rough day today")
-    assert not started
-
-
-def test_crisis_wording_never_waits(sms):
-    send, started = sms
-    reply = send("I want to drink tonight and the Big Book isn't helping, what does it say about this feeling")
-    assert server._SMS_RESEARCH_ACK not in reply and not started
+    reply = send(body)
+    assert "Classic reply." in reply and not started
 
 
 def test_a_first_text_gets_the_instant_reply(sms):
     send, started = sms
     reply = send("What does the Big Book say about fear?", returning=False)
-    assert server._SMS_RESEARCH_ACK not in reply and not started
+    assert "Classic reply." in reply and not started
+
+
+@pytest.mark.parametrize("delay,expect_ack", [(0.0, False), (0.6, True)])
+def test_looking_that_up_is_sent_only_when_slow(monkeypatch, delay, expect_ack):
+    import time as _t
+    sent = []
+    monkeypatch.setattr(server, "SMS_ACK_AFTER_S", 0.3)
+    monkeypatch.setattr(server, "_sms_answer", lambda q, h, r: (_t.sleep(delay), "Serenity is…")[1])
+    monkeypatch.setattr(server, "send_twilio_sms", lambda to, body, record_in_history=True: sent.append(body))
+    monkeypatch.setattr(server, "get_redis_client", lambda: FakeRedis())
+    server._sms_research_job(PHONE, "what's serenity", [], "h", "seen", "")
+    assert sent == ([server._SMS_RESEARCH_ACK] if expect_ack else []) + ["Serenity is…"]
 
 
 def test_answers_are_cleaned_for_sms():

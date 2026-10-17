@@ -37,7 +37,8 @@ OPTIMISTIC_CHARS = 40
 _URGENT_RE = re.compile(
     r"\b(suicid\w*|kill (?:my|him|her)self|end (?:it all|my life)|hurt(?:ing)? myself|self[- ]harm|overdos\w*"
     r"|(?:want|going|about|need) to (?:drink|use|get (?:high|drunk))|(?:drink|use|relapse)\w* (?:right )?now"
-    r"|can'?t stop (?:myself|drinking|using))", re.IGNORECASE)
+    r"|can'?t stop (?:myself|drinking|using)|should i (?:drink|use|get high)"
+    r"|thinking (?:about|of) (?:drinking|using|a drink)|(?:drink|use) tonight)", re.IGNORECASE)
 MAX_SOURCES = 12
 # vLLM priority: lower runs first. Chat requests send none (0), so research
 # never makes a live chat wait behind it.

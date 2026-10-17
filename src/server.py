@@ -9,6 +9,7 @@ import hmac
 import json
 import os
 import re
+import threading
 import time
 from collections import OrderedDict
 from contextlib import asynccontextmanager
@@ -1710,30 +1711,47 @@ _SMS_RESEARCH_ACK = "Looking that up in the literature, one moment."
 _sms_jobs: set = set()
 
 
+# Send "Looking that up…" only when the answer takes longer than this.
+SMS_ACK_AFTER_S = float(os.environ.get("SMS_ACK_AFTER_S", "8"))
+
+
+def _sms_answer(question: str, history: list[dict], length_rule: str) -> str:
+    """The research agent's answer to a text, as plain SMS text ("" on failure)."""
+    try:
+        retriever_instance = _get_retriever()
+    except Exception:
+        retriever_instance = None
+    session = ResearchSession(
+        client=engine.client, model=engine.model, library=_get_research_library(),
+        extra_body=engine._extra_body(), retriever=retriever_instance,
+        use_priority=engine.backend == "vllm", answer_style="sms",
+    )
+    turns = [{"role": t["role"], "content": t["content"]} for t in history if t.get("role") in ("user", "assistant")]
+    answer = "".join(ev["token"] for ev in session.run(question, turns, _sms_system_message(length_rule))
+                     if ev and "token" in ev)
+    print(f"[SMS-RESEARCH] kind={session.answer_kind} steps={session.steps}", flush=True)
+    return _clean_sms_text(answer)
+
+
 def _sms_research_job(phone: str, question: str, history: list[dict], hist_key: str, seen_key: str,
                       length_rule: str) -> None:
-    """Research a texted question and send the answer as a follow-up SMS."""
+    """Answer a text with the research agent and send it; acknowledge first only if it's slow."""
     t0 = time.monotonic()
-    answer = ""
-    session = None
-    try:
+    result: dict[str, str] = {}
+
+    def work() -> None:
         try:
-            retriever_instance = _get_retriever()
-        except Exception:
-            retriever_instance = None
-        session = ResearchSession(
-            client=engine.client, model=engine.model, library=_get_research_library(),
-            extra_body=engine._extra_body(), retriever=retriever_instance,
-            use_priority=engine.backend == "vllm", answer_style="sms",
-        )
-        sys_msg = _sms_system_message(length_rule)
-        turns = [{"role": t["role"], "content": t["content"]} for t in history if t.get("role") in ("user", "assistant")]
-        answer = "".join(ev["token"] for ev in session.run(question, turns, sys_msg) if ev and "token" in ev)
-        answer = _clean_sms_text(answer)
-    except Exception as exc:
-        print(f"[SMS-RESEARCH-ERR] {type(exc).__name__}: {exc}", flush=True)
-    if not answer:
-        answer = "Sorry, I couldn't finish looking that up. Please text your question again."
+            result["answer"] = _sms_answer(question, history, length_rule)
+        except Exception as exc:
+            print(f"[SMS-RESEARCH-ERR] {type(exc).__name__}: {exc}", flush=True)
+
+    worker = threading.Thread(target=work, name="sms-research", daemon=True)
+    worker.start()
+    worker.join(SMS_ACK_AFTER_S)
+    if worker.is_alive():
+        send_twilio_sms(phone, _SMS_RESEARCH_ACK, record_in_history=False)
+        worker.join()
+    answer = result.get("answer") or "Sorry, I couldn't finish looking that up. Please text your question again."
     send_twilio_sms(phone, answer, record_in_history=False)
     try:
         rc = get_redis_client()
@@ -1743,7 +1761,7 @@ def _sms_research_job(phone: str, question: str, history: list[dict], hist_key: 
         rc.expire(seen_key, 365 * 86400)
     except Exception:
         pass
-    print(f"[SMS-RESEARCH-DONE] {time.monotonic() - t0:.1f}s steps={session.steps if session else '-'}", flush=True)
+    print(f"[SMS-RESEARCH-DONE] {time.monotonic() - t0:.1f}s", flush=True)
 
 
 def _start_sms_research(*args) -> None:
@@ -2172,13 +2190,14 @@ async def incoming_sms(request: Request):
                     "Twelve Traditions) or a full daily reading, provide the complete text."
                 )
 
-            # Questions that need reading go to the research agent (SMS_ENGINE=research);
-            # crisis wording and a newcomer's first texts stay on the instant reply.
-            if (SMS_ENGINE == "research" and not first_contact and _wants_research(body_text)
-                    and not _SMS_URGENT_RE.search(body_text)):
+            # SMS_ENGINE=research: the agent answers every text (it decides whether to
+            # just reply or to read). Twilio gets an empty reply now; the answer goes
+            # out as a normal SMS when ready, with "Looking that up…" first only if it
+            # takes a while. Crisis wording and a newcomer's first text stay instant.
+            if SMS_ENGINE == "research" and not first_contact and not _SMS_URGENT_RE.search(body_text):
                 _start_sms_research(from_phone, body_text, sms_history, hist_key, seen_key, sms_length_rule)
                 return Response(
-                    content=f'<?xml version="1.0" encoding="UTF-8"?><Response><Message>{_SMS_RESEARCH_ACK}</Message></Response>',
+                    content='<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
                     media_type="application/xml",
                 )
 
@@ -2887,12 +2906,20 @@ _LITERATURE_RE = re.compile(
 _ROUTER_SHORT_WORDS = 14
 
 
+# A question ("what's serenity?", "waht's serentiy", "how do I pray") gets the
+# agent; statements and feelings ("rough day") keep the fast classic reply.
+_QUESTION_RE = re.compile(
+    r"\?|^\s*(?:wh\w*|waht\w*|wat\w*|how|is|are|does|do|did|can|could|should|would|will|tell me|explain|"
+    r"define|meaning)\b", re.IGNORECASE)
+
+
 def _wants_research(message: str) -> bool:
     """Whether a message needs the research agent rather than the fast classic reply."""
     if CHAT_ROUTER == "agent":
         return True
     text = message or ""
-    return bool(_LITERATURE_RE.search(text)) or len(text.split()) > _ROUTER_SHORT_WORDS
+    return (bool(_LITERATURE_RE.search(text)) or bool(_QUESTION_RE.search(text))
+            or len(text.split()) > _ROUTER_SHORT_WORDS)
 
 
 @app.post("/api/research")

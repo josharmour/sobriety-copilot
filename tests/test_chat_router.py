@@ -14,7 +14,8 @@ CLASSIC = ["hi", "thanks so much", "I'm having a rough day", "I feel so alone to
 RESEARCH = ["What's the difference between Step 6 and Step 7?", "how many prayers are in each chapter of the big book",
             "is let go and let god in the big book?", "what does the literature say about fear",
             "who was Ebby Thatcher?", "my sponsor says I need to do my 4th step and I'm scared",
-            "I have 30 days sober and I'm scared I'm going to relapse at my sister's wedding this weekend."]
+            "I have 30 days sober and I'm scared I'm going to relapse at my sister's wedding this weekend.",
+            "What's serenity?", "waht's serentiy", "how do I pray"]
 
 
 @pytest.mark.parametrize("message", CLASSIC)
