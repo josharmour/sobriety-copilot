@@ -6,6 +6,7 @@ import unittest
 from src.prompts.templates import TONE_VARIANTS, system_message_for_tone
 
 _UI_WORDS = re.compile(r"\b(button|tap|click|screen)\b", re.IGNORECASE)
+_PHONE = re.compile(r"(?:\+?1[-. ]?)?\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}")
 
 
 class SystemMessageChannelTest(unittest.TestCase):
@@ -18,6 +19,13 @@ class SystemMessageChannelTest(unittest.TestCase):
             msg = system_message_for_tone(tone, channel="sms")
             self.assertIsNone(_UI_WORDS.search(msg), f"{tone}: {_UI_WORDS.search(msg)}")
             self.assertIn("sobrietycopilot.com", msg)
+
+    def test_only_the_real_helpline_number(self):
+        # The model invents "AA hotline" numbers unless given exactly one.
+        for tone in TONE_VARIANTS:
+            for channel in ("app", "sms"):
+                msg = system_message_for_tone(tone, channel=channel)
+                self.assertEqual(set(_PHONE.findall(msg)), {"(212) 647-1680"}, (tone, channel))
 
 
 if __name__ == "__main__":

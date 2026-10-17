@@ -10,7 +10,7 @@ import 'package:sobriety_copilot_mobile/widgets.dart';
 /// it is an educational companion built on recovery literature, NOT a
 /// substitute for professional help, and it is privacy-respecting.
 ///
-/// Only the AA 24-Hour Helpline is listed as a crisis resource.
+/// Only the A.A. helpline (New York Intergroup) is listed as a crisis resource.
 class AboutSheet extends StatelessWidget {
   const AboutSheet({super.key});
 
@@ -56,7 +56,8 @@ class AboutSheet extends StatelessWidget {
             'This app is not a substitute for professional help, medical '
             'advice, therapy, or a sponsor. It is an educational companion '
             'only. If you are in crisis or need to talk to someone now, call '
-            'the AA 24-Hour Helpline at (212) 647-1680.',
+            'the A.A. helpline at (212) 647-1680 (9 am to 1 am Eastern), '
+            'or 911 if you are in danger.',
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -93,8 +94,8 @@ class AboutSheet extends StatelessWidget {
         const NoticeCard(
           icon: AppIcons.helpline,
           child: Text(
-            'AA 24-Hour Helpline — (212) 647-1680.\n'
-            'Free, confidential, answered by a sober AA member 24/7.',
+            'A.A. Helpline (New York Intergroup) — (212) 647-1680.\n'
+            'Free and confidential, answered 9 am to 1 am Eastern, 7 days a week.',
           ),
         ),
         const SizedBox(height: AppSpacing.lg),

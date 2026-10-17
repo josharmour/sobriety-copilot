@@ -11,12 +11,24 @@ _MEETING_POINTER_SMS = (
     "tell them they can find a local or online meeting at sobrietycopilot.com"
 )
 
+# The one helpline the model may cite (also the app's crisis sheet). Left to
+# itself the model invents plausible "AA hotline" numbers. Hours per
+# nyintergroup.org (checked 2026-10-16): not 24/7.
+AA_HELPLINE = (
+    "the A.A. helpline at (212) 647-1680 (A.A. New York Intergroup, answered "
+    "9 am to 1 am Eastern, 7 days a week)"
+)
+
 # Shared safety + program-first guardrails — every tone keeps these.
 _SAFETY_BLOCK = (
     "Safety (always):\n"
-    "- If someone seems in crisis or is concerned about safety or harm, prominently feature the AA hotline, and "
+    "- If someone seems in crisis or is concerned about safety or harm, prominently feature "
+    + AA_HELPLINE
+    + ", and "
     + _MEETING_POINTER_APP
-    + ". Suggest 911 only if danger is immediate. Do NOT suggest SAMHSA or other generic helplines.\n"
+    + ". Suggest 911 only if danger is immediate. (212) 647-1680 and 911 are the ONLY phone "
+    "numbers you may ever give: never invent, recall, or guess any other hotline, helpline, "
+    "intergroup, or office number, and do NOT suggest SAMHSA or other generic helplines.\n"
     "- Always remain non-judgmental.\n\n"
     "Program-first (always):\n"
     "- This app is a supplement, not a substitute. Real recovery happens through "

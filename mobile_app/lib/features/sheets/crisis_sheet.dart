@@ -4,7 +4,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/widgets.dart';
 
-/// Bottom-sheet that shows the AA 24-Hour Helpline as the primary resource.
+/// Bottom-sheet that shows the A.A. helpline (New York Intergroup, 9 am–1 am
+/// Eastern, NOT 24/7, per nyintergroup.org) as the primary resource.
 /// National hotlines (988, SAMHSA) live behind a collapsed "More support
 /// options" tile so the default presentation stays helpline-first while the
 /// resources remain reachable (Play health/AI policy expects crisis routing).
@@ -41,14 +42,14 @@ class CrisisSheet extends StatelessWidget {
       header: const SheetHeader(
         icon: AppIcons.crisis,
         title: 'Need to talk now?',
-        subtitle:
-            'Call the AA 24-Hour Helpline to speak with a sober AA member, 24/7.',
+        subtitle: 'Call the A.A. helpline, 9 am to 1 am Eastern, 7 days a week. '
+            'At other hours, see More support options below.',
       ),
       children: [
         ActionCard(
           icon: AppIcons.helpline,
-          title: 'AA 24-Hour Helpline',
-          subtitle: '(212) 647-1680',
+          title: 'A.A. Helpline',
+          subtitle: '(212) 647-1680 · 9 am–1 am ET',
           trailing: Icon(Icons.call, color: cs.success),
           onTap: () => _call(context, _aaPhone),
         ),
