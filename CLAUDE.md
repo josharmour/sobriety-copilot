@@ -127,6 +127,7 @@ The full set lives in `docker-compose.yml` under `x-app-env`. The ones most wort
 | `TWILIO_SMS_WEBHOOK_URL` | `https://sobrietycopilot.com/api/sms` | Exact URL Twilio posts to; `/api/sms` checks `X-Twilio-Signature` against it |
 | `TWILIO_VALIDATE_SIGNATURE` | `1` | `0` disables the signature check (local testing only) |
 | `CHAT_ENGINE` | `classic` | What answers `/api/chat` (website + every installed app): `classic` retrieval chat, or `research` = the research-capable chat (router below). No app release needed to flip |
+| `SMS_ENGINE` | `classic` | `research`: texted questions that need reading get "Looking that up…" at once and the researched answer as a follow-up SMS (Twilio waits only 15 s); conversation, crisis wording and first texts stay on the instant reply |
 | `CHAT_ROUTER` | `auto` | For research-capable chat: `auto` sends short, plainly conversational messages to the fast classic reply and anything touching the literature (or longer than ~14 words) to the agent; `agent` sends everything to the agent |
 | `RESEARCH_RATE_LIMIT` / `RESEARCH_MAX_CONCURRENT` | `90` / `2` | Agent messages per IP per hour / server-wide whole-chapter reading runs (ordinary messages never wait on the latter) |
 | `RESEARCH_EFFORT` | `low` | Reasoning effort for the agent's planning/answer turns (`medium` spent ~1 min deliberating per answer) |

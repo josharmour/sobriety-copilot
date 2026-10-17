@@ -40,6 +40,7 @@ from src.rag.indexer import DEFAULT_COLLECTION
 from src.rag.memory import UserMemoryManager, format_state_note
 from src.rag.reranker import warmup as warmup_reranker
 from src.rag.retriever import RAGRetriever
+from src.research.agent import _URGENT_RE as _SMS_URGENT_RE
 from src.research.agent import ResearchSession
 from src.research.library import Library as ResearchLibrary
 from src.tasks.indexing import index_documents_task, perform_shadow_index
@@ -1662,6 +1663,95 @@ def _sms_display_number() -> str:
     return f"({d[:3]}) {d[3:6]}-{d[6:]}"
 
 
+def _sms_system_message(sms_length_rule: str) -> str:
+    return (
+        system_message_for_tone("warm", channel="sms")
+        + "\n\nSMS Delivery Guidelines:\n"
+        "- You are replying via SMS text message in a continuous conversation thread. "
+        "The person is reading plain text on their phone: there are no buttons, screens, "
+        "tabs, menus, or app features. Never tell them to tap, click, press, or open "
+        "anything; when pointing to a resource, give a phone number or a plain web address "
+        "such as sobrietycopilot.com.\n"
+        "- Draw on the same literature breadth (Big Book, Twelve Steps and Twelve "
+        "Traditions, As Bill Sees It, Living Sober, and the full recovery library), "
+        "accuracy, and directness as the main web/mobile app.\n"
+        "- Maintain a coherent ongoing conversation when the person follows up or continues "
+        "a thread, and pivot cleanly to the newly retrieved literature whenever they ask "
+        "about a new topic (never force an earlier turn's book, like Daily Reflections, "
+        "onto a new topic).\n"
+        "- Format as plain text only (no markdown asterisks ** or #, no bracketed [1] citations).\n"
+        + sms_length_rule
+    )
+
+
+def _clean_sms_text(raw: str, limit: int = 1480) -> str:
+    """Plain text that fits one Twilio message (1,600 max), ending on a sentence when possible."""
+    text = re.sub(r"\[\d+\]", "", raw or "")
+    text = re.sub(r"^\s*\|?\s*:?-{3,}.*$", "", text, flags=re.MULTILINE)   # table rules
+    text = re.sub(r"[*_#`|]", "", text).strip()
+    text = "\n".join(re.sub(r"[ \t]+", " ", ln).strip() for ln in text.splitlines())
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    if len(text) > limit:
+        window = text[:limit]
+        ends = list(re.finditer(r"[.!?](?:['\"\u201d\u2019])?(?=\s|$)", window))
+        if ends and ends[-1].end() >= limit // 2:
+            text = window[: ends[-1].end()].strip()
+        else:
+            text = (window[: limit - 5].rsplit(" ", 1)[0] or window[: limit - 5]) + "..."
+    return text
+
+
+# Which engine answers SMS questions that need reading: "classic" (one
+# retrieval + reply, synchronous) or "research" (the agent). Twilio waits only
+# 15 s for a webhook reply, so a research answer is acknowledged at once and
+# sent as a follow-up text. Conversation, crisis and newcomers stay synchronous.
+SMS_ENGINE = os.environ.get("SMS_ENGINE", "classic").strip().lower()
+_SMS_RESEARCH_ACK = "Looking that up in the literature, one moment."
+_sms_jobs: set = set()
+
+
+def _sms_research_job(phone: str, question: str, history: list[dict], hist_key: str, seen_key: str,
+                      length_rule: str) -> None:
+    """Research a texted question and send the answer as a follow-up SMS."""
+    t0 = time.monotonic()
+    answer = ""
+    session = None
+    try:
+        try:
+            retriever_instance = _get_retriever()
+        except Exception:
+            retriever_instance = None
+        session = ResearchSession(
+            client=engine.client, model=engine.model, library=_get_research_library(),
+            extra_body=engine._extra_body(), retriever=retriever_instance,
+            use_priority=engine.backend == "vllm", answer_style="sms",
+        )
+        sys_msg = _sms_system_message(length_rule)
+        turns = [{"role": t["role"], "content": t["content"]} for t in history if t.get("role") in ("user", "assistant")]
+        answer = "".join(ev["token"] for ev in session.run(question, turns, sys_msg) if ev and "token" in ev)
+        answer = _clean_sms_text(answer)
+    except Exception as exc:
+        print(f"[SMS-RESEARCH-ERR] {type(exc).__name__}: {exc}", flush=True)
+    if not answer:
+        answer = "Sorry, I couldn't finish looking that up. Please text your question again."
+    send_twilio_sms(phone, answer, record_in_history=False)
+    try:
+        rc = get_redis_client()
+        history = history + [{"role": "user", "content": question}, {"role": "assistant", "content": answer}]
+        rc.setex(hist_key, 604800, json.dumps(history[-8:]))
+        rc.incr(seen_key)
+        rc.expire(seen_key, 365 * 86400)
+    except Exception:
+        pass
+    print(f"[SMS-RESEARCH-DONE] {time.monotonic() - t0:.1f}s steps={session.steps if session else '-'}", flush=True)
+
+
+def _start_sms_research(*args) -> None:
+    task = asyncio.get_running_loop().create_task(asyncio.to_thread(_sms_research_job, *args))
+    _sms_jobs.add(task)  # keep a reference until it finishes
+    task.add_done_callback(_sms_jobs.discard)
+
+
 def _tz_for(lng: float, lat: float) -> str | None:
     try:
         import tzfpy
@@ -2082,6 +2172,16 @@ async def incoming_sms(request: Request):
                     "Twelve Traditions) or a full daily reading, provide the complete text."
                 )
 
+            # Questions that need reading go to the research agent (SMS_ENGINE=research);
+            # crisis wording and a newcomer's first texts stay on the instant reply.
+            if (SMS_ENGINE == "research" and not first_contact and _wants_research(body_text)
+                    and not _SMS_URGENT_RE.search(body_text)):
+                _start_sms_research(from_phone, body_text, sms_history, hist_key, seen_key, sms_length_rule)
+                return Response(
+                    content=f'<?xml version="1.0" encoding="UTF-8"?><Response><Message>{_SMS_RESEARCH_ACK}</Message></Response>',
+                    media_type="application/xml",
+                )
+
             retriever_instance = _safe_get_retriever()
             results = []
             retrieval_query = body_text
@@ -2102,24 +2202,7 @@ async def incoming_sms(request: Request):
             else:
                 prompt = NO_CONTEXT_TEMPLATE.format(question=body_text)
 
-            sms_sys_msg = (
-                system_message_for_tone("warm", channel="sms")
-                + "\n\nSMS Delivery Guidelines:\n"
-                "- You are replying via SMS text message in a continuous conversation thread. "
-                "The person is reading plain text on their phone: there are no buttons, screens, "
-                "tabs, menus, or app features. Never tell them to tap, click, press, or open "
-                "anything; when pointing to a resource, give a phone number or a plain web address "
-                "such as sobrietycopilot.com.\n"
-                "- Draw on the same literature breadth (Big Book, Twelve Steps and Twelve "
-                "Traditions, As Bill Sees It, Living Sober, and the full recovery library), "
-                "accuracy, and directness as the main web/mobile app.\n"
-                "- Maintain a coherent ongoing conversation when the person follows up or continues "
-                "a thread, and pivot cleanly to the newly retrieved literature whenever they ask "
-                "about a new topic (never force an earlier turn's book, like Daily Reflections, "
-                "onto a new topic).\n"
-                "- Format as plain text only (no markdown asterisks ** or #, no bracketed [1] citations).\n"
-                + sms_length_rule
-            )
+            sms_sys_msg = _sms_system_message(sms_length_rule)
             active_eng = engine
             if engine_fallback is not None:
                 try:

@@ -24,6 +24,9 @@
     // outage never strands anyone); ?beta=off — the beta's "Back to the
     // regular site" link — clears the choice.
     (function () {
+      // Off while the main site runs the same build as the beta; set true to
+      // offer the next beta ("Try the beta" link + remembered redirect).
+      var BETA_OPEN = false;
       var MAIN = 'sobrietycopilot.com', BETA = 'beta.' + MAIN;
       var host = location.hostname;
       var onMain = host === MAIN || host === 'www.' + MAIN;
@@ -33,9 +36,9 @@
       var params = new URLSearchParams(location.search);
       if (params.get('beta') === 'off') remember('0');
       if (params.get('beta') === 'on') remember('1');
-      window.scBeta = { on: function () { remember('1'); }, host: host, main: MAIN, beta: BETA };
+      window.scBeta = { on: function () { remember('1'); }, host: host, main: MAIN, beta: BETA, open: BETA_OPEN };
       var optedIn = /(?:^|;\s*)sc_beta=1(?:;|$)/.test(document.cookie);
-      if (onMain && optedIn && params.get('beta') !== 'off') {
+      if (BETA_OPEN && onMain && optedIn && params.get('beta') !== 'off') {
         var img = new Image(), done = false;
         img.onload = function () { if (!done) { done = true; location.replace('https://' + BETA + '/'); } };
         img.onerror = function () { done = true; };
@@ -96,7 +99,7 @@
       if (b.host === b.beta) {
         el.innerHTML = ' &middot; <span class="beta-badge">Beta</span>' +
           '<a href="https://' + b.main + '/?beta=off">Back to the regular site</a>';
-      } else if (b.host === b.main || b.host === 'www.' + b.main) {
+      } else if (b.open && (b.host === b.main || b.host === 'www.' + b.main)) {
         el.innerHTML = ' &middot; <a href="https://' + b.beta + '/" onclick="scBeta.on()">Try the beta</a>';
       }
     })();

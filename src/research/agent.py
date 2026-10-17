@@ -172,6 +172,14 @@ with its page, e.g. (Big Book, p. 67). Never quote from memory.
 - Never mention tools, searches or block ids.
 - Keep the Voice and Safety rules."""
 
+_ANSWER_INSTRUCTIONS_SMS = """Research is complete. Now write the answer as a text message.
+- Plain text only: no markdown, no tables, no headings, no bullet symbols; short lines are fine.
+- At most about 1,000 characters. Lead with the direct answer.
+- Quote exactly — copy wording from the tool output, never from memory — with the page, e.g. (Big Book, p. 67). \
+Never cite a page you did not see in a tool result.
+- Never mention tools or searches, and never tell them to tap, click or open anything.
+- Keep the Voice and Safety rules."""
+
 _ANALYZE_SYSTEM = """You read one section of a recovery book for a research task. Report only what this text \
 says. Quote exactly, copying words from the text. Each paragraph starts with a marker like [p.67 b00629]; put \
 the marker of the paragraph you quote in front of each finding."""
@@ -230,6 +238,7 @@ class ResearchSession:
     heavy_gate: Callable[[], bool] | None = None
     answer_kind: str = "reply"
     preamble: str = ""  # text streamed in a turn that then called tools
+    answer_style: str = "app"  # "sms": plain text, no tables, ~1,000 characters
     words_read: int = 0
     steps: int = 0
 
@@ -274,14 +283,15 @@ class ResearchSession:
                         kind = None
                     self.answer_kind = "reply" if kind == "reply" else "research"
                     messages.append({"role": "tool", "tool_call_id": call["id"],
-                                     "content": _REPLY_INSTRUCTIONS if kind == "reply" else _ANSWER_INSTRUCTIONS})
+                                     "content": self._instructions(kind)})
                     continue
                 result = yield from self._run_tool(call)
                 messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
             if ready:
                 break
-        if messages[-1]["role"] != "tool" or messages[-1]["content"] not in (_ANSWER_INSTRUCTIONS, _REPLY_INSTRUCTIONS):
-            messages.append({"role": "user", "content": "(Time to answer.) " + _ANSWER_INSTRUCTIONS})
+        if messages[-1]["role"] != "tool" or messages[-1]["content"] not in (
+                _ANSWER_INSTRUCTIONS, _REPLY_INSTRUCTIONS, _ANSWER_INSTRUCTIONS_SMS):
+            messages.append({"role": "user", "content": "(Time to answer.) " + self._instructions("research")})
         yield {"research": {"type": "phase", "phase": "writing"}}
         if self.preamble:
             yield {"token": "\n\n"}
@@ -324,6 +334,11 @@ class ResearchSession:
         return ("\n\n[The app already found these passages for this message. Use them if they fit; quote only "
                 "from these or from tool results. They may not be enough for a question that needs real reading.]\n"
                 + "\n".join(lines))
+
+    def _instructions(self, kind: str | None) -> str:
+        if self.answer_style == "sms":
+            return _ANSWER_INSTRUCTIONS_SMS
+        return _REPLY_INSTRUCTIONS if kind == "reply" else _ANSWER_INSTRUCTIONS
 
     # ── model calls ─────────────────────────────────────────────────────
 
