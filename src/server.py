@@ -1662,6 +1662,28 @@ def _sms_display_number() -> str:
     return f"({d[:3]}) {d[3:6]}-{d[6:]}"
 
 
+def _tz_for(lng: float, lat: float) -> str | None:
+    try:
+        import tzfpy
+        return tzfpy.get_tz(lng, lat) or None
+    except Exception:
+        return None
+
+
+def _sms_meeting_finder(phone: str):
+    from src.sms_meetings import MeetingFinder
+
+    # +1 numbers are US/Canada: bias "Springfield" or "10001" to North America.
+    countries = "us,ca" if phone.startswith("+1") else None
+    return MeetingFinder(
+        store=get_redis_client(),
+        geocode=lambda q: _geocode_lookup(q, countries),
+        search=search_meetings,
+        search_online=search_online_meetings,
+        tz_for=_tz_for,
+    )
+
+
 def _phone_hash(phone: str) -> str:
     """Redis key suffix for long-lived per-number state; holds no raw number."""
     return hashlib.sha256(phone.encode()).hexdigest()[:32]
@@ -1749,19 +1771,26 @@ async def incoming_sms(request: Request):
 
     body_text = ""
     from_phone = "default_sms"
+    # Where the sender's number was issued (Twilio sends it when known): the
+    # last guess for "where's a meeting?" before asking for a city or zip.
+    number_area = None
     try:
         content_type = request.headers.get("content-type", "")
+        fields: dict[str, str] = {}
         if "application/json" in content_type:
             try:
                 json_data = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
-                body_text = str(json_data.get("Body", "")).strip()
-                from_phone = str(json_data.get("From", "")).strip() or "default_sms"
+                fields = {k: str(v) for k, v in json_data.items() if isinstance(v, (str, int))}
             except Exception:
                 pass
-        if not body_text:
+        if not fields.get("Body"):
             parsed = parse_qs(raw_bytes.decode("utf-8", errors="ignore"))
-            body_text = str(parsed.get("Body", [""])[0]).strip()
-            from_phone = str(parsed.get("From", ["default_sms"])[0]).strip() or "default_sms"
+            fields = {k: str(v[0]) for k, v in parsed.items() if v}
+        body_text = fields.get("Body", "").strip()
+        from_phone = fields.get("From", "").strip() or "default_sms"
+        from_zip = fields.get("FromZip", "").strip()
+        from_city, from_state = fields.get("FromCity", "").strip(), fields.get("FromState", "").strip()
+        number_area = from_zip or (f"{from_city.title()}, {from_state}" if from_city and from_state else None)
     except Exception:
         body_text = ""
     body_text = body_text[:800]
@@ -1998,6 +2027,39 @@ async def incoming_sms(request: Request):
                     first_contact = get_subscriber(from_phone) is None
                 except Exception:
                     pass
+
+            # "Where's a meeting?" — answered from the meeting catalog, asking at
+            # most "what city or zip?" (src/sms_meetings.py).
+            meeting_reply = None
+            try:
+                meeting_reply = await _sms_meeting_finder(from_phone).handle(
+                    _phone_hash(from_phone), body_text,
+                    recent=[t.get("content", "") for t in sms_history if t.get("role") == "user"],
+                    number_area=number_area,
+                )
+            except Exception as mt_exc:
+                print(f"[SMS-MEETINGS-ERR] {type(mt_exc).__name__}: {mt_exc}", flush=True)
+            if meeting_reply is not None:
+                prefix, footer = (
+                    (_SMS_FIRST_CONTACT_PREFIX, _SMS_FIRST_CONTACT_FOOTER) if first_contact else ("", "")
+                )
+                twiml_reply = prefix + meeting_reply + footer
+                try:
+                    rc = get_redis_client()
+                    sms_history.append({"role": "user", "content": body_text})
+                    sms_history.append({"role": "assistant", "content": meeting_reply})
+                    rc.setex(hist_key, 604800, json.dumps(sms_history[-8:]))
+                    rc.incr(seen_key)
+                    rc.expire(seen_key, 365 * 86400)
+                except Exception:
+                    pass
+                escaped_mt = (
+                    twiml_reply.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+                )
+                return Response(
+                    content=f'<?xml version="1.0" encoding="UTF-8"?><Response><Message>{escaped_mt}</Message></Response>',
+                    media_type="application/xml",
+                )
 
             if prior_exchanges < _SMS_NEWCOMER_EXCHANGES:
                 # Phrased as overriding: the base prompt's "think it through, name the
@@ -3149,21 +3211,19 @@ def doc_window_endpoint(doc_id: str, blocks: str = Query(default=""),
 _geocode_cache: dict[str, dict[str, Any] | None] = {}
 
 
-@app.get("/api/geocode")
-async def geocode(q: str = Query(..., min_length=2, max_length=120)):
-    """Resolve a ZIP, city, or place name to lat/lng via OpenStreetMap Nominatim.
+async def _geocode_lookup(q: str, countrycodes: str | None = None) -> dict[str, Any] | None:
+    """ZIP, city or place → {"lat", "lng", "label"} via OpenStreetMap Nominatim; None if no match.
 
-    Proxied so the user's IP isn't exposed to the upstream and so we can
-    enforce a polite User-Agent + cache repeated lookups.
+    Raises on upstream errors. Cached per query (+ country filter).
     """
     import httpx
 
-    key = q.strip().lower()
+    # Optional comma-separated country filter. Default is worldwide — the NA
+    # aggregator covers meetings well beyond the US/CA.
+    countrycodes = countrycodes if countrycodes is not None else os.environ.get("GEOCODE_COUNTRYCODES", "").strip()
+    key = f"{q.strip().lower()}|{countrycodes}"
     if key in _geocode_cache:
-        cached = _geocode_cache[key]
-        if cached is None:
-            raise HTTPException(status_code=404, detail="No match for that location")
-        return cached
+        return _geocode_cache[key]
 
     params = {
         "q": q,
@@ -3171,29 +3231,23 @@ async def geocode(q: str = Query(..., min_length=2, max_length=120)):
         "limit": "1",
         "addressdetails": "1",
     }
-    # Optional comma-separated country filter. Default is worldwide — the NA
-    # aggregator covers meetings well beyond the US/CA.
-    countrycodes = os.environ.get("GEOCODE_COUNTRYCODES", "").strip()
     if countrycodes:
         params["countrycodes"] = countrycodes
 
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                "https://nominatim.openstreetmap.org/search",
-                params=params,
-                headers={"User-Agent": "sobriety-copilot/1.0 (+https://github.com)"},
-                timeout=8.0,
-                follow_redirects=True,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"geocoding upstream error: {exc}") from exc
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://nominatim.openstreetmap.org/search",
+            params=params,
+            headers={"User-Agent": "sobriety-copilot/1.0 (+https://github.com)"},
+            timeout=8.0,
+            follow_redirects=True,
+        )
+        resp.raise_for_status()
+        data = resp.json()
 
     if not data:
         _geocode_cache[key] = None
-        raise HTTPException(status_code=404, detail="No match for that location")
+        return None
 
     hit = data[0]
     addr = hit.get("address", {}) or {}
@@ -3209,6 +3263,22 @@ async def geocode(q: str = Query(..., min_length=2, max_length=120)):
         "label": label,
     }
     _geocode_cache[key] = payload
+    return payload
+
+
+@app.get("/api/geocode")
+async def geocode(q: str = Query(..., min_length=2, max_length=120)):
+    """Resolve a ZIP, city, or place name to lat/lng via OpenStreetMap Nominatim.
+
+    Proxied so the user's IP isn't exposed to the upstream and so we can
+    enforce a polite User-Agent + cache repeated lookups.
+    """
+    try:
+        payload = await _geocode_lookup(q)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"geocoding upstream error: {exc}") from exc
+    if payload is None:
+        raise HTTPException(status_code=404, detail="No match for that location")
     return payload
 
 

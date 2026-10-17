@@ -12,3 +12,5 @@ ebooklib>=0.18
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
 sentence-transformers>=2.7.0
+# Time zone of a meeting search location (SMS "where's a meeting?")
+tzfpy>=0.15

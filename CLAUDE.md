@@ -255,6 +255,13 @@ UI string — `grep -c "Some New Button" static/main.dart.js` should be ≥ 1.
   helpline or getting to an in-person A.A. meeting today, in 3–4 sentences.
   Owner's decision (2026-10-16): the app is not affiliated with 988, SAMHSA or
   other crisis lines, so the model never suggests them.
+- SMS "where's a meeting?" (any phrasing) is answered from the meeting
+  catalog by `src/sms_meetings.py` before the LLM: next meetings soonest-first
+  in local time (tzfpy), place from the message, else the last place they
+  gave (30 days, the text only — never coordinates), else a place mentioned
+  earlier in the thread, else Twilio's FromZip/FromCity+FromState (labelled as
+  a guess, never saved); only then "what city or zip?". MORE / TOMORROW /
+  ONLINE / a new city refine it. Tests: `tests/test_sms_meetings.py`.
 - SMS: `/api/sms` rejects requests without a valid Twilio signature. Web/app
   sign-ups (`/api/sms/optin`) only text a "Reply YES" confirmation (double
   opt-in), and no endpoint reveals whether a phone number is subscribed.
