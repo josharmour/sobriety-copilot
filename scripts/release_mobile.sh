@@ -96,6 +96,7 @@ BUILD_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/sc-mobile-build.XXXXXX")"
 trap 'rm -rf "$BUILD_ROOT"' EXIT
 echo "==> Copying mobile_app to $BUILD_ROOT for the build..."
 rsync -a --exclude build --exclude .dart_tool --exclude ios/Pods --exclude '._*' \
+  --exclude .symlinks --exclude ephemeral --exclude .gradle \
   "$MOBILE_DIR/" "$BUILD_ROOT/mobile_app/"
 cd "$BUILD_ROOT/mobile_app"
 

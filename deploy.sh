@@ -13,6 +13,6 @@ ssh $NAS_HOST "chmod -R a+rX $REMOTE_DIR/static $REMOTE_DIR/src $REMOTE_DIR/docu
 
 # Rebuild and run
 echo "=== 2. Rebuilding and restarting containers on server ==="
-ssh $NAS_HOST "export PATH=\$PATH:/usr/local/bin && cd $REMOTE_DIR && docker compose build app nginx && docker compose up -d --force-recreate --no-deps app nginx worker"
+ssh $NAS_HOST "export PATH=\$PATH:/usr/local/bin && cd $REMOTE_DIR && docker compose build app worker nginx && docker compose up -d --force-recreate --no-deps app nginx worker"
 
 echo "=== 3. Deployment Complete! ==="

@@ -18,6 +18,7 @@ BUILD_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/sc-web-build.XXXXXX")"
 trap 'rm -rf "$BUILD_ROOT"' EXIT
 
 rsync -a --exclude build --exclude .dart_tool --exclude ios/Pods --exclude '._*' \
+  --exclude .symlinks --exclude ephemeral --exclude .gradle \
   "$REPO_ROOT/mobile_app/" "$BUILD_ROOT/mobile_app/"
 (cd "$BUILD_ROOT/mobile_app" && "$FLUTTER_BIN" build web --release)
 

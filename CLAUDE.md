@@ -61,7 +61,9 @@ production.)
 docker-compose.yml Dockerfile requirements.txt documents/.manifests` (never
 `.env`) to the remote (`NAS_HOST`, default the `litellm` ssh alias for
 `joshu@10.0.0.100`), copies it into place, `chmod -R a+rX`'s it, then runs
-`docker compose build app nginx` and force-recreates `app nginx worker`. It
+`docker compose build app worker nginx` and force-recreates `app nginx worker`
+(the worker has its own image; until 2026-10-16 it was never rebuilt and ran
+August code). It
 never deletes files on the server and does **not** verify health — verify
 that yourself:
 
@@ -79,6 +81,13 @@ that yourself:
   ```
 - `deploy.sh` needs its executable bit (`chmod +x`, or run `bash deploy.sh`);
   it has been lost in a commit before.
+
+Tests: `python -m pytest tests/` (needs `requirements.txt` + `pytest`). Use
+pytest, not `unittest`: several suites (e.g. `test_distill_endpoint`,
+`test_sms_reply`) are pytest-style and `unittest` silently runs 0 of them.
+`test_sse_path` and `test_model_variant` call a live server
+(`SSE_TEST_BASE_URL`, default `http://localhost:5000`). Flutter tests: run
+`flutter test` in a temp copy of `mobile_app/`, like `scripts/build_web.sh`.
 
 For evaluation (heavyweight RAGAS deps live in `requirements-eval.txt`,
 kept out of the runtime image):
@@ -108,6 +117,8 @@ The full set lives in `docker-compose.yml` under `x-app-env`. The ones most wort
 | `RERANKER_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Cross-encoder model name |
 | `ENABLE_HYDE` | `1` | Set to `0` to disable hypothetical passage generation (HyDE) |
 | `USER_MEMORY_DB_PATH` | `/app/user_memory.db` | SQLite path for `UserMemoryManager` |
+| `TWILIO_SMS_WEBHOOK_URL` | `https://sobrietycopilot.com/api/sms` | Exact URL Twilio posts to; `/api/sms` checks `X-Twilio-Signature` against it |
+| `TWILIO_VALIDATE_SIGNATURE` | `1` | `0` disables the signature check (local testing only) |
 
 ## Performance Optimization
 
@@ -186,7 +197,16 @@ UI string — `grep -c "Some New Button" static/main.dart.js` should be ≥ 1.
 ## Domain considerations
 
 - This application serves a vulnerable population. Responses must be empathetic, non-judgmental, and privacy-respecting.
-- The system prompt directs the LLM to recommend SAMHSA (1-800-662-4357) or 911 for crisis situations.
+- Crisis guidance gives exactly one helpline, A.A. New York Intergroup
+  (212) 647-1680 (answered 9 am–1 am Eastern, **not** 24/7, per
+  nyintergroup.org), plus 911 for immediate danger, and forbids every other
+  number: left alone the model invents plausible "AA hotline" numbers. The
+  constant is `AA_HELPLINE` in `src/prompts/templates.py`; the app's crisis and
+  About sheets and Private Mode prompt carry the same number, and the crisis
+  sheet lists 988 and SAMHSA under "More support options".
+- SMS: `/api/sms` rejects requests without a valid Twilio signature. Web/app
+  sign-ups (`/api/sms/optin`) only text a "Reply YES" confirmation (double
+  opt-in), and no endpoint reveals whether a phone number is subscribed.
 - User data in this domain is highly sensitive.
 
 ## Note on the GitHub history
