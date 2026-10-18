@@ -69,6 +69,8 @@ x-app-env: &app-env
   #   python3 -c "import secrets; print(secrets.token_hex(24))"
   # Visit the app once as /?admin=<value> to unlock the in-app bug viewer.
   BUG_ADMIN_TOKEN: "${BUG_ADMIN_TOKEN:-7fe8d9a7e8a43db0472dd8e927b5dcd8}"
+  # GET /api/stats/active-users (unique-user counts for Grafana); unset = BUG_ADMIN_TOKEN.
+  STATS_ADMIN_TOKEN: "${STATS_ADMIN_TOKEN:-}"
   # Server-side chat transcript storage (debugging only). Default OFF — the
   # privacy policy promises chat history stays on the user's device.
   STORE_CHAT_HISTORY: "${STORE_CHAT_HISTORY:-0}"

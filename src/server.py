@@ -81,6 +81,7 @@ from src.sms_subscriptions import (
     set_subscriber_enabled,
     upsert_subscriber,
 )
+from src.usage_stats import active_users, chat_identity, record_active
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -1905,6 +1906,11 @@ async def incoming_sms(request: Request):
     raw_phone = re.sub(r"[^0-9+a-zA-Z_-]", "", from_phone)[:32] or "default_sms"
     from_phone = normalize_phone(raw_phone) or raw_phone
     upper_body = body_text.upper()
+    if from_phone != "default_sms":
+        try:
+            record_active(get_redis_client(), "sms", f"sms:{from_phone}")
+        except Exception:
+            pass
 
     _sms_injection_re = re.compile(
         r"(?:ignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions"
@@ -2523,8 +2529,19 @@ def distill(payload: DistillRequest):
 CHAT_ENGINE = os.environ.get("CHAT_ENGINE", "classic").strip().lower()
 
 
+def _record_chat_user(payload: ChatRequest, request: Request) -> None:
+    """Counts this sender toward today's unique users (src/usage_stats.py).
+    Browsers send Origin on every POST; the native apps don't."""
+    try:
+        channel = "web" if request.headers.get("origin") else "app"
+        record_active(get_redis_client(), channel, chat_identity(payload.user_id, _client_ip(request)))
+    except Exception:
+        pass  # counting must never cost a reply
+
+
 @app.post("/api/chat")
 def chat(payload: ChatRequest, request: Request):
+    _record_chat_user(payload, request)
     if CHAT_ENGINE == "research":
         return research(payload, request)
     return _classic_chat(payload, request)
@@ -2926,6 +2943,7 @@ def _wants_research(message: str) -> bool:
 def research(payload: ChatRequest, request: Request):
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="missing 'message' field")
+    _record_chat_user(payload, request)
     query = payload.message.strip()[:2000]
     if not _wants_research(query) and not _PROMPT_INJECTION_RE.search(query):
         return _classic_chat(payload, request)
@@ -3091,6 +3109,23 @@ def list_bugs(x_admin_token: str | None = Header(default=None)):
     r = get_redis_client()
     raw = r.lrange(BUG_REPORT_KEY, 0, 99)
     return [json.loads(item) for item in raw]
+
+
+@app.get("/api/stats/active-users")
+def stats_active_users(
+    days: int = Query(default=30, ge=1, le=366),
+    range_s: int | None = Query(default=None, ge=1),
+    x_admin_token: str | None = Header(default=None),
+):
+    """Unique users per day and over 7/30 days, for the Grafana usage board
+    (which passes its time range as range_s). Admin-only (STATS_ADMIN_TOKEN,
+    else BUG_ADMIN_TOKEN); fails closed."""
+    expected = os.environ.get("STATS_ADMIN_TOKEN") or os.environ.get("BUG_ADMIN_TOKEN", "")
+    if not expected or not x_admin_token or not hmac.compare_digest(x_admin_token, expected):
+        raise HTTPException(status_code=403, detail="forbidden")
+    if range_s:
+        days = min(366, -(-range_s // 86400) + 1)
+    return active_users(get_redis_client(), days)
 
 
 @app.get("/api/suggest")
