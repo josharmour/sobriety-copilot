@@ -65,12 +65,15 @@ x-app-env: &app-env
   TWILIO_PHONE_NUMBER: "${TWILIO_PHONE_NUMBER:-+17623769696}"
   TWILIO_MESSAGING_SERVICE_SID: "${TWILIO_MESSAGING_SERVICE_SID:-}"
   # Bug report admin token — gates GET /api/bugs (reads expose conversation
-  # history). Override via .env on the host or in your environment. Generate:
+  # history) and POST /api/index. No default: set it in .env on the host; the
+  # endpoints fail closed while it's unset. Generate:
   #   python3 -c "import secrets; print(secrets.token_hex(24))"
   # Visit the app once as /?admin=<value> to unlock the in-app bug viewer.
-  BUG_ADMIN_TOKEN: "${BUG_ADMIN_TOKEN:-7fe8d9a7e8a43db0472dd8e927b5dcd8}"
+  BUG_ADMIN_TOKEN: "${BUG_ADMIN_TOKEN:-}"
   # GET /api/stats/active-users (unique-user counts for Grafana); unset = BUG_ADMIN_TOKEN.
   STATS_ADMIN_TOKEN: "${STATS_ADMIN_TOKEN:-}"
+  # 0 = let the LLM gateway log message text (default 1: redacted).
+  LLM_REDACT_LOGS: "${LLM_REDACT_LOGS:-1}"
   # Server-side chat transcript storage (debugging only). Default OFF — the
   # privacy policy promises chat history stays on the user's device.
   STORE_CHAT_HISTORY: "${STORE_CHAT_HISTORY:-0}"

@@ -22,7 +22,14 @@ class InferenceEngine:
         model: str = "dsv4",
         api_key: str = "",
     ):
-        self.client = OpenAI(base_url=base_url, api_key=api_key)
+        # Ask the LiteLLM gateway to blank message and answer text in its spend
+        # logs and traces: users' recovery conversations shouldn't sit in an
+        # ops dashboard. Counts, tokens and cost are still logged. Servers
+        # that aren't LiteLLM ignore the header. LLM_REDACT_LOGS=0 turns it off.
+        headers = None
+        if os.environ.get("LLM_REDACT_LOGS", "1").strip() != "0":
+            headers = {"x-litellm-enable-message-redaction": "true"}
+        self.client = OpenAI(base_url=base_url, api_key=api_key, default_headers=headers)
         self.model = model
         keep_alive = os.environ.get("OLLAMA_KEEP_ALIVE", "-1").strip()
         try:
