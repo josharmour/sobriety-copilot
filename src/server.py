@@ -3263,6 +3263,14 @@ def _cgraph_or_202():
     return g, None
 
 
+# `categories` on the /api/graph2/* reads is the app's source-material setting
+# (comma-separated, as /api/suggest takes it): hides passages, books, chapters
+# and concepts outside those categories. Empty = the whole library.
+def _cgraph_scope(g, categories: str):
+    from src.rag.concept_graph import scope_for
+    return scope_for(g, _get_research_library(), _normalize_categories(categories.split(",")) if categories else None)
+
+
 @app.get("/api/graph2/status")
 def concept_graph_status():
     svc = _concept_graph()
@@ -3271,20 +3279,21 @@ def concept_graph_status():
 
 
 @app.get("/api/graph2/map")
-def concept_graph_map():
+def concept_graph_map(categories: str = Query("", max_length=500)):
     from src.rag.concept_graph import map_payload
     g, pending = _cgraph_or_202()
-    return pending if pending is not None else map_payload(g, _get_research_library())
+    return pending if pending is not None else map_payload(g, _get_research_library(), _cgraph_scope(g, categories))
 
 
 @app.get("/api/graph2/node")
 def concept_graph_node(id: str = Query(..., max_length=200), peers: int = Query(300, ge=1, le=800),
-                       passages: int = Query(12, ge=0, le=40)):
+                       passages: int = Query(12, ge=0, le=40), categories: str = Query("", max_length=500)):
     from src.rag.concept_graph import node_payload
     g, pending = _cgraph_or_202()
     if pending is not None:
         return pending
-    out = node_payload(g, _get_research_library(), id, peers=peers, passages=passages)
+    out = node_payload(g, _get_research_library(), id, peers=peers, passages=passages,
+                       sc=_cgraph_scope(g, categories))
     if out is None:
         raise HTTPException(status_code=404, detail="Unknown concept")
     return out
@@ -3292,46 +3301,48 @@ def concept_graph_node(id: str = Query(..., max_length=200), peers: int = Query(
 
 @app.get("/api/graph2/meet")
 def concept_graph_meet(a: str = Query(..., max_length=200), b: str = Query(..., max_length=200),
-                       offset: int = Query(0, ge=0), limit: int = Query(12, ge=1, le=40)):
+                       offset: int = Query(0, ge=0), limit: int = Query(12, ge=1, le=40),
+                       categories: str = Query("", max_length=500)):
     from src.rag.concept_graph import meet_payload
     g, pending = _cgraph_or_202()
     if pending is not None:
         return pending
-    out = meet_payload(g, _get_research_library(), a, b, offset, limit)
+    out = meet_payload(g, _get_research_library(), a, b, offset, limit, sc=_cgraph_scope(g, categories))
     if out is None:
         raise HTTPException(status_code=404, detail="Unknown concept")
     return out
 
 
 @app.get("/api/graph2/book/{doc_id}")
-def concept_graph_book(doc_id: str):
+def concept_graph_book(doc_id: str, categories: str = Query("", max_length=500)):
     from src.rag.concept_graph import book_payload
     g, pending = _cgraph_or_202()
     if pending is not None:
         return pending
-    out = book_payload(g, _get_research_library(), doc_id)
+    out = book_payload(g, _get_research_library(), doc_id, sc=_cgraph_scope(g, categories))
     if out is None:
         raise HTTPException(status_code=404, detail="Unknown book")
     return out
 
 
 @app.get("/api/graph2/chapter/{doc_id}/{section}")
-def concept_graph_chapter(doc_id: str, section: int):
+def concept_graph_chapter(doc_id: str, section: int, categories: str = Query("", max_length=500)):
     from src.rag.concept_graph import chapter_payload
     g, pending = _cgraph_or_202()
     if pending is not None:
         return pending
-    out = chapter_payload(g, _get_research_library(), doc_id, section)
+    out = chapter_payload(g, _get_research_library(), doc_id, section, sc=_cgraph_scope(g, categories))
     if out is None:
         raise HTTPException(status_code=404, detail="Unknown chapter")
     return out
 
 
 @app.get("/api/graph2/search")
-def concept_graph_search(q: str = Query("", max_length=200)):
+def concept_graph_search(q: str = Query("", max_length=200), categories: str = Query("", max_length=500)):
     from src.rag.concept_graph import search_payload
     g, pending = _cgraph_or_202()
-    return pending if pending is not None else search_payload(g, _get_research_library(), q)
+    return pending if pending is not None else search_payload(g, _get_research_library(), q,
+                                                              sc=_cgraph_scope(g, categories))
 
 
 @app.get("/api/doc/{doc_id}/window")

@@ -103,8 +103,9 @@ class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> with Si
   @override
   void initState() {
     super.initState();
-    final base = ref.read(appConfigProvider).baseUrl;
-    _api = ConceptApi(base);
+    final config = ref.read(appConfigProvider);
+    final base = config.baseUrl;
+    _api = ConceptApi(base, categories: config.categoriesForRequest);
     _readerApi = GraphApi(base);
     _tc.addListener(_keepInView);
     _loadMap();

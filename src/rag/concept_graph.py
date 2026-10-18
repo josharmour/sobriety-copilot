@@ -235,31 +235,109 @@ class ConceptGraphService:
             print(f"[CGRAPH] build failed: {self._error}", flush=True)
 
 
+# ── source filter ─────────────────────────────────────────────────────────
+#
+# The app's "source material" setting (the same category ids /api/chat takes).
+# The graph itself — map positions, prominence, NPMI peer strengths — stays the
+# whole-library one; a scope only hides the passages, books, chapters and
+# concepts outside the chosen categories, and recounts what remains.
+
+
+class Scope:
+    def __init__(self, g: ConceptGraphData, library: Any, categories: frozenset[str] | None):
+        self.full = categories is None
+        if self.full:
+            self.book_ok = np.ones(len(g.books), dtype=bool)
+            self.postings, self.hits = g.postings, g.hits
+        else:
+            cat = library.catalog()
+            self.book_ok = np.asarray([b in cat and cat[b].category in categories for b in g.books], dtype=bool)
+            mask = self.book_ok[g.p_doc] if len(g.p_doc) else np.zeros(0, dtype=bool)
+            self.postings = [p[mask[p]] for p in g.postings]
+            self.hits = [h[mask[p]] for p, h in zip(g.postings, g.hits)]
+        self.n_passages = int(np.count_nonzero(self.book_ok[g.p_doc])) if len(g.p_doc) else 0
+        self._peers: dict[int, list[tuple[int, float, int]]] = {}
+        self.map_rows: tuple[list, dict] | None = None
+
+    def peers(self, g: ConceptGraphData, j: int) -> list[tuple[int, float, int]]:
+        """(peer, npmi, passages shared in scope), strongest first; peers that never meet in scope are dropped."""
+        if self.full:
+            return list(zip(g.peer_idx[j].tolist(), g.peer_w[j].tolist(), g.peer_n[j].tolist()))
+        out = self._peers.get(j)
+        if out is None:
+            sel = np.zeros(len(g.p_doc), dtype=bool)
+            sel[self.postings[j]] = True
+            out = []
+            for k, w in zip(g.peer_idx[j].tolist(), g.peer_w[j].tolist()):
+                shared = int(np.count_nonzero(sel[self.postings[k]]))
+                if shared:
+                    out.append((k, w, shared))
+            self._peers[j] = out
+        return out
+
+
+_SCOPES: dict[tuple, Scope] = {}
+
+
+def scope_for(g: ConceptGraphData, library: Any, categories: list[str] | None = None) -> Scope:
+    """The scope for a category list; None, empty, or every category the library has means the whole library."""
+    cats = frozenset(c for c in (categories or []) if c) or None
+    if cats is not None and {info.category for info in library.catalog().values()} <= cats:
+        cats = None
+    key = (id(g), g.built_at, cats)
+    sc = _SCOPES.get(key)
+    if sc is None:
+        if len(_SCOPES) >= 64:
+            _SCOPES.clear()
+        sc = _SCOPES[key] = Scope(g, library, cats)
+    return sc
+
+
 # ── queries ───────────────────────────────────────────────────────────────
 
 
-def _node_brief(g: ConceptGraphData, j: int) -> dict[str, Any]:
+def _node_brief(g: ConceptGraphData, j: int, sc: Scope | None = None) -> dict[str, Any]:
     n = g.nodes[j]
     return {"id": n["id"], "label": n["label"], "type": n.get("type"), "group": n.get("group"),
-            "passages": int(len(g.postings[j]))}
+            "passages": int(len((sc.postings if sc else g.postings)[j]))}
 
 
-def map_payload(g: ConceptGraphData, library: Any) -> dict[str, Any]:
-    """Every node with its map position and size, plus each node's three strongest peers."""
-    rows = []
-    for j, n in enumerate(g.nodes):
-        rows.append([n["id"], n["label"], n.get("type") or "concept", n.get("group") or "other",
-                     n.get("x", 0.5), n.get("y", 0.5), n.get("prominence", 0.0), int(len(g.postings[j])),
-                     [int(k) for k in g.peer_idx[j][:3]]])
-    cat = library.catalog()
+def map_payload(g: ConceptGraphData, library: Any, sc: Scope | None = None) -> dict[str, Any]:
+    """Every node with its map position and size, plus each node's three strongest peers.
+
+    Under a source filter, concepts that never occur in the chosen books are left
+    off the map (``top_peers`` index the rows actually sent).
+    """
+    sc = sc or scope_for(g, library)
+    if sc.map_rows is None:
+        keep = [j for j in range(len(g.nodes)) if sc.full or len(sc.postings[j])]
+        row_of = {j: i for i, j in enumerate(keep)}
+        rows = []
+        for j in keep:
+            n = g.nodes[j]
+            if sc.full:
+                top = [int(k) for k in g.peer_idx[j][:3]]
+            else:
+                top = []
+                for k, _w, _c in sc.peers(g, j):
+                    top.append(row_of[k])
+                    if len(top) == 3:
+                        break
+            rows.append([n["id"], n["label"], n.get("type") or "concept", n.get("group") or "other",
+                         n.get("x", 0.5), n.get("y", 0.5), n.get("prominence", 0.0), int(len(sc.postings[j])), top])
+        cat = library.catalog()
+        books = [b for b, ok in zip(g.books, sc.book_ok) if ok]
+        stats = {"nodes": len(rows), "passages": sc.n_passages, "books": len(books),
+                 "chapters": int(sum(cat[b].sections for b in books if b in cat))}
+        sc.map_rows = (rows, stats)
+    rows, stats = sc.map_rows
     return {
         "version": g.version,
         "built_at": g.built_at,
         "fields": ["id", "label", "type", "group", "x", "y", "prominence", "passages", "top_peers"],
         "nodes": rows,
         "groups": g.groups,
-        "stats": {"nodes": len(g.nodes), "passages": int(len(g.p_doc)), "books": len(g.books),
-                  "chapters": int(sum(cat[b].sections for b in g.books if b in cat))},
+        "stats": dict(stats),
     }
 
 
@@ -337,11 +415,12 @@ def _rank_passages(g: ConceptGraphData, library: Any, pids: np.ndarray, weights:
 
 
 def node_payload(g: ConceptGraphData, library: Any, node_id: str, peers: int = 300,
-                 passages: int = 12) -> dict[str, Any] | None:
+                 passages: int = 12, sc: Scope | None = None) -> dict[str, Any] | None:
     j = g.index.get(node_id)
     if j is None:
         return None
-    pids = g.postings[j]
+    sc = sc or scope_for(g, library)
+    pids = sc.postings[j]
     n = g.nodes[j]
     # Books and chapters where it occurs.
     book_counts = np.bincount(g.p_doc[pids], minlength=len(g.books)) if len(pids) else np.zeros(len(g.books), int)
@@ -357,43 +436,46 @@ def node_payload(g: ConceptGraphData, library: Any, node_id: str, peers: int = 3
         if title:
             chapters.append({"doc_id": g.books[d], "book_title": library.catalog()[g.books[d]].title,
                              "section": s, "title": title, "pages": pages, "count": cnt})
-    ranked = _rank_passages(g, library, pids, g.hits[j].astype(np.float64))[:passages]
+    ranked = _rank_passages(g, library, pids, sc.hits[j].astype(np.float64))[:passages]
+    all_peers = sc.peers(g, j)
     return {
-        "node": dict(_node_brief(g, j), prominence=n.get("prominence"), hub=n.get("hub"),
+        "node": dict(_node_brief(g, j, sc), prominence=n.get("prominence"), hub=n.get("hub"),
                      forms=_forms(g, j)[:12]),
-        "peers_total": int(len(g.peer_idx[j])),
-        "peers": [dict(_node_brief(g, int(k)), weight=round(float(w), 3), shared=int(c))
-                  for k, w, c in zip(g.peer_idx[j][:peers], g.peer_w[j][:peers], g.peer_n[j][:peers])],
+        "peers_total": len(all_peers),
+        "peers": [dict(_node_brief(g, k, sc), weight=round(float(w), 3), shared=int(c))
+                  for k, w, c in all_peers[:peers]],
         "books": books,
         "chapters": chapters,
         "passages": _passages_payload(g, library, [int(p) for p in ranked], _forms(g, j)),
     }
 
 
-def meet_payload(g: ConceptGraphData, library: Any, a: str, b: str, offset: int = 0, limit: int = 12) -> dict | None:
+def meet_payload(g: ConceptGraphData, library: Any, a: str, b: str, offset: int = 0, limit: int = 12,
+                 sc: Scope | None = None) -> dict | None:
     """Passages where two concepts occur together — the junction between them."""
     ja, jb = g.index.get(a), g.index.get(b)
     if ja is None or jb is None:
         return None
-    both = np.intersect1d(g.postings[ja], g.postings[jb], assume_unique=True)
-    wa = dict(zip(g.postings[ja].tolist(), g.hits[ja].tolist()))
-    wb = dict(zip(g.postings[jb].tolist(), g.hits[jb].tolist()))
+    sc = sc or scope_for(g, library)
+    both = np.intersect1d(sc.postings[ja], sc.postings[jb], assume_unique=True)
+    wa = dict(zip(sc.postings[ja].tolist(), sc.hits[ja].tolist()))
+    wb = dict(zip(sc.postings[jb].tolist(), sc.hits[jb].tolist()))
     weights = np.asarray([min(wa[p], wb[p]) for p in both.tolist()], dtype=np.float64)
     ranked = _rank_passages(g, library, both, weights) if len(both) else both
     page = [int(p) for p in ranked[offset:offset + limit]]
-    return {"a": _node_brief(g, ja), "b": _node_brief(g, jb), "total": int(len(both)), "offset": offset,
+    return {"a": _node_brief(g, ja, sc), "b": _node_brief(g, jb, sc), "total": int(len(both)), "offset": offset,
             "passages": _passages_payload(g, library, page, _forms(g, ja) + _forms(g, jb))}
 
 
-def _concepts_in(g: ConceptGraphData, mask_pids: np.ndarray, limit: int) -> list[dict]:
-    """Concepts over-represented in a set of passages (a book or a chapter)."""
+def _concepts_in(g: ConceptGraphData, sc: Scope, mask_pids: np.ndarray, limit: int) -> list[dict]:
+    """Concepts over-represented in a set of passages (a book or a chapter), relative to the scope."""
     if not len(mask_pids):
         return []
     sel = np.zeros(len(g.p_doc), dtype=bool)
     sel[mask_pids] = True
-    n_sel, n_all = len(mask_pids), len(g.p_doc)
+    n_sel, n_all = len(mask_pids), max(sc.n_passages, 1)
     scored = []
-    for j, post in enumerate(g.postings):
+    for j, post in enumerate(sc.postings):
         if not len(post):
             continue
         k = int(sel[post].sum())
@@ -402,40 +484,57 @@ def _concepts_in(g: ConceptGraphData, mask_pids: np.ndarray, limit: int) -> list
         lift = (k / n_sel) / (len(post) / n_all)
         scored.append((k * np.log1p(lift), j, k))
     scored.sort(key=lambda x: -x[0])
-    return [dict(_node_brief(g, j), count=k) for _s, j, k in scored[:limit]]
+    return [dict(_node_brief(g, j, sc), count=k) for _s, j, k in scored[:limit]]
 
 
-def book_payload(g: ConceptGraphData, library: Any, doc_id: str, limit: int = 300) -> dict | None:
+def _scoped_book(g: ConceptGraphData, sc: Scope, doc_id: str) -> int | None:
+    """The book's index, or None when it is unknown or outside the scope."""
     if doc_id not in g.books:
         return None
     bi = g.books.index(doc_id)
+    return bi if sc.book_ok[bi] else None
+
+
+def book_payload(g: ConceptGraphData, library: Any, doc_id: str, limit: int = 300,
+                 sc: Scope | None = None) -> dict | None:
+    sc = sc or scope_for(g, library)
+    bi = _scoped_book(g, sc, doc_id)
+    if bi is None:
+        return None
     pids = np.where(g.p_doc == bi)[0]
     secs = np.bincount(g.p_section[pids][g.p_section[pids] >= 0]) if len(pids) else np.zeros(0, int)
     chapters = [{"section": s, "title": t, "pages": pg, "passages": int(secs[s]) if s < len(secs) else 0}
                 for (b, s), (t, pg) in sorted(g.extra["chapters"].items()) if b == bi]
-    return {"book": _book_meta(library, doc_id), "concepts": _concepts_in(g, pids, limit), "chapters": chapters}
+    return {"book": _book_meta(library, doc_id), "concepts": _concepts_in(g, sc, pids, limit), "chapters": chapters}
 
 
-def chapter_payload(g: ConceptGraphData, library: Any, doc_id: str, section: int, limit: int = 200) -> dict | None:
-    if doc_id not in g.books:
+def chapter_payload(g: ConceptGraphData, library: Any, doc_id: str, section: int, limit: int = 200,
+                    sc: Scope | None = None) -> dict | None:
+    sc = sc or scope_for(g, library)
+    bi = _scoped_book(g, sc, doc_id)
+    if bi is None:
         return None
-    bi = g.books.index(doc_id)
     pids = np.where((g.p_doc == bi) & (g.p_section == section))[0]
     title, pages = _chapter_title(g, doc_id, section)
     if not title:
         return None
     return {"book": _book_meta(library, doc_id), "section": section, "title": title, "pages": pages,
-            "concepts": _concepts_in(g, pids, limit),
+            "concepts": _concepts_in(g, sc, pids, limit),
             "passages": _passages_payload(g, library, [int(p) for p in pids[:40]], [])}
 
 
-def search_payload(g: ConceptGraphData, library: Any, q: str, limit: int = 20) -> dict[str, Any]:
+def search_payload(g: ConceptGraphData, library: Any, q: str, limit: int = 20,
+                   sc: Scope | None = None) -> dict[str, Any]:
     ql = (q or "").strip().lower()
     if not ql:
         return {"query": q, "nodes": [], "books": [], "chapters": []}
+    sc = sc or scope_for(g, library)
+    in_scope = {b for b, ok in zip(g.books, sc.book_ok) if ok}
     qt = " ".join(tokens(ql))
     scored = []
     for j, n in enumerate(g.nodes):
+        if not sc.full and not len(sc.postings[j]):
+            continue
         lab = n["label"].lower()
         forms = [f.lower() for f in (n.get("forms") or [])]
         if lab == ql or qt in forms:
@@ -450,13 +549,13 @@ def search_payload(g: ConceptGraphData, library: Any, q: str, limit: int = 20) -
     scored.sort(key=lambda x: (-x[0], -x[1]))
     books, chapters = [], []
     for doc_id, info in library.catalog().items():
-        if ql in info.title.lower():
+        if ql in info.title.lower() and (sc.full or doc_id in in_scope):
             books.append(_book_meta(library, doc_id))
     cat = library.catalog()
     for (bi, s), (title, pages) in g.extra["chapters"].items():
-        if ql in title.lower() and len(chapters) < limit:
+        if ql in title.lower() and len(chapters) < limit and sc.book_ok[bi]:
             doc_id = g.books[bi]
             chapters.append({"doc_id": doc_id, "book_title": cat[doc_id].title if doc_id in cat else doc_id,
                              "section": s, "title": title, "pages": pages})
-    return {"query": q, "nodes": [_node_brief(g, j) for _s, _p, j in scored[:limit]],
+    return {"query": q, "nodes": [_node_brief(g, j, sc) for _s, _p, j in scored[:limit]],
             "books": books[:10], "chapters": chapters[:limit]}

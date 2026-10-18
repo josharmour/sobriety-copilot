@@ -90,3 +90,39 @@ def test_book_chapter_search_and_map(setup):
     assert any("Bill" in c["title"] for c in s["chapters"])
     m = CG.map_payload(g, lib)
     assert m["fields"][0] == "id" and len(m["nodes"]) == 4
+
+
+def test_source_filter_hides_books_outside_the_categories(setup, monkeypatch):
+    lib, g = setup
+    cat = lib.catalog()
+    monkeypatch.setattr(cat["twelve-steps-and-twelve-traditions"], "category", "books_about_aa")
+    CG._SCOPES.clear()
+    try:
+        assert CG.scope_for(g, lib, ["conference_approved", "books_about_aa"]).full
+        sc = CG.scope_for(g, lib, ["conference_approved"])
+        assert not sc.full
+        bb = g.books.index("alcoholics-anonymous")
+        assert sc.n_passages == int((g.p_doc == bb).sum())
+
+        d = CG.node_payload(g, lib, "t:resentment", sc=sc)
+        assert {b["id"] for b in d["books"]} == {"alcoholics-anonymous"}
+        assert all(p["doc_id"] == "alcoholics-anonymous" for p in d["passages"])
+        assert all(c["doc_id"] == "alcoholics-anonymous" for c in d["chapters"])
+        assert d["node"]["passages"] <= CG.node_payload(g, lib, "t:resentment")["node"]["passages"]
+        for p in d["peers"]:
+            m = CG.meet_payload(g, lib, "t:resentment", p["id"], sc=sc)
+            assert m["total"] == p["shared"] > 0
+            assert all(x["doc_id"] == "alcoholics-anonymous" for x in m["passages"])
+
+        assert CG.book_payload(g, lib, "twelve-steps-and-twelve-traditions", sc=sc) is None
+        assert CG.book_payload(g, lib, "alcoholics-anonymous", sc=sc) is not None
+        s = CG.search_payload(g, lib, "step", sc=sc)
+        assert all(c["doc_id"] == "alcoholics-anonymous" for c in s["chapters"])
+        assert all(b["id"] != "twelve-steps-and-twelve-traditions" for b in s["books"])
+
+        m = CG.map_payload(g, lib, sc)
+        assert m["stats"]["books"] == 1 and m["stats"]["passages"] == sc.n_passages
+        assert all(r[7] > 0 for r in m["nodes"])
+        assert all(0 <= k < len(m["nodes"]) for r in m["nodes"] for k in r[8])
+    finally:
+        CG._SCOPES.clear()

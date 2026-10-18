@@ -11,11 +11,16 @@ class ConceptApi {
   final String baseUrl;
   final http.Client _client;
 
-  ConceptApi(String baseUrl, {http.Client? client})
+  /// The source-material setting (`AppConfig.categoriesForRequest`); null = the whole library.
+  final List<String>? categories;
+
+  ConceptApi(String baseUrl, {this.categories, http.Client? client})
       : baseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl,
         _client = client ?? http.Client();
 
   Future<Map<String, dynamic>> _get(String path, [Map<String, String>? query]) async {
+    final cats = categories;
+    if (cats != null && cats.isNotEmpty) query = {...?query, 'categories': cats.join(',')};
     final uri = Uri.parse('$baseUrl$path').replace(queryParameters: query == null || query.isEmpty ? null : query);
     final resp = await _client.get(uri).timeout(const Duration(seconds: 40));
     final body = resp.body.isEmpty ? <String, dynamic>{} : json.decode(utf8.decode(resp.bodyBytes));
