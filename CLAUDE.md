@@ -131,6 +131,8 @@ The full set lives in `docker-compose.yml` under `x-app-env`. The ones most wort
 | `CHAT_ROUTER` | `auto` | For research-capable chat: `auto` sends short, plainly conversational messages to the fast classic reply and anything touching the literature (or longer than ~14 words) to the agent; `agent` sends everything to the agent |
 | `RESEARCH_RATE_LIMIT` / `RESEARCH_MAX_CONCURRENT` | `90` / `2` | Agent messages per IP per hour / server-wide whole-chapter reading runs (ordinary messages never wait on the latter) |
 | `RESEARCH_EFFORT` | `low` | Reasoning effort for the agent's planning/answer turns (`medium` spent ~1 min deliberating per answer) |
+| `LLM_REDACT_LOGS` | `1` | Sends `x-litellm-enable-message-redaction`, so the LiteLLM gateway stores chat text as `redacted-by-litellm` in its spend log and Langfuse traces (tokens/cost still logged). `0` = log text |
+| `STATS_ADMIN_TOKEN` | *(empty → `BUG_ADMIN_TOKEN`)* | Gates `GET /api/stats/active-users` (daily/7-/30-day unique users from per-day Redis HyperLogLogs, `src/usage_stats.py`), read by the Grafana AI Usage board on blackwell:3001 |
 
 ## Performance Optimization
 
