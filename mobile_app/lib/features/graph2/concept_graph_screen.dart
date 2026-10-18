@@ -18,6 +18,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sobriety_copilot_mobile/features/graph/graph_api.dart';
 import 'package:sobriety_copilot_mobile/features/graph/graph_models.dart' as g1;
@@ -56,7 +57,7 @@ class ConceptGraphScreen extends ConsumerStatefulWidget {
   ConsumerState<ConceptGraphScreen> createState() => _ConceptGraphScreenState();
 }
 
-class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> {
+class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> with SingleTickerProviderStateMixin {
   late final ConceptApi _api;
   late final GraphApi _readerApi;
   final TransformationController _tc = TransformationController();
@@ -64,6 +65,13 @@ class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> {
   final TextEditingController _search = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   final LabelCache _labels = LabelCache();
+  late final AnimationController _cam = AnimationController(vsync: this, duration: const Duration(milliseconds: 280))
+    ..addListener(_onCamTick);
+  Matrix4? _camFrom, _camTo;
+  final FocusNode _canvasFocus = FocusNode(debugLabel: 'concept canvas');
+
+  /// True while the camera still shows the fitted map (so a resize re-fits it).
+  bool _fitted = true;
 
   ConceptMap? _map;
   ConceptGraphBuilding? _building;
@@ -98,6 +106,7 @@ class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> {
     final base = ref.read(appConfigProvider).baseUrl;
     _api = ConceptApi(base);
     _readerApi = GraphApi(base);
+    _tc.addListener(_keepInView);
     _loadMap();
   }
 
@@ -105,10 +114,12 @@ class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> {
   void dispose() {
     _poll?.cancel();
     _debounce?.cancel();
+    _cam.dispose();
     _tc.dispose();
     _panel.dispose();
     _search.dispose();
     _searchFocus.dispose();
+    _canvasFocus.dispose();
     super.dispose();
   }
 
@@ -124,7 +135,7 @@ class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> {
         _building = null;
         _error = null;
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) => _fit());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _fit(animate: false));
     } on ConceptGraphBuilding catch (b) {
       if (!mounted) return;
       setState(() => _building = b);
@@ -273,7 +284,7 @@ class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> {
       _emphasis = _groupFilter == null ? const {} : _groupSet(_groupFilter!);
       _trail.clear();
     });
-    _fit();
+    _fit(panel: max(_panelSize, 0.22));
     _openPanel(0.22);
   }
 
@@ -369,33 +380,121 @@ class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> {
 
   double get _zoom => _tc.value.getMaxScaleOnAxis();
 
-  void _fit() {
+  /// Where the camera is headed: the end of a running move, else where it is.
+  Matrix4 get _camTarget => _cam.isAnimating && _camTo != null ? _camTo! : _tc.value;
+
+  double get _panelSize => _panel.isAttached ? _panel.size : 0.22;
+
+  /// Canvas height left above a bottom panel of [panel] (fraction of the
+  /// canvas; capped so a tall panel doesn't squeeze the map into a sliver).
+  double _visibleHeight([double? panel]) => _viewport.height * (1 - (panel ?? _panelSize).clamp(0.1, 0.6));
+
+  /// Scale at which the whole map fits above the panel.
+  double _fitScaleFor(double visibleH) => min(_viewport.width, visibleH) / kSceneSize;
+  double get _fitScale => _fitScaleFor(_visibleHeight(0.22));
+
+  /// Zoom limits: out to half the fitted map, in to 8×.
+  double get _minScale => max(0.02, _fitScale * 0.5);
+  static const double _maxScale = 8;
+
+  // The InteractiveViewer is unbounded (a finite boundaryMargin pins the map
+  // to the left edge whenever map + margin is narrower than the viewport, e.g.
+  // on a wide desktop window); this keeps part of the map on screen instead.
+  Matrix4 _clamp(Matrix4 m) {
+    if (_viewport == Size.zero) return m;
+    final side = kSceneSize * m.getMaxScaleOnAxis();
+    final t = m.getTranslation();
+    double axis(double v, double view) {
+      final keep = min(side, view) * 0.35;
+      return v.clamp(keep - side, view - keep).toDouble();
+    }
+
+    final x = axis(t.x, _viewport.width), y = axis(t.y, _viewport.height);
+    if (x == t.x && y == t.y) return m;
+    return m.clone()..setTranslationRaw(x, y, t.z);
+  }
+
+  void _keepInView() {
+    final c = _clamp(_tc.value);
+    if (!identical(c, _tc.value)) _tc.value = c;
+  }
+
+  /// Moves the camera to [target], animated unless [animate] is false.
+  void _moveTo(Matrix4 target, {bool animate = true}) {
+    target = _clamp(target);
+    if (!animate) {
+      _cam.stop();
+      _tc.value = target;
+      return;
+    }
+    _camFrom = _tc.value.clone();
+    _camTo = target;
+    _cam.forward(from: 0);
+  }
+
+  void _onCamTick() {
+    final from = _camFrom, to = _camTo;
+    if (from == null || to == null) return;
+    _tc.value = Matrix4Tween(begin: from, end: to).lerp(Curves.easeOutCubic.transform(_cam.value));
+  }
+
+  /// Fits the whole map into the canvas above the panel ([panel] = the
+  /// panel size to allow for, default its current size).
+  void _fit({bool animate = true, double? panel}) {
     if (_viewport == Size.zero) return;
-    final s = min(_viewport.width, _viewport.height * 0.8) / kSceneSize;
+    final h = _visibleHeight(panel);
+    final s = _fitScaleFor(h);
     final dx = (_viewport.width - kSceneSize * s) / 2;
-    final dy = (_viewport.height * 0.8 - kSceneSize * s) / 2;
-    _tc.value = Matrix4.identity()
-      ..translateByDouble(dx, dy, 0, 1)
-      ..scaleByDouble(s, s, 1, 1);
+    final dy = (h - kSceneSize * s) / 2;
+    _moveTo(
+      Matrix4.identity()
+        ..translateByDouble(dx, dy, 0, 1)
+        ..scaleByDouble(s, s, 1, 1),
+      animate: animate,
+    );
+    _fitted = true;
   }
 
   void _centerOn(int idx) {
     if (_viewport == Size.zero) return;
     final p = scenePos(_map!.nodes[idx]);
-    final z = max(_zoom, min(_viewport.width, _viewport.height) / kSceneSize * 2.2);
-    final target = Offset(_viewport.width / 2, _viewport.height * 0.3);
-    _tc.value = Matrix4.identity()
+    final z = max(_camTarget.getMaxScaleOnAxis(), min(_viewport.width, _viewport.height) / kSceneSize * 2.2);
+    // Selecting opens the panel to at least 0.45; centre in what stays visible.
+    final target = Offset(_viewport.width / 2, _visibleHeight(max(_panelSize, 0.45)) / 2);
+    _fitted = false;
+    _moveTo(Matrix4.identity()
       ..translateByDouble(target.dx - p.dx * z, target.dy - p.dy * z, 0, 1)
-      ..scaleByDouble(z, z, 1, 1);
+      ..scaleByDouble(z, z, 1, 1));
+  }
+
+  /// Pans the view by [d] screen pixels (keyboard arrows).
+  void _panBy(Offset d) {
+    _fitted = false;
+    _moveTo(Matrix4.translationValues(d.dx, d.dy, 0) * _camTarget);
+  }
+
+  /// Keeps the map where it was on screen when the canvas changes size,
+  /// re-fitting it instead if it was still showing the fitted map.
+  void _onResize(Size old) {
+    if (old == Size.zero || _fitted) {
+      _fit(animate: false);
+      return;
+    }
+    final d = Offset(_viewport.width - old.width, _viewport.height - old.height) / 2;
+    _moveTo(Matrix4.translationValues(d.dx, d.dy, 0) * _camTarget, animate: false);
   }
 
   void _zoomBy(double f) {
-    final c = Offset(_viewport.width / 2, _viewport.height * 0.35);
-    final scene = _tc.toScene(c);
-    final z = (_zoom * f).clamp(0.05, 8.0);
-    _tc.value = Matrix4.identity()
+    // Zoom about the middle of the visible map (above the panel). Repeated
+    // clicks build on the move in flight rather than the frame on screen.
+    _fitted = false;
+    final from = _camTarget;
+    final c = Offset(_viewport.width / 2, _visibleHeight() / 2);
+    final scene = MatrixUtils.transformPoint(Matrix4.inverted(from), c);
+    final z = (from.getMaxScaleOnAxis() * f).clamp(_minScale, _maxScale);
+    _moveTo(Matrix4.identity()
       ..translateByDouble(c.dx - scene.dx * z, c.dy - scene.dy * z, 0, 1)
-      ..scaleByDouble(z, z, 1, 1);
+      ..scaleByDouble(z, z, 1, 1));
   }
 
   void _openPanel(double size) {
@@ -502,9 +601,11 @@ class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> {
                   child: LayoutBuilder(builder: (context, c) {
                     final size = Size(c.maxWidth, c.maxHeight);
                     if (size != _viewport) {
-                      final first = _viewport == Size.zero;
+                      final old = _viewport;
                       _viewport = size;
-                      if (first) WidgetsBinding.instance.addPostFrameCallback((_) => _fit());
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) _onResize(old);
+                      });
                     }
                     return Stack(children: [
                       Positioned.fill(child: _canvas(isDark)),
@@ -538,6 +639,33 @@ class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> {
   }
 
   Widget _canvas(bool isDark) {
+    // Keyboard navigation works once the canvas has focus (any click on it).
+    return CallbackShortcuts(
+      bindings: {
+        const CharacterActivator('+'): () => _zoomBy(1.4),
+        const CharacterActivator('='): () => _zoomBy(1.4),
+        const SingleActivator(LogicalKeyboardKey.numpadAdd): () => _zoomBy(1.4),
+        const CharacterActivator('-'): () => _zoomBy(0.7),
+        const SingleActivator(LogicalKeyboardKey.numpadSubtract): () => _zoomBy(0.7),
+        const CharacterActivator('0'): _fit,
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _panBy(const Offset(120, 0)),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () => _panBy(const Offset(-120, 0)),
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () => _panBy(const Offset(0, 120)),
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () => _panBy(const Offset(0, -120)),
+        const SingleActivator(LogicalKeyboardKey.escape): _goBack,
+      },
+      child: Focus(
+        focusNode: _canvasFocus,
+        autofocus: true,
+        child: Listener(
+          onPointerDown: (_) => _canvasFocus.requestFocus(),
+          child: _canvasBody(isDark),
+        ),
+      ),
+    );
+  }
+
+  Widget _canvasBody(bool isDark) {
     final m = _map!;
     // Taps are caught outside the InteractiveViewer and converted to scene
     // coordinates (taps inside it were lost near the canvas edge on web).
@@ -553,9 +681,15 @@ class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> {
         child: InteractiveViewer(
           transformationController: _tc,
           constrained: false,
-          boundaryMargin: const EdgeInsets.all(2400),
-          minScale: 0.05,
-          maxScale: 8,
+          boundaryMargin: const EdgeInsets.all(double.infinity),
+          minScale: _minScale,
+          maxScale: _maxScale,
+          // Gentler mouse-wheel zoom than the default 200 (≈1.3× per notch).
+          scaleFactor: 400,
+          onInteractionStart: (_) {
+            _cam.stop();
+            _fitted = false;
+          },
           clipBehavior: Clip.hardEdge,
           child: SizedBox(
             width: kSceneSize,
@@ -1084,6 +1218,8 @@ class _ConceptGraphScreenState extends ConsumerState<ConceptGraphScreen> {
               'keep going.'),
           SizedBox(height: 6),
           Text('• "Research this" asks the app to read the books and write a cited answer about it.'),
+          SizedBox(height: 6),
+          Text('• Keyboard: + and − zoom, 0 fits the whole map, the arrow keys move around, Esc goes back.'),
         ]),
       ),
       fitContent: true,

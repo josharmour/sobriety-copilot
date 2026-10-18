@@ -317,6 +317,26 @@ class _RagGraphScreenState extends ConsumerState<RagGraphScreen> with SingleTick
   }
 
   void _onTransform() {
+    // Unbounded viewer (a finite boundaryMargin pins the graph to the left
+    // edge once graph + margin is narrower than the viewport); keep part of
+    // the graph on screen instead.
+    if (_viewport != Size.zero && _layout.positions.isNotEmpty) {
+      final m = _tc.value;
+      final s = m.getMaxScaleOnAxis();
+      final t = m.getTranslation();
+      final b = _layout.bounds;
+      double axis(double v, double lo, double hi, double view) {
+        final keep = min((hi - lo) * s, view) * 0.35;
+        return v.clamp(keep - hi * s, view - keep - lo * s).toDouble();
+      }
+
+      final x = axis(t.x, b.left, b.right, _viewport.width);
+      final y = axis(t.y, b.top, b.bottom, _viewport.height);
+      if (x != t.x || y != t.y) {
+        _tc.value = m.clone()..setTranslationRaw(x, y, t.z);
+        return;
+      }
+    }
     final z = _tc.value.getMaxScaleOnAxis();
     if ((z - _zoom).abs() > 0.02) setState(() => _zoom = z);
   }
@@ -899,7 +919,7 @@ class _RagGraphScreenState extends ConsumerState<RagGraphScreen> with SingleTick
         cursor: _hoveredId != null ? SystemMouseCursors.click : SystemMouseCursors.grab,
         child: InteractiveViewer(
           transformationController: _tc,
-          boundaryMargin: const EdgeInsets.all(4000),
+          boundaryMargin: const EdgeInsets.all(double.infinity),
           minScale: 0.1,
           maxScale: 3.5,
           clipBehavior: Clip.none,
