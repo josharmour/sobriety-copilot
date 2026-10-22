@@ -1252,9 +1252,13 @@ class _StarterViewState extends ConsumerState<_StarterView> {
   @override
   void initState() {
     super.initState();
-    // Rotation with a persisted no-repeat window — a fresh hand of prompts
-    // every empty-chat view, no repeats until the pool cycles.
-    _prompts = pickStarterPrompts(ref.read(sharedPreferencesProvider));
+    // Rotation with a persisted no-repeat window across the 92-topic /
+    // 1,790+ prompt catalog, weighted by true-interest signals (typed queries
+    // and multi-turn engaged conversations, ignoring single-click starter tests).
+    _prompts = pickStarterPrompts(
+      ref.read(sharedPreferencesProvider),
+      topicScores: ref.read(trueInterestTopicScoresProvider),
+    );
   }
 
   @override
@@ -1453,7 +1457,15 @@ class _StarterViewState extends ConsumerState<_StarterView> {
                                   ),
                                   elevation: isLight ? 1 : 0,
                                 ),
-                                onPressed: () => widget.onPick(p),
+                                onPressed: () {
+                                  unawaited(
+                                    recordStarterPromptTapped(
+                                      ref.read(sharedPreferencesProvider),
+                                      p,
+                                    ),
+                                  );
+                                  widget.onPick(p);
+                                },
                                 child: Text(p, textAlign: TextAlign.left),
                               ),
                             ),

@@ -1,18 +1,29 @@
-/// Recovery-oriented starter prompts and daily reflections.
+/// Recovery-oriented starter prompts, 92-topic / 1,790+ prompt dynamic catalog,
+/// and true-interest signal personalization.
 ///
-/// Prompts are bucketed by time of day and merged with an evergreen pool, so
-/// the empty-chat screen surfaces contextually appropriate suggestions. A
-/// persisted no-repeat window ([pickStarterPrompts]) rotates through the
-/// whole pool before anything comes back around — a user shouldn't see the
-/// same suggestion twice for a long while. (Conversation follow-ups and
-/// "continue your study" cards are separate and unaffected.)
+/// Prompts are drawn from [kRecoveryTopicCatalog] (92 canonical recovery topics
+/// and 2,500+ sub-concepts) and [kStarterPrompts] / [kEvergreenPrompts].
+///
+/// When the user has genuine query history — queries they typed/dictated/scanned
+/// themselves, or starter-initiated conversations where they continued
+/// interacting (follow-up turns, saved passages, or saved memory facts) —
+/// [pickStarterPrompts] weights the draw toward their active topics and
+/// NPMI-connected peer topics while keeping serendipitous time-of-day variety.
+/// Single-turn clicks on preloaded starter prompts ("testing the app") receive
+/// zero weight so they never skew future recommendations.
 library;
 
 import 'dart:math';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Time-bucketed starter prompts (keys: 'morning','day','evening','late').
+import 'package:sobriety_copilot_mobile/data/models/chat_models.dart';
+import 'package:sobriety_copilot_mobile/data/topic_prompts_catalog.dart';
+import 'package:sobriety_copilot_mobile/features/personal_memory/personal_memory.dart';
+
+export 'package:sobriety_copilot_mobile/data/topic_prompts_catalog.dart';
+
+/// Time-bucketed core starter prompts (keys: 'morning','day','evening','late').
 const Map<String, List<String>> kStarterPrompts = {
   'morning': [
     "Help me set an intention for today's recovery.",
@@ -261,8 +272,28 @@ const List<String> kReflections = [
   "Live and let live.",
 ];
 
-/// All prompts flattened & de-duplicated (case-insensitive, order-preserving).
+/// Map of topic ID -> [RecoveryTopicEntry] for O(1) lookup.
+final Map<String, RecoveryTopicEntry> kTopicById = {
+  for (final t in kRecoveryTopicCatalog) t.id: t,
+};
+
+/// All prompts flattened & de-duplicated across the 92-topic catalog and
+/// time-of-day pools (~1,800+ unique recovery prompts).
 final List<String> kAllStarterPrompts = _flattenPrompts();
+
+/// Normalized lookup set of all preloaded starter prompts, used to detect
+/// whether a conversation's opening message came from a preloaded starter
+/// button versus being typed/dictated/scanned by the user.
+final Set<String> _kNormalizedStarterSet = {
+  for (final p in kAllStarterPrompts) _normalizePromptKey(p),
+};
+
+String _normalizePromptKey(String text) {
+  return text
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .trim();
+}
 
 List<String> _flattenPrompts() {
   final all = <String>[
@@ -271,73 +302,408 @@ List<String> _flattenPrompts() {
     ...kStarterPrompts['evening']!,
     ...kStarterPrompts['late']!,
     ...kEvergreenPrompts,
+    for (final topic in kRecoveryTopicCatalog) ...topic.prompts,
   ];
   final seen = <String>{};
   final out = <String>[];
   for (final p in all) {
-    final key = p.toLowerCase().trim();
+    final key = _normalizePromptKey(p);
     if (seen.add(key)) out.add(p);
   }
   return List.unmodifiable(out);
 }
 
-/// Returns the bucket appropriate for [now] (defaults to DateTime.now()):
-/// morning 4–11, day 11–17, evening 17–22, late 22–4.
-List<String> starterPromptsForNow([DateTime? now]) {
-  final hour = (now ?? DateTime.now()).hour;
-  final String key;
-  if (hour >= 4 && hour < 11) {
-    key = 'morning';
-  } else if (hour >= 11 && hour < 17) {
-    key = 'day';
-  } else if (hour >= 17 && hour < 22) {
-    key = 'evening';
-  } else {
-    key = 'late';
-  }
-  return kStarterPrompts[key]!;
+/// Returns true if [text] matches any preloaded starter prompt in the catalog.
+bool isKnownStarterPrompt(String text) {
+  final key = _normalizePromptKey(text);
+  if (key.isEmpty) return false;
+  return _kNormalizedStarterSet.contains(key);
 }
+
+/// SharedPreferences key tracking prompts explicitly tapped from the starter screen.
+const String kTappedStarterPromptsKey = 'starter_prompts_tapped_v1';
+const int _kMaxTappedHistory = 300;
+
+/// Records that the user tapped a preloaded starter button.
+Future<void> recordStarterPromptTapped(
+  SharedPreferences prefs,
+  String prompt,
+) async {
+  final norm = _normalizePromptKey(prompt);
+  if (norm.isEmpty) return;
+  final existing = prefs.getStringList(kTappedStarterPromptsKey) ?? const <String>[];
+  final next = <String>[
+    ...existing.where((e) => e != norm),
+    norm,
+  ];
+  final trimmed = next.length > _kMaxTappedHistory
+      ? next.sublist(next.length - _kMaxTappedHistory)
+      : next;
+  await prefs.setStringList(kTappedStarterPromptsKey, trimmed);
+}
+
+/// Returns the time bucket name ('morning' | 'day' | 'evening' | 'late') for [now].
+String timeBucketForNow([DateTime? now]) {
+  final hour = (now ?? DateTime.now()).hour;
+  if (hour >= 4 && hour < 11) {
+    return 'morning';
+  } else if (hour >= 11 && hour < 17) {
+    return 'day';
+  } else if (hour >= 17 && hour < 22) {
+    return 'evening';
+  } else {
+    return 'late';
+  }
+}
+
+/// Returns the starter prompt pool appropriate for [now] (defaults to
+/// DateTime.now()): morning 4–11, day 11–17, evening 17–22, late 22–4.
+/// Combines the core time-bucketed prompts with all catalog topics that have
+/// affinity for that time of day.
+List<String> starterPromptsForNow([DateTime? now]) {
+  final key = timeBucketForNow(now);
+  final seen = <String>{};
+  final out = <String>[];
+  for (final p in kStarterPrompts[key]!) {
+    if (seen.add(_normalizePromptKey(p))) out.add(p);
+  }
+  for (final topic in kRecoveryTopicCatalog) {
+    if (topic.timeAffinity == key) {
+      for (final p in topic.prompts) {
+        if (seen.add(_normalizePromptKey(p))) out.add(p);
+      }
+    }
+  }
+  return out;
+}
+
+/// Extracts true-interest user messages from local [conversations], filtering
+/// out single-turn preloaded starter clicks ("testing the app" signal).
+///
+/// A conversation's messages are included ONLY if:
+/// 1. The user typed/dictated/scanned the query themselves (not a preloaded
+///    starter prompt, or included attached photos), OR
+/// 2. The user interacted with the conversation after the initial starter
+///    prompt was sent ($\ge 2$ user turns, or saved a passage from that chat,
+///    or saved a personal memory fact from that chat).
+List<({String text, double weight})> extractTrueInterestSignals({
+  required List<Conversation> conversations,
+  PersonalMemory? memory,
+  List<Source> savedPassages = const [],
+  SharedPreferences? prefs,
+  DateTime? now,
+}) {
+  final currentTime = now ?? DateTime.now();
+  final tappedSet = (prefs?.getStringList(kTappedStarterPromptsKey) ?? const <String>[])
+      .toSet();
+  final memoryConvIds = <String>{
+    if (memory != null)
+      for (final f in memory.facts)
+        if (f.sourceConversationId.isNotEmpty) f.sourceConversationId,
+  };
+  final savedSourceKeys = <String>{
+    for (final s in savedPassages) '${s.documentKey}|${s.excerpt.trim()}',
+  };
+
+  bool isStarterPrompt(String text) {
+    final norm = _normalizePromptKey(text);
+    return tappedSet.contains(norm) || _kNormalizedStarterSet.contains(norm);
+  }
+
+  final signals = <({String text, double weight})>[];
+
+  for (final conv in conversations) {
+    final userMsgs = conv.messages
+        .where((m) => m.role == 'user' && m.text.trim().isNotEmpty)
+        .toList();
+    if (userMsgs.isEmpty) continue;
+
+    final hasSavedMemory = memoryConvIds.contains(conv.id);
+    var hasSavedPassage = false;
+    if (savedSourceKeys.isNotEmpty) {
+      for (final m in conv.messages) {
+        if (m.role != 'assistant') continue;
+        for (final s in m.sources) {
+          if (savedSourceKeys.contains('${s.documentKey}|${s.excerpt.trim()}')) {
+            hasSavedPassage = true;
+            break;
+          }
+        }
+        if (hasSavedPassage) break;
+      }
+    }
+
+    final firstMsg = userMsgs.first;
+    final firstWasPreloadedStarter =
+        firstMsg.imageThumbs.isEmpty && isStarterPrompt(firstMsg.text);
+    final userInteractedAfterInitial =
+        userMsgs.length >= 2 || hasSavedMemory || hasSavedPassage;
+
+    // Crucial filter: if the user merely clicked a preloaded starter prompt and
+    // never interacted with the conversation afterward, ignore it completely
+    // so "testing the app" clicks do not amplify random starter topics.
+    if (firstWasPreloadedStarter && !userInteractedAfterInitial) {
+      continue;
+    }
+
+    final ageDays = max(
+      0,
+      currentTime.difference(conv.updatedAt).inHours / 24.0,
+    );
+    // Smooth 14-day half-life recency decay in [0.25, 1.0].
+    final recency = (1.0 / (1.0 + ageDays / 14.0)).clamp(0.25, 1.0);
+
+    // Score the opening message: higher weight if typed by the user themselves,
+    // moderate weight if it was a starter prompt that the user followed up on.
+    final firstWeight = (firstWasPreloadedStarter ? 1.0 : 2.5) * recency;
+    signals.add((text: firstMsg.text, weight: firstWeight));
+
+    // Score all subsequent turns in the conversation (strong engagement signal).
+    for (var i = 1; i < userMsgs.length; i++) {
+      final msg = userMsgs[i];
+      final w = (isStarterPrompt(msg.text) ? 1.25 : 2.25) * recency;
+      signals.add((text: msg.text, weight: w));
+    }
+  }
+
+  // Also incorporate explicit personal memory facts, triggers, goals, and
+  // open threads when available — these are high-signal recovery interests.
+  if (memory != null) {
+    for (final trigger in memory.profile.triggers) {
+      if (trigger.trim().isNotEmpty) {
+        signals.add((text: trigger, weight: 2.0));
+      }
+    }
+    if (memory.profile.goal != null && memory.profile.goal!.trim().isNotEmpty) {
+      signals.add((text: memory.profile.goal!, weight: 2.0));
+    }
+    for (final fact in memory.facts.reversed.take(25)) {
+      if (fact.text.trim().isNotEmpty) {
+        signals.add((text: fact.text, weight: 1.5));
+      }
+    }
+    for (final thread in memory.threads) {
+      if (!thread.resolved && thread.title.trim().isNotEmpty) {
+        signals.add((
+          text: '${thread.title} ${thread.lastDetail}',
+          weight: 2.25,
+        ));
+      }
+    }
+  }
+
+  return signals;
+}
+
+/// Scores all 92 recovery topics in [kRecoveryTopicCatalog] against the user's
+/// true-interest signals and spreads activation across NPMI peer topics.
+Map<String, double> extractTrueInterestTopicScores({
+  required List<Conversation> conversations,
+  PersonalMemory? memory,
+  List<Source> savedPassages = const [],
+  SharedPreferences? prefs,
+  DateTime? now,
+}) {
+  final signals = extractTrueInterestSignals(
+    conversations: conversations,
+    memory: memory,
+    savedPassages: savedPassages,
+    prefs: prefs,
+    now: now,
+  );
+  if (signals.isEmpty) return const {};
+
+  final directScores = <String, double>{};
+
+  for (final sig in signals) {
+    final text = sig.text.toLowerCase();
+    for (final topic in kRecoveryTopicCatalog) {
+      var hits = 0;
+      for (final kw in topic.keywords) {
+        if (_containsKeywordOnBoundary(text, kw)) {
+          hits++;
+          if (hits >= 3) break; // Cap per-message keyword saturation per topic
+        }
+      }
+      if (hits > 0) {
+        final bonus = hits == 1 ? 1.0 : (hits == 2 ? 1.5 : 1.85);
+        directScores[topic.id] =
+            (directScores[topic.id] ?? 0.0) + sig.weight * bonus;
+      }
+    }
+  }
+
+  if (directScores.isEmpty) return const {};
+
+  // Spread activation to NPMI-connected peer topics in the concept graph so
+  // related recovery areas surface naturally alongside direct matches.
+  final combined = Map<String, double>.from(directScores);
+  directScores.forEach((tid, score) {
+    final topic = kTopicById[tid];
+    if (topic == null) return;
+    for (var i = 0; i < topic.peerTopicIds.length; i++) {
+      final peerId = topic.peerTopicIds[i];
+      final decay = 0.38 / (1.0 + i * 0.35);
+      combined[peerId] = (combined[peerId] ?? 0.0) + score * decay;
+    }
+  });
+
+  return combined;
+}
+
+bool _containsKeywordOnBoundary(String text, String kw) {
+  if (kw.isEmpty) return false;
+  var idx = text.indexOf(kw);
+  while (idx >= 0) {
+    final beforeOk = idx == 0 || !_isWordChar(text.codeUnitAt(idx - 1));
+    final afterIdx = idx + kw.length;
+    final afterOk =
+        afterIdx >= text.length || !_isWordChar(text.codeUnitAt(afterIdx));
+    if (beforeOk && afterOk) return true;
+    idx = text.indexOf(kw, idx + kw.length);
+  }
+  return false;
+}
+
+bool _isWordChar(int c) =>
+    (c >= 0x61 && c <= 0x7A) ||
+    (c >= 0x41 && c <= 0x5A) ||
+    (c >= 0x30 && c <= 0x39);
 
 /// SharedPreferences key for the rotation window (list of recently shown
 /// prompts, oldest first).
 const String _kRecentPromptsKey = 'starter_prompts_recent_v1';
 
-/// How many recently-shown prompts stay excluded from the draw. With
-/// bucket+evergreen pools of ~80–95, a window of 60 means the rotation walks
-/// most of the pool before anything can reappear.
-const int _kRecentWindow = 60;
+/// How many recently-shown prompts stay excluded from the draw. With ~1,800+
+/// prompts in the 92-topic catalog, a window of 240 ensures users can cycle
+/// through dozens of sessions without repeats.
+const int _kRecentWindow = 240;
 
-/// Picks [count] starter prompts for the current time of day, excluding
-/// anything shown recently (persisted across sessions). Falls back to
-/// releasing the oldest half of the window when the pool runs low.
+/// Picks [count] starter prompts for the current time of day, blending:
+/// - True-interest personalized prompts from [topicScores] (up to ~60% of the
+///   hand, max 1 prompt per topic so every card explores a distinct angle)
+/// - Time-of-day & evergreen discovery prompts across the 92-topic catalog
+///   (remaining ~40%, or 100% when the user has no true-interest history yet)
+///
+/// Excludes anything shown recently (persisted across sessions) and never
+/// repeats prompts already asked by the user.
 List<String> pickStarterPrompts(
   SharedPreferences prefs, {
   int count = 5,
   DateTime? now,
   Random? random,
+  Map<String, double>? topicScores,
+  Set<String>? excludePrompts,
 }) {
   final rng = random ?? Random();
-  final pool = <String>{
-    ...starterPromptsForNow(now),
-    ...kEvergreenPrompts,
-  }.toList();
+  final bucket = timeBucketForNow(now);
 
   var recent = prefs.getStringList(_kRecentPromptsKey) ?? const <String>[];
-  var recentSet = recent.toSet();
-  var candidates = pool.where((p) => !recentSet.contains(p)).toList();
+  var recentSet = <String>{
+    ...recent,
+    if (excludePrompts != null) ...excludePrompts,
+  };
 
-  // Window too aggressive for this bucket's pool — release the oldest half.
-  if (candidates.length < count) {
-    recent = recent.sublist(recent.length ~/ 2);
-    recentSet = recent.toSet();
-    candidates = pool.where((p) => !recentSet.contains(p)).toList();
-  }
-  if (candidates.length < count) {
-    candidates = pool; // Degenerate case (tiny pool): allow anything.
+  final picked = <String>[];
+  final pickedNorm = <String>{};
+  final usedTopics = <String>{};
+
+  bool canUse(String prompt) {
+    final norm = _normalizePromptKey(prompt);
+    return !recentSet.contains(prompt) &&
+        !recentSet.contains(norm) &&
+        !pickedNorm.contains(norm);
   }
 
-  candidates.shuffle(rng);
-  final picked = candidates.take(count).toList();
+  void accept(String prompt, [String? topicId]) {
+    picked.add(prompt);
+    pickedNorm.add(_normalizePromptKey(prompt));
+    if (topicId != null) usedTopics.add(topicId);
+  }
+
+  // 1. If we have true-interest topic scores, draw up to ceil(count * 0.6)
+  //    prompts from the user's top-scoring topics & peer topics (1 per topic).
+  if (topicScores != null && topicScores.isNotEmpty) {
+    final targetPersonalized = (count * 3 + 2) ~/ 5; // 3 of 5 when count == 5
+    final rankedTopics = topicScores.entries.toList()
+      ..sort((a, b) {
+        // Small jitter (±12%) among similarly-scored topics so consecutive
+        // sessions rotate smoothly across the user's top interest cluster.
+        final ja = a.value * (0.94 + rng.nextDouble() * 0.12);
+        final jb = b.value * (0.94 + rng.nextDouble() * 0.12);
+        return jb.compareTo(ja);
+      });
+
+    for (final entry in rankedTopics) {
+      if (picked.length >= targetPersonalized) break;
+      final topic = kTopicById[entry.key];
+      if (topic == null || usedTopics.contains(topic.id)) continue;
+      final available = topic.prompts.where(canUse).toList();
+      if (available.isEmpty) continue;
+      final chosen = available[rng.nextInt(available.length)];
+      accept(chosen, topic.id);
+    }
+  }
+
+  // 2. Fill remaining slots with diverse time-of-day + catalog topics (at most
+  //    1 per topic first, then general time-bucketed pool).
+  final discoveryTopics = kRecoveryTopicCatalog
+      .where((t) => !usedTopics.contains(t.id))
+      .toList()
+    ..shuffle(rng);
+
+  // Prioritize topics matching the current time-of-day affinity first.
+  discoveryTopics.sort((a, b) {
+    final aMatch = a.timeAffinity == bucket ? 0 : 1;
+    final bMatch = b.timeAffinity == bucket ? 0 : 1;
+    return aMatch.compareTo(bMatch);
+  });
+
+  // Interleave curated time-of-day prompts and 92-topic catalog prompts.
+  final curatedTimePool = <String>[
+    ...kStarterPrompts[bucket]!,
+    ...kEvergreenPrompts,
+  ].where(canUse).toList()
+    ..shuffle(rng);
+
+  var curatedIdx = 0;
+  for (final topic in discoveryTopics) {
+    if (picked.length >= count) break;
+    // Alternate between a curated time-of-day prompt and a catalog topic prompt
+    if (curatedIdx < curatedTimePool.length && picked.length.isEven) {
+      final candidate = curatedTimePool[curatedIdx++];
+      if (canUse(candidate)) {
+        accept(candidate);
+        if (picked.length >= count) break;
+      }
+    }
+    final available = topic.prompts.where(canUse).toList();
+    if (available.isNotEmpty) {
+      accept(available[rng.nextInt(available.length)], topic.id);
+    }
+  }
+
+  // 3. Fallback if recent window exhausted candidates
+  if (picked.length < count) {
+    final pool = <String>{
+      ...starterPromptsForNow(now),
+      ...kEvergreenPrompts,
+      for (final t in kRecoveryTopicCatalog) ...t.prompts,
+    }.toList();
+
+    if (recent.length > 1) {
+      recent = recent.sublist(recent.length ~/ 2);
+      recentSet = recent.toSet();
+    } else {
+      recentSet = <String>{};
+    }
+
+    final fallback = pool.where(canUse).toList()..shuffle(rng);
+    for (final p in fallback) {
+      if (picked.length >= count) break;
+      accept(p);
+    }
+  }
 
   final nextRecent = [
     ...recent.where((p) => !picked.contains(p)),
