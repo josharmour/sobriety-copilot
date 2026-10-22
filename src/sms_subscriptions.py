@@ -454,7 +454,6 @@ def format_daily_reading_sms(
 def send_twilio_sms(
     to_phone: str,
     body: str,
-    *,
     record_in_history: bool = True,
 ) -> bool:
     """Send an outbound SMS via Twilio REST API and optionally record it in Redis SMS history."""

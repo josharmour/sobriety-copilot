@@ -1973,8 +1973,7 @@ async def incoming_sms(request: Request):
             )
     elif upper_body in {"START", "YES", "UNSTOP"}:
         try:
-            if get_subscriber(from_phone):
-                set_subscriber_enabled(from_phone, True)
+            set_subscriber_enabled(from_phone, True)
         except Exception:
             pass
         twiml_reply = (
