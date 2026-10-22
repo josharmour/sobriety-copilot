@@ -131,10 +131,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final FocusNode _keyboardFocus = FocusNode();
   late final AppTts _tts;
 
-  Timer? _debounce;
-  String _suggestQuery = '';
-  bool _suggestVisible = false;
-
   /// Queued photo attachments as `data:image/...;base64,...` URLs.
   final List<String> _pendingImages = [];
 
@@ -157,16 +153,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.initState();
     _tts = ref.read(appTtsProvider);
     _tts.onDone = _onTtsDone;
-    _inputFocus.addListener(() {
-      if (!_inputFocus.hasFocus) {
-        setState(() => _suggestVisible = false);
-      }
-    });
   }
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _input.dispose();
     _scroll.dispose();
     _inputFocus.dispose();
@@ -218,7 +208,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     _input.clear();
     if (_pendingImages.isNotEmpty) setState(() => _pendingImages.clear());
-    _hideSuggestions();
     FocusScope.of(context).unfocus();
 
     // Fire and forget; the notifier folds the SSE stream into state.
@@ -241,40 +230,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
-  // ── Autocomplete ────────────────────────────────────────────────────────────
-
-  void _onInputChanged(String value) {
-    _debounce?.cancel();
-    final q = value.trim();
-    if (q.length < 3) {
-      _hideSuggestions();
-      setState(() {}); // refresh send-button enabled state
-      return;
-    }
-    setState(() {}); // refresh send-button enabled state immediately
-    _debounce = Timer(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      setState(() {
-        _suggestQuery = q;
-        _suggestVisible = true;
-      });
-    });
-  }
-
-  void _hideSuggestions() {
-    if (_suggestVisible || _suggestQuery.isNotEmpty) {
-      setState(() {
-        _suggestVisible = false;
-        _suggestQuery = '';
-      });
-    }
-  }
-
-  void _applySuggestion(Suggestion s) {
-    _input.text = s.text;
-    _input.selection = TextSelection.collapsed(offset: s.text.length);
-    _hideSuggestions();
-    _inputFocus.requestFocus();
+  void _onInputChanged(String _) {
+    setState(() {}); // refresh send-button enabled state
   }
 
   // ── Scan / OCR ──────────────────────────────────────────────────────────────
@@ -620,7 +577,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _newChat() {
     ref.read(chatNotifierProvider.notifier).startNew();
     _input.clear();
-    _hideSuggestions();
     // Remount the starter view so a fresh hand of suggestions is drawn —
     // tapping the title / new-conversation repeatedly cycles the rotation.
     setState(() => _starterGeneration++);
@@ -754,7 +710,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         )
                         : _buildMessageList(chat, config),
               ),
-              if (_suggestVisible) _buildSuggestions(config),
               _buildMemoryHint(memoryEnabled: memoryEnabled, memory: memory),
               _buildInputBar(chat, config),
             ],
@@ -892,7 +847,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
     );
     _input.clear();
-    _hideSuggestions();
     _scrollToBottomSoon();
   }
 
@@ -945,43 +899,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSuggestions(AppConfig config) {
-    final async = ref.watch(suggestionsProvider(_suggestQuery));
-    final items = async.valueOrNull ?? const <Suggestion>[];
-    if (items.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
-    return Material(
-      elevation: 4,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 220),
-        child: ListView.separated(
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
-          itemCount: items.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
-          itemBuilder: (context, i) {
-            final s = items[i];
-            return ListTile(
-              dense: true,
-              leading: const Icon(Icons.north_west, size: 16),
-              title: Text(s.text, maxLines: 2, overflow: TextOverflow.ellipsis),
-              subtitle:
-                  s.source.isEmpty
-                      ? null
-                      : Text(
-                        s.source,
-                        style: theme.textTheme.bodySmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-              onTap: () => _applySuggestion(s),
-            );
-          },
         ),
       ),
     );

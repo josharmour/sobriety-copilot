@@ -128,6 +128,7 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
     if (stored != null && _radiusOptions.contains(stored)) {
       _radiusMi = stored;
     }
+    _setLocationFromGeolocation(userInitiated: false);
   }
 
   @override
@@ -299,25 +300,30 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
     }
   }
 
-  Future<void> _setLocationFromGeolocation() async {
+  Future<void> _setLocationFromGeolocation({bool userInitiated = true}) async {
     setState(() => _locating = true);
     _setLocationLabel('Getting your location…', placeholder: true);
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!mounted) return;
       if (!serviceEnabled) {
         _setLocationLabel('Location off — type a ZIP code above',
             placeholder: true);
         return;
       }
       var permission = await Geolocator.checkPermission();
+      if (!mounted) return;
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
+        if (!mounted) return;
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         _setLocationLabel('Location denied — type a ZIP code above',
             placeholder: true);
-        if (permission == LocationPermission.deniedForever && mounted) {
+        if (userInitiated &&
+            permission == LocationPermission.deniedForever &&
+            mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content:
@@ -331,19 +337,32 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
         }
         return;
       }
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.low),
-      ).timeout(const Duration(seconds: 8));
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings:
+              const LocationSettings(accuracy: LocationAccuracy.low),
+        ).timeout(const Duration(seconds: 8));
+      } catch (_) {
+        pos = await Geolocator.getLastKnownPosition();
+      }
+      if (!mounted) return;
+      if (pos == null) {
+        _setLocationLabel("Couldn't get location — type a ZIP code above",
+            placeholder: true);
+        return;
+      }
       setState(() {
-        _lat = pos.latitude;
+        _lat = pos!.latitude;
         _lng = pos.longitude;
       });
       _setLocationLabel('Your current location');
       await _fetchAndRender();
     } catch (_) {
-      _setLocationLabel("Couldn't get location — type a ZIP code above",
-          placeholder: true);
+      if (mounted) {
+        _setLocationLabel("Couldn't get location — type a ZIP code above",
+            placeholder: true);
+      }
     } finally {
       if (mounted) setState(() => _locating = false);
     }
@@ -607,13 +626,15 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
                         : _error != null
                             ? _buildError(theme)
                             : _buildOnlineResults(theme))
-                    : !hasLocation
-                        ? _buildPrompt(theme)
-                        : _loading
-                            ? _buildLoading(theme)
-                            : _error != null
-                                ? _buildError(theme)
-                                : _buildResults(theme),
+                    : (_locating && !hasLocation)
+                        ? _buildLoading(theme)
+                        : !hasLocation
+                            ? _buildPrompt(theme)
+                            : _loading
+                                ? _buildLoading(theme)
+                                : _error != null
+                                    ? _buildError(theme)
+                                    : _buildResults(theme),
               ),
             ],
           ),
@@ -966,6 +987,9 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
   }
 
   Widget _buildLoading(ThemeData theme) {
+    final message = (_locating && _lat == null)
+        ? 'Getting your location…'
+        : 'Searching nearby intergroup feeds…\n(first call can take 5–10 s)';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
@@ -975,7 +999,7 @@ class _MeetingsSheetState extends ConsumerState<MeetingsSheet> {
             const CircularProgressIndicator(),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              'Searching nearby intergroup feeds…\n(first call can take 5–10 s)',
+              message,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall,
             ),
