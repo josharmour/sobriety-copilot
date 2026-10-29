@@ -43,13 +43,21 @@ import 'package:sobriety_copilot_mobile/features/personal_memory/personal_memory
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/widgets.dart';
+import 'package:sobriety_copilot_mobile/features/home/day_home.dart';
+import 'package:sobriety_copilot_mobile/features/daily/mood_sheet.dart';
+import 'package:sobriety_copilot_mobile/features/daily/inventory_sheet.dart';
 
 /// The app's main screen: streaming chat with sources, follow-ups, a
 /// collapsible thinking panel, suggest autocomplete, the app-bar menu that
 /// opens the various sheets, starter prompts when empty, and optional
 /// per-message text-to-speech.
 class ChatScreen extends ConsumerStatefulWidget {
-  const ChatScreen({super.key});
+  const ChatScreen({
+    super.key,
+    this.dayHomeEnabled = const bool.fromEnvironment('DAY_HOME', defaultValue: true),
+  });
+
+  final bool dayHomeEnabled;
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -120,6 +128,37 @@ String normalizeRememberPrefill(String raw) {
 }
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
+  late int _homeDestination = widget.dayHomeEnabled ? 0 : 1;
+
+  Future<void> _homeAction(HomeAction action) async {
+    switch (action) {
+      case HomeAction.chat:
+        setState(() => _homeDestination = 1);
+      case HomeAction.checkIn:
+        await showAppSheet(context, const MoodSheet(), initialSize: 0.9);
+      case HomeAction.evening:
+        await showAppSheet(context, const InventorySheet(), initialSize: 0.9);
+      case HomeAction.practice:
+        await _openMenu(_MenuAction.today);
+      case HomeAction.meditate:
+        await _openMenu(_MenuAction.meditation);
+      case HomeAction.meetings:
+        await _openMenu(_MenuAction.meetings);
+      case HomeAction.graph:
+        await _openMenu(_MenuAction.graph);
+      case HomeAction.saved:
+        await _openMenu(_MenuAction.saved);
+      case HomeAction.memory:
+        await showAppSheet(context, const MemorySheet(), initialSize: 0.9);
+      case HomeAction.tracker:
+        await showTrackerEditor(context, ref);
+      case HomeAction.conversations:
+        await _openConversations();
+      case HomeAction.settings:
+        await _openMenu(_MenuAction.settings);
+    }
+  }
+
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final FocusNode _inputFocus = FocusNode();
@@ -206,6 +245,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final state = ref.read(chatNotifierProvider);
     if (state.isSending) return;
 
+    if (widget.dayHomeEnabled) setState(() => _homeDestination = 1);
     _input.clear();
     if (_pendingImages.isNotEmpty) setState(() => _pendingImages.clear());
     FocusScope.of(context).unfocus();
@@ -571,6 +611,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _openConversations() async {
+    if (widget.dayHomeEnabled) setState(() => _homeDestination = 1);
     await showAppSheet(context, const ConversationsSheet());
   }
 
@@ -579,7 +620,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _input.clear();
     // Remount the starter view so a fresh hand of suggestions is drawn —
     // tapping the title / new-conversation repeatedly cycles the rotation.
-    setState(() => _starterGeneration++);
+    setState(() {
+      _starterGeneration++;
+      if (widget.dayHomeEnabled) _homeDestination = 1;
+    });
   }
 
   // ── Source detail ────────────────────────────────────────────────────────────
@@ -626,7 +670,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _maybeAutoRead(next, config.ttsEnabled);
     });
 
-    return Scaffold(
+    // The web host reserves 24px for its fixed footer. Give the bottom
+    // navigation real layout space above it instead of clipping its labels.
+    return Padding(
+      padding: EdgeInsets.only(bottom: widget.dayHomeEnabled && kIsWeb ? 24 : 0),
+      child: Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.menu),
@@ -634,7 +682,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           onPressed: _openConversations,
         ),
         title: GestureDetector(
-          onTap: _newChat,
+          onTap: widget.dayHomeEnabled ? null : _newChat,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -661,11 +709,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ),
         actions: [
-          IconButton.filledTonal(
-            icon: const Icon(AppIcons.graph),
-            tooltip: 'Knowledge Graph',
-            onPressed: () => _openMenu(_MenuAction.graph),
-          ),
+          if (widget.dayHomeEnabled)
+            IconButton(
+              icon: const Icon(AppIcons.crisis),
+              tooltip: 'Support & crisis resources',
+              onPressed: () => _openMenu(_MenuAction.crisis),
+            ),
+          if (!widget.dayHomeEnabled)
+            IconButton.filledTonal(
+              icon: const Icon(AppIcons.graph),
+              tooltip: 'Knowledge Graph',
+              onPressed: () => _openMenu(_MenuAction.graph),
+            ),
           IconButton(
             icon: const Icon(Icons.add_comment_outlined),
             tooltip: 'New conversation',
@@ -689,32 +744,75 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: Column(
-            children: [
-              Expanded(
-                child:
-                    chat.isEmpty
-                        ? _StarterView(
-                          key: ValueKey(_starterGeneration),
-                          onPick: _send,
-                          studySuggestions: ref.watch(studySuggestionsProvider),
-                          resumeThread: _resumeChipCandidate(
-                            memoryEnabled,
-                            memory,
-                            chat.resumedThread,
-                          ),
-                          onResume: _resumeFromThread,
-                        )
-                        : _buildMessageList(chat, config),
+      bottomNavigationBar:
+          widget.dayHomeEnabled
+              ? NavigationBar(
+                selectedIndex: _homeDestination,
+                onDestinationSelected: (index) {
+                  FocusScope.of(context).unfocus();
+                  setState(() => _homeDestination = index);
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(AppIcons.today),
+                    label: 'Today',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(AppIcons.conversations),
+                    label: 'Chat',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(AppIcons.source),
+                    label: 'Library',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.person_outline),
+                    label: 'You',
+                  ),
+                ],
+              )
+              : null,
+      body: IndexedStack(
+        index: !widget.dayHomeEnabled || _homeDestination == 1 ? 1 : 0,
+        children: [
+          if (widget.dayHomeEnabled)
+            DayHome(destination: _homeDestination, onAction: _homeAction)
+          else
+            const SizedBox.shrink(),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: Column(
+                children: [
+                  Expanded(
+                    child:
+                        chat.isEmpty
+                            ? _StarterView(
+                              key: ValueKey(_starterGeneration),
+                              onPick: _send,
+                              studySuggestions: ref.watch(
+                                studySuggestionsProvider,
+                              ),
+                              resumeThread: _resumeChipCandidate(
+                                memoryEnabled,
+                                memory,
+                                chat.resumedThread,
+                              ),
+                              onResume: _resumeFromThread,
+                            )
+                            : _buildMessageList(chat, config),
+                  ),
+                  _buildMemoryHint(
+                    memoryEnabled: memoryEnabled,
+                    memory: memory,
+                  ),
+                  _buildInputBar(chat, config),
+                ],
               ),
-              _buildMemoryHint(memoryEnabled: memoryEnabled, memory: memory),
-              _buildInputBar(chat, config),
-            ],
+            ),
           ),
-        ),
+        ],
+      ),
       ),
     );
   }

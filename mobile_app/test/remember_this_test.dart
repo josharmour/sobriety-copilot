@@ -89,7 +89,7 @@ Future<void> _pumpChat(WidgetTester tester, _Harness h) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: h.container,
-      child: const MaterialApp(home: ChatScreen()),
+      child: const MaterialApp(home: ChatScreen(dayHomeEnabled: false)),
     ),
   );
   await tester.pump();
