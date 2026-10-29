@@ -85,6 +85,7 @@ Future<_Harness> _harness() async {
 }
 
 Future<void> _pumpScreen(WidgetTester tester, _Harness h) async {
+  addTearDown(() => tester.pumpWidget(const SizedBox()));
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: h.container,
@@ -119,6 +120,7 @@ void main() {
     final chip = find.text('Continue: Step 8 amends');
     expect(chip, findsOneWidget);
 
+    await tester.ensureVisible(chip);
     await tester.tap(chip);
     await _drain(tester);
 

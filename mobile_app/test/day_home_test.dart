@@ -42,6 +42,7 @@ Future<ProviderContainer> harness(
     ],
   );
   addTearDown(container.dispose);
+  addTearDown(() => tester.pumpWidget(const SizedBox()));
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
@@ -162,6 +163,6 @@ void main() {
     await harness(tester, enabled: false);
     expect(find.byType(DayHome), findsNothing);
     expect(find.byType(NavigationBar), findsNothing);
-    expect(find.text('Start a Conversation'), findsOneWidget);
+    expect(find.text('A little room to think.'), findsOneWidget);
   });
 }

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'empty_chat_landing.dart';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -29,7 +31,6 @@ import 'package:sobriety_copilot_mobile/features/library/offline_reader.dart';
 import 'package:sobriety_copilot_mobile/config/capabilities.dart';
 import 'package:sobriety_copilot_mobile/features/asr/asr_manager.dart';
 import 'package:sobriety_copilot_mobile/features/asr/asr_service.dart';
-import 'package:sobriety_copilot_mobile/features/daily/study_themes.dart';
 import 'package:sobriety_copilot_mobile/features/meditation/meditation_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/daily/today_sheet.dart';
 import 'package:sobriety_copilot_mobile/features/milestones/milestone_card.dart';
@@ -184,7 +185,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Tracks the last assistant message we auto-read so TTS fires only once.
   String? _autoReadId;
 
-  /// Bumped on new-chat so the starter view remounts with fresh suggestions.
+  /// Bumped on new-chat to restart the quiet entrance and idle clock.
   int _starterGeneration = 0;
 
   @override
@@ -779,38 +780,67 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             DayHome(destination: _homeDestination, onAction: _homeAction)
           else
             const SizedBox.shrink(),
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
-              child: Column(
+          if (chat.isEmpty)
+            EmptyChatLanding(
+              key: ValueKey(_starterGeneration),
+              controller: _input,
+              active: !widget.dayHomeEnabled || _homeDestination == 1,
+              prompts: [
+                kStarterPrompts['morning']![11],
+                kStarterPrompts['morning']![19],
+                kEvergreenPrompts.firstWhere(
+                  (p) => p == 'Show me a passage about courage.',
+                ),
+              ],
+              onPick: (prompt) {
+                _input.value = TextEditingValue(
+                  text: prompt,
+                  selection: TextSelection.collapsed(offset: prompt.length),
+                );
+                _onInputChanged(prompt);
+                _inputFocus.requestFocus();
+              },
+              composer: _buildEmptyComposer(),
+              footer: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child:
-                        chat.isEmpty
-                            ? _StarterView(
-                              key: ValueKey(_starterGeneration),
-                              onPick: _send,
-                              studySuggestions: ref.watch(
-                                studySuggestionsProvider,
-                              ),
-                              resumeThread: _resumeChipCandidate(
-                                memoryEnabled,
-                                memory,
-                                chat.resumedThread,
-                              ),
-                              onResume: _resumeFromThread,
-                            )
-                            : _buildMessageList(chat, config),
-                  ),
+                  if (_resumeChipCandidate(
+                        memoryEnabled,
+                        memory,
+                        chat.resumedThread,
+                      )
+                      case final thread?)
+                    TextButton.icon(
+                      icon: const Icon(Icons.history, size: 18),
+                      label: Text(
+                        'Continue: ${thread.title}',
+                        textAlign: TextAlign.center,
+                      ),
+                      onPressed: () => _resumeFromThread(thread),
+                    ),
                   _buildMemoryHint(
                     memoryEnabled: memoryEnabled,
                     memory: memory,
                   ),
-                  _buildInputBar(chat, config),
                 ],
               ),
+            )
+          else
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 800),
+                child: Column(
+                  children: [
+                    Expanded(child: _buildMessageList(chat, config)),
+                    _buildMemoryHint(
+                      memoryEnabled: memoryEnabled,
+                      memory: memory,
+                    ),
+                    _buildInputBar(chat, config),
+                  ],
+                ),
+              ),
             ),
-          ),
         ],
       ),
       ),
@@ -998,6 +1028,94 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyComposer() {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Container(
+      key: const ValueKey('empty-chat-composer'),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: .7)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.shadow.withValues(
+              alpha: theme.brightness == Brightness.dark ? .14 : .045,
+            ),
+            blurRadius: 40,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_pendingImages.isNotEmpty) _buildAttachmentPreview(theme),
+          KeyboardListener(
+            focusNode: _keyboardFocus,
+            onKeyEvent: _composerKeyEvent,
+            child: TextField(
+              controller: _input,
+              focusNode: _inputFocus,
+              minLines: 2,
+              maxLines: 5,
+              style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
+              textInputAction: kIsWeb
+                  ? TextInputAction.done
+                  : TextInputAction.newline,
+              onChanged: _onInputChanged,
+              decoration: InputDecoration(
+                hintText: _isRecording ? 'Listening…' : 'What’s on your mind?',
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(AppIcons.attach),
+                tooltip: 'Attach a photo or scan text',
+                onPressed: _showAttachSheet,
+              ),
+              if (supportsMicInput)
+                _isTranscribing
+                    ? const SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: Padding(
+                          padding: EdgeInsets.all(14),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        icon: Icon(_isRecording ? Icons.stop : Icons.mic_none),
+                        color: _isRecording ? colors.error : null,
+                        tooltip: _isRecording
+                            ? 'Stop recording'
+                            : 'Voice input',
+                        onPressed: _toggleMic,
+                      ),
+              const Spacer(),
+              IconButton.filled(
+                icon: const Icon(Icons.arrow_upward_rounded),
+                tooltip: 'Send',
+                onPressed:
+                    _input.text.trim().isNotEmpty || _pendingImages.isNotEmpty
+                    ? () => _send()
+                    : null,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1322,265 +1440,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 // ════════════════════════════════════════════════════════════════════════════
 // Starter / empty state
 // ════════════════════════════════════════════════════════════════════════════
-
-class _StarterView extends ConsumerStatefulWidget {
-  final void Function(String prompt) onPick;
-  final List<StudySuggestion> studySuggestions;
-
-  /// FR11 Wave C — when personal memory is enabled and there is an open
-  /// thread (and none already resumed), the MOST-RECENT unresolved thread
-  /// renders as a single "Continue: <title>" chip above the starters.
-  final MemoryThread? resumeThread;
-  final void Function(MemoryThread thread) onResume;
-  const _StarterView({
-    super.key,
-    required this.onPick,
-    this.studySuggestions = const [],
-    this.resumeThread,
-    required this.onResume,
-  });
-
-  @override
-  ConsumerState<_StarterView> createState() => _StarterViewState();
-}
-
-class _StarterViewState extends ConsumerState<_StarterView> {
-  late final List<String> _prompts;
-
-  @override
-  void initState() {
-    super.initState();
-    // Rotation with a persisted no-repeat window across the 92-topic /
-    // 1,790+ prompt catalog, weighted by true-interest signals (typed queries
-    // and multi-turn engaged conversations, ignoring single-click starter tests).
-    _prompts = pickStarterPrompts(
-      ref.read(sharedPreferencesProvider),
-      topicScores: ref.read(trueInterestTopicScoresProvider),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isLight = theme.brightness == Brightness.light;
-    final prompts = _prompts;
-    final reflection = reflectionForToday();
-
-    final bgDecoration =
-        isLight
-            ? BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  theme.colorScheme.surface,
-                  theme.colorScheme.surfaceContainerHighest.withAlpha(180),
-                ],
-              ),
-            )
-            : const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/icon/app_icon.jpg'),
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-              ),
-            );
-
-    final overlayDecoration =
-        isLight
-            ? const BoxDecoration(color: Colors.transparent)
-            : BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withAlpha(20),
-                  Colors.black.withAlpha(160),
-                  Colors.black.withAlpha(240),
-                ],
-                stops: const [0.0, 0.5, 1.0],
-              ),
-            );
-
-    final titleColor = isLight ? theme.colorScheme.onSurface : Colors.white;
-    final cardBg =
-        isLight ? theme.colorScheme.surface : Colors.black.withAlpha(120);
-    final cardBorder =
-        isLight ? theme.colorScheme.outlineVariant : Colors.white24;
-    final reflectionTextColor =
-        isLight ? theme.colorScheme.onSurface : Colors.white;
-    final btnFgColor = isLight ? theme.colorScheme.onSurface : Colors.white;
-    final btnBorderColor =
-        isLight ? theme.colorScheme.outlineVariant : Colors.white54;
-    final btnBgColor =
-        isLight ? theme.colorScheme.surface : Colors.black.withAlpha(120);
-
-    return Container(
-      decoration: bgDecoration,
-      child: Container(
-        decoration: overlayDecoration,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight:
-                      constraints.maxHeight > 80
-                          ? constraints.maxHeight - 80
-                          : 0,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Start a Conversation',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        color: titleColor,
-                        fontWeight: FontWeight.bold,
-                        shadows:
-                            isLight
-                                ? null
-                                : [
-                                  const Shadow(
-                                    color: Colors.black87,
-                                    blurRadius: 8,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 600),
-                        child: Container(
-                          padding: const EdgeInsets.all(AppSpacing.lg),
-                          decoration: BoxDecoration(
-                            color: cardBg,
-                            borderRadius: BorderRadius.circular(
-                              AppSpacing.radius,
-                            ),
-                            border: Border.all(color: cardBorder),
-                            boxShadow:
-                                isLight
-                                    ? [
-                                      BoxShadow(
-                                        color: Colors.black.withAlpha(12),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ]
-                                    : null,
-                          ),
-                          child: Text(
-                            reflection,
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontStyle: FontStyle.italic,
-                              color: reflectionTextColor,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    const MilestoneCard(),
-                    const SizedBox(height: AppSpacing.xl),
-                    if (widget.resumeThread != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                        child: Center(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 600),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  alignment: Alignment.centerLeft,
-                                  foregroundColor: btnFgColor,
-                                  side: BorderSide(color: btnBorderColor),
-                                  backgroundColor: btnBgColor,
-                                  // Prompts are content, not button labels.
-                                  textStyle: theme.textTheme.bodyMedium,
-                                  padding: const EdgeInsets.all(AppSpacing.lg),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      AppSpacing.radius,
-                                    ),
-                                  ),
-                                  elevation: isLight ? 1 : 0,
-                                ),
-                                icon: Icon(
-                                  Icons.history,
-                                  size: 18,
-                                  color: theme.colorScheme.primary,
-                                ),
-                                label: Text(
-                                  'Continue: ${widget.resumeThread!.title}',
-                                  textAlign: TextAlign.left,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onPressed:
-                                    () => widget.onResume(widget.resumeThread!),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ...prompts.map(
-                      (p) => Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: Center(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 600),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  alignment: Alignment.centerLeft,
-                                  foregroundColor: btnFgColor,
-                                  side: BorderSide(color: btnBorderColor),
-                                  backgroundColor: btnBgColor,
-                                  // Prompts are content, not button labels.
-                                  textStyle: theme.textTheme.bodyMedium,
-                                  padding: const EdgeInsets.all(AppSpacing.lg),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      AppSpacing.radius,
-                                    ),
-                                  ),
-                                  elevation: isLight ? 1 : 0,
-                                ),
-                                onPressed: () {
-                                  unawaited(
-                                    recordStarterPromptTapped(
-                                      ref.read(sharedPreferencesProvider),
-                                      p,
-                                    ),
-                                  );
-                                  widget.onPick(p);
-                                },
-                                child: Text(p, textAlign: TextAlign.left),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
 
 class _DenoisingProgress extends StatelessWidget {
   final int step;
