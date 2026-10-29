@@ -9,6 +9,7 @@
 # Xcode can't build on the SMB share (no POSIX byte-range locks), so the build
 # itself happens in a throwaway local copy that is deleted on exit; version
 # bumps are made, committed and pushed in the NAS repo.
+# --build-only disables store uploads and Git commit/push; useful for beta builds.
 
 set -euo pipefail
 
@@ -31,9 +32,14 @@ BUMP_BUILD=true
 NEW_VERSION=""
 SKIP_IOS=false
 SKIP_ANDROID=false
+BUILD_ONLY=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --build-only)
+      BUILD_ONLY=true
+      shift
+      ;;
     --no-bump)
       BUMP_BUILD=false
       shift
@@ -52,7 +58,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "Unknown option: $1"
-      echo "Usage: $0 [--no-bump] [--version <x.y.z>] [--skip-ios] [--skip-android]"
+      echo "Usage: $0 [--no-bump] [--version <x.y.z>] [--skip-ios] [--skip-android] [--build-only]"
       exit 1
       ;;
   esac
@@ -111,13 +117,15 @@ if [ "$SKIP_IOS" = false ]; then
   # which then crashes listing the build/ios/ipa dir an upload never creates.)
   "$FLUTTER_BIN" build ipa --export-method app-store
 
-  echo "==> [iOS] Uploading to App Store Connect / TestFlight..."
-  xcodebuild -exportArchive \
-    -archivePath build/ios/archive/Runner.xcarchive \
-    -exportPath /tmp/xcode-upload \
-    -exportOptionsPlist ios/ExportOptions-upload.plist \
-    -allowProvisioningUpdates
-  echo "==> [iOS] Successfully uploaded build ${NEW_FULL_VERSION} to TestFlight!"
+  if [ "$BUILD_ONLY" = false ]; then
+    echo "==> [iOS] Uploading to App Store Connect / TestFlight..."
+    xcodebuild -exportArchive \
+      -archivePath build/ios/archive/Runner.xcarchive \
+      -exportPath /tmp/xcode-upload \
+      -exportOptionsPlist ios/ExportOptions-upload.plist \
+      -allowProvisioningUpdates
+    echo "==> [iOS] Successfully uploaded build ${NEW_FULL_VERSION} to TestFlight!"
+  fi
 fi
 
 # 5. Android Build
@@ -134,7 +142,9 @@ if [ "$SKIP_ANDROID" = false ]; then
 
   # Check if Google Play API credentials exist
   PLAY_CREDS="${PLAY_STORE_JSON:-$MOBILE_DIR/android/play-service-account.json}"
-  if [ -f "$PLAY_CREDS" ]; then
+  if [ "$BUILD_ONLY" = true ]; then
+    echo "==> Build-only mode: Google Play upload disabled."
+  elif [ -f "$PLAY_CREDS" ]; then
     echo "==> [Android] Uploading AAB to Google Play via service account..."
     if command -v fastlane >/dev/null 2>&1; then
       fastlane supply --aab "$AAB_PATH" --json_key "$PLAY_CREDS" --package_name "com.sobrietycopilot.app" --track "production"
@@ -143,6 +153,12 @@ if [ "$SKIP_ANDROID" = false ]; then
     echo "==> [Android] Play Store service account not found at $PLAY_CREDS."
     echo "    To upload: Open Google Play Console -> Production -> Upload: $AAB_PATH"
   fi
+fi
+
+# Build-only is intentionally local: no upload, commit, or push.
+if [ "$BUILD_ONLY" = true ]; then
+  echo "==> Build-only complete. Store upload and Git commit/push were skipped."
+  exit 0
 fi
 
 # 6. Commit and push version bump (in the NAS repo; fsmonitor hangs on SMB)
