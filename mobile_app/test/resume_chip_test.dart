@@ -22,6 +22,7 @@ import 'package:sobriety_copilot_mobile/providers.dart';
 
 class FakeChatRepository implements ChatRepository {
   int sends = 0;
+  String? failure;
   String? lastMessage;
   List<ChatMessage>? lastHistory;
 
@@ -41,6 +42,10 @@ class FakeChatRepository implements ChatRepository {
     sends++;
     lastMessage = message;
     lastHistory = List<ChatMessage>.from(history);
+    if (failure != null) {
+      yield ErrorEvent(failure!);
+      return;
+    }
     yield const SourcesEvent([]);
     yield const TokenEvent('Picking that back up.');
     yield const DoneEvent();

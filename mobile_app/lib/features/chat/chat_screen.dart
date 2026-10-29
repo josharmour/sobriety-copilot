@@ -785,20 +785,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               key: ValueKey(_starterGeneration),
               controller: _input,
               active: !widget.dayHomeEnabled || _homeDestination == 1,
-              prompts: [
-                kStarterPrompts['morning']![11],
-                kStarterPrompts['morning']![19],
-                kEvergreenPrompts.firstWhere(
-                  (p) => p == 'Show me a passage about courage.',
-                ),
-              ],
+              prompts: kEvergreenPrompts,
+              loadPrompts: (count, shown) => pickStarterPrompts(
+                ref.read(sharedPreferencesProvider),
+                count: count,
+                excludePrompts: shown,
+                // Public graph-catalog discovery only; do not derive prompts
+                // from private memory or inferred personal health interests.
+              ),
               onPick: (prompt) {
-                _input.value = TextEditingValue(
-                  text: prompt,
-                  selection: TextSelection.collapsed(offset: prompt.length),
-                );
-                _onInputChanged(prompt);
-                _inputFocus.requestFocus();
+                final current = ref.read(chatNotifierProvider);
+                if (!current.isEmpty || current.isSending || _input.text.trim().isNotEmpty) return;
+                unawaited(recordStarterPromptTapped(ref.read(sharedPreferencesProvider), prompt));
+                unawaited(_send(prompt));
               },
               composer: _buildEmptyComposer(),
               footer: Column(
