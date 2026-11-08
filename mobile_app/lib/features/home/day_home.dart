@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../daily/daily_readings.dart';
-import '../daily/inventory.dart';
-import '../../providers.dart';
 import '../milestones/sobriety_tracker.dart';
 import '../../theme/tokens.dart';
 
@@ -35,8 +33,6 @@ class DayHome extends ConsumerWidget {
     final cs = theme.colorScheme;
     final now = DateTime.now();
     final tracker = ref.watch(sobrietyProvider);
-    final moods = ref.watch(moodProvider);
-    final checkedIn = moods.any((entry) => entry.dateIso == dateIsoOf(now));
     final readings = ref.watch(dailyReadingsProvider);
     final isLibrary = destination == 2;
     final isYou = destination == 3;
@@ -140,45 +136,6 @@ class DayHome extends ConsumerWidget {
         ),
       ),
     );
-    final checkInCard = Card(
-      margin: EdgeInsets.zero,
-      color: cs.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: DefaultTextStyle.merge(
-          style: TextStyle(color: cs.onPrimaryContainer),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                checkedIn ? Icons.check_circle_outline : AppIcons.mood,
-                color: cs.onPrimaryContainer,
-                size: 28,
-              ),
-              const SizedBox(height: 18),
-              Text(
-                checkedIn ? 'You made space today.' : 'How are you arriving?',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  color: cs.onPrimaryContainer,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                checkedIn
-                    ? 'Your check-in is saved on this device. You can revisit it whenever you like.'
-                    : 'Name a feeling. Add a few words if you want. There’s no right answer.',
-                style: const TextStyle(fontSize: 16, height: 1.5),
-              ),
-              const SizedBox(height: 20),
-              FilledButton(
-                onPressed: () => onAction(HomeAction.checkIn),
-                child: Text(checkedIn ? 'Revisit check-in' : 'Check in'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
 
     return ColoredBox(
       color: theme.scaffoldBackgroundColor,
@@ -226,26 +183,7 @@ class DayHome extends ConsumerWidget {
                     HomeAction.chat,
                   ),
                   const SizedBox(height: 8),
-                  LayoutBuilder(
-                    builder: (context, constraints) =>
-                        constraints.maxWidth >= 700
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(flex: 3, child: readingCard),
-                              const SizedBox(width: 20),
-                              Expanded(flex: 2, child: checkInCard),
-                            ],
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              checkInCard,
-                              const SizedBox(height: 16),
-                              readingCard,
-                            ],
-                          ),
-                  ),
+                  readingCard,
                   const SizedBox(height: 28),
                   Text('A small next step', style: theme.textTheme.titleLarge),
                   const SizedBox(height: 12),

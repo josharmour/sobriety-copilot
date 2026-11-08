@@ -129,7 +129,8 @@ String normalizeRememberPrefill(String raw) {
 }
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
-  late int _homeDestination = widget.dayHomeEnabled ? 0 : 1;
+  // Conversation is the primary entry point; Today remains an optional tab.
+  int _homeDestination = 1;
 
   Future<void> _homeAction(HomeAction action) async {
     switch (action) {

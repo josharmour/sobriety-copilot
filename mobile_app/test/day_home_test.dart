@@ -63,8 +63,28 @@ Future<ProviderContainer> harness(
 }
 
 void main() {
-  test('the approved home is enabled in ordinary production builds', () {
+  test('optional home navigation is enabled in ordinary production builds', () {
     expect(const ChatScreen().dayHomeEnabled, isTrue);
+  });
+
+  testWidgets('Chat opens first and Today remains available', (tester) async {
+    await harness(tester);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      1,
+    );
+    expect(find.text('A little room to think.'), findsOneWidget);
+    expect(find.text('A little space for today.'), findsNothing);
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Today'));
+    await tester.pumpAndSettle();
+    expect(find.text('A little space for today.'), findsOneWidget);
+    await tester.tap(find.text('Talk with your copilot'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      1,
+    );
+    expect(find.text('A little room to think.'), findsOneWidget);
   });
 
   testWidgets('existing saved conversations open visibly from the home menu', (
@@ -101,6 +121,8 @@ void main() {
   ) async {
     final handle = tester.ensureSemantics();
     await harness(tester);
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Today'));
+    await tester.pumpAndSettle();
     await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
     await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
     await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
@@ -109,10 +131,11 @@ void main() {
   });
   testWidgets('home navigation preserves an unsent chat draft', (tester) async {
     await harness(tester);
-    expect(find.text('A little space for today.'), findsOneWidget);
-    await tester.tap(find.widgetWithText(NavigationDestination, 'Chat'));
-    await tester.pumpAndSettle();
+    expect(find.text('A little room to think.'), findsOneWidget);
     await tester.enterText(find.byType(TextField).first, 'A draft to keep');
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Today'));
+    await tester.pumpAndSettle();
+    expect(find.text('A little space for today.'), findsOneWidget);
     await tester.tap(find.widgetWithText(NavigationDestination, 'Library'));
     await tester.pumpAndSettle();
     expect(find.text('Explore connected ideas'), findsOneWidget);
@@ -122,11 +145,15 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('check-in completion comes from local saved state', (
+  testWidgets('Today has no check-in prompt before or after a saved entry', (
     tester,
   ) async {
     final container = await harness(tester);
-    expect(find.text('Check in'), findsOneWidget);
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Today'));
+    await tester.pumpAndSettle();
+    expect(find.text('How are you arriving?'), findsNothing);
+    expect(find.text('Check in'), findsNothing);
+    expect(find.text('A MOMENT TO READ'), findsOneWidget);
     await container
         .read(moodProvider.notifier)
         .upsert(
@@ -138,8 +165,12 @@ void main() {
           ),
         );
     await tester.pumpAndSettle();
-    expect(find.text('Revisit check-in'), findsOneWidget);
-    expect(find.text('You made space today.'), findsOneWidget);
+    expect(find.text('Revisit check-in'), findsNothing);
+    expect(find.text('You made space today.'), findsNothing);
+    expect(container.read(moodProvider), hasLength(1));
+    await tester.tap(find.widgetWithText(NavigationDestination, 'You'));
+    await tester.pumpAndSettle();
+    expect(find.text('Check-in & journal'), findsOneWidget);
   });
 
   testWidgets('all home destinations fit narrow screens at 200 percent text', (
