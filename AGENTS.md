@@ -20,9 +20,9 @@ Recovery-based AI assistant with RAG over 12-step literature.
 - **Cloud:** all-minilm + dsv4.
 
 ## Mobile Releases (iOS TestFlight / App Store & Google Play)
-- **Always automate mobile releases after making changes**: Whenever changes are made to `mobile_app/`, agents MUST run `./scripts/release_mobile.sh` from the local-disk clone (`/Users/joshu/development/sobriety-copilot`).
+- **Always automate mobile releases after making changes**: Whenever changes are made to `mobile_app/`, agents MUST use the explicit release modes in `docs/mobile-versioning.md` from this NAS repo. The script builds in a temporary local copy. Use `--release patch|minor|major` for a new public version, `--candidate` only for an unpublished release, or `--build-only` for local beta preparation. Honor the user's release scope; testing-only work does not authorize production uploads.
 - `scripts/release_mobile.sh` automatically:
-  1. Auto-bumps the build number in `mobile_app/pubspec.yaml`.
+  1. Requires an explicit release intent, advances the customer-visible version for a new public release, and increments the build number in `mobile_app/pubspec.yaml`.
   2. Syncs Xcode build versioning via `mobile_app/ios/sync_versions.rb`.
   3. Archives iOS and directly uploads the build to Apple TestFlight / App Store Connect via Xcode (`xcodebuild -exportArchive`).
   4. Compiles the signed release Android App Bundle (AAB) with `release-upload-key.jks` at `mobile_app/build/app/outputs/bundle/release/app-release.aab`.

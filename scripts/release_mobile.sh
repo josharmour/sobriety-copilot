@@ -9,7 +9,9 @@
 # Xcode can't build on the SMB share (no POSIX byte-range locks), so the build
 # itself happens in a throwaway local copy that is deleted on exit; version
 # bumps are made, committed and pushed in the NAS repo.
-# --build-only disables store uploads and Git commit/push; useful for beta builds.
+# Choose --release patch|minor|major for a new public release, --candidate to
+# continue an unpublished release, or --build-only for local beta builds.
+# --build-only disables store uploads and Git commit/push.
 
 set -euo pipefail
 
@@ -30,12 +32,22 @@ fi
 # Parse options
 BUMP_BUILD=true
 NEW_VERSION=""
+RELEASE_KIND=""
+CONTINUE_CANDIDATE=false
 SKIP_IOS=false
 SKIP_ANDROID=false
 BUILD_ONLY=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --release)
+      RELEASE_KIND="${2:?--release requires patch, minor, or major}"
+      shift 2
+      ;;
+    --candidate)
+      CONTINUE_CANDIDATE=true
+      shift
+      ;;
     --build-only)
       BUILD_ONLY=true
       shift
@@ -45,7 +57,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --version)
-      NEW_VERSION="$2"
+      NEW_VERSION="${2:?--version requires x.y.z}"
       shift 2
       ;;
     --skip-ios)
@@ -58,7 +70,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "Unknown option: $1"
-      echo "Usage: $0 [--no-bump] [--version <x.y.z>] [--skip-ios] [--skip-android] [--build-only]"
+      echo "Usage: $0 (--release patch|minor|major | --version x.y.z | --candidate | --build-only) [--no-bump] [--skip-ios] [--skip-android]"
       exit 1
       ;;
   esac
@@ -72,26 +84,25 @@ CURRENT_VERSION_FULL=$(echo "$CURRENT_VERSION_LINE" | awk '{print $2}' | tr -d '
 MARKETING_VERSION="${CURRENT_VERSION_FULL%+*}"
 BUILD_NUMBER="${CURRENT_VERSION_FULL#*+}"
 
-if [ -n "$NEW_VERSION" ]; then
-  MARKETING_VERSION="$NEW_VERSION"
-fi
-
-if [ "$BUMP_BUILD" = true ]; then
-  BUILD_NUMBER=$((BUILD_NUMBER + 1))
-  NEW_FULL_VERSION="${MARKETING_VERSION}+${BUILD_NUMBER}"
-  echo "==> Bumping version: ${CURRENT_VERSION_FULL} -> ${NEW_FULL_VERSION}"
-  python3 -c "
+# Resolve all version choices before changing files or invoking a build.
+# A bare invocation must never silently start another public release at the
+# same customer-visible version. Candidate continuation is deliberately explicit.
+NEW_FULL_VERSION=$(python3 "$SCRIPT_DIR/mobile_release_version.py" \
+  --current "$CURRENT_VERSION_FULL" \
+  --release "$RELEASE_KIND" --version "$NEW_VERSION" \
+  --candidate "$CONTINUE_CANDIDATE" --build-only "$BUILD_ONLY" \
+  --bump-build "$BUMP_BUILD")
+MARKETING_VERSION="${NEW_FULL_VERSION%+*}"
+BUILD_NUMBER="${NEW_FULL_VERSION#*+}"
+echo "==> Version: ${CURRENT_VERSION_FULL} -> ${NEW_FULL_VERSION}"
+python3 - "$NEW_FULL_VERSION" <<'PY_VERSION'
 import re
-with open('pubspec.yaml', 'r') as f:
-    content = f.read()
-new_content = re.sub(r'^version:\s*.*$', 'version: ${NEW_FULL_VERSION}', content, flags=re.MULTILINE)
-with open('pubspec.yaml', 'w') as f:
-    f.write(new_content)
-"
-else
-  NEW_FULL_VERSION="${MARKETING_VERSION}+${BUILD_NUMBER}"
-  echo "==> Using existing version: ${NEW_FULL_VERSION}"
-fi
+import sys
+from pathlib import Path
+path = Path('pubspec.yaml')
+path.write_text(re.sub(r'^version:\s*.*$', 'version: ' + sys.argv[1],
+                       path.read_text(), flags=re.MULTILINE))
+PY_VERSION
 
 # 2. Sync Xcode versioning
 echo "==> Syncing Xcode targets..."

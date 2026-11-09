@@ -6,7 +6,8 @@ A.A./recovery literature, a meeting finder, a Knowledge Graph library browser
 home-screen widgets.
 
 - **Web PWA:** https://sobrietycopilot.com
-- **Mobile app:** `mobile_app/` (Flutter — Android + iOS, v1.4.2 build 35)
+- **Mobile app:** `mobile_app/` (Flutter — Android + iOS, 1.7.0 build 45 release candidate)
+- Mobile versioning and release workflow: [`docs/mobile-versioning.md`](docs/mobile-versioning.md)
 - Latest release/change history: [`CHANGELOG.md`](CHANGELOG.md)
 
 ## Production

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.7.0 (build 45) — Release candidate, not a public-release confirmation
+
+- Persistent Today, Chat, Library and You navigation, with Chat opening by default.
+- A quieter first-message chat canvas and refreshed suggested prompts.
+- Removed the arrival check-in from Today.
+- Improved horizontal safe areas and adaptive chat reading layout.
+
+The earlier 1.6.1 builds 42, 43 and 44 preceded this explicitly renumbered
+1.7.0 candidate. Build 45 retains build 44's app source and dependency versions.
+Store availability must be
+verified in each console. See [mobile versioning](docs/mobile-versioning.md) for
+new-public-release versus beta-build rules.
+
 ## 1.3.0 (build 22) — 2026-09-02 — Production Release
 
 ### What's New in Version 1.3.0
