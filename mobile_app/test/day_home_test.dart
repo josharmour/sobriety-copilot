@@ -11,6 +11,7 @@ import 'package:sobriety_copilot_mobile/features/home/day_home.dart';
 import 'package:sobriety_copilot_mobile/features/tts/tts_service.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
+import 'package:sobriety_copilot_mobile/features/layout/app_safe_viewport.dart';
 import 'package:sobriety_copilot_mobile/data/models/chat_models.dart';
 import 'package:sobriety_copilot_mobile/features/chat/conversations.dart';
 import 'resume_chip_test.dart' show FakeChatRepository;
@@ -52,7 +53,7 @@ Future<ProviderContainer> harness(
           data: MediaQuery.of(
             context,
           ).copyWith(textScaler: TextScaler.linear(scale)),
-          child: child!,
+          child: AppSafeViewport(child: child!),
         ),
         home: ChatScreen(dayHomeEnabled: enabled),
       ),

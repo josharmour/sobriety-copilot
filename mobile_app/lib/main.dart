@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sobriety_copilot_mobile/features/library/offline_reader.dart';
 import 'package:sobriety_copilot_mobile/platform_init.dart';
 import 'package:sobriety_copilot_mobile/providers.dart';
+import 'package:sobriety_copilot_mobile/features/layout/app_safe_viewport.dart';
 import 'package:sobriety_copilot_mobile/theme/tokens.dart';
 import 'package:sobriety_copilot_mobile/features/chat/chat_screen.dart';
 import 'package:sobriety_copilot_mobile/features/daily/daily_readings.dart';
@@ -109,6 +110,9 @@ class _SobrietyCopilotAppState extends ConsumerState<SobrietyCopilotApp> {
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(),
       themeMode: config.themeMode,
+      builder:
+          (context, child) =>
+              AppSafeViewport(child: child ?? const SizedBox.shrink()),
       home: const ChatScreen(),
     );
   }

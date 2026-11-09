@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'empty_chat_landing.dart';
+import '../layout/adaptive_reading_workspace.dart';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -131,6 +132,11 @@ String normalizeRememberPrefill(String raw) {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   // Conversation is the primary entry point; Today remains an optional tab.
   int _homeDestination = 1;
+  Source? _readingSource;
+  List<Source> _readingSources = const [];
+  int _readingGeneration = 0;
+
+  void _closeReader() => setState(() => _readingSource = null);
 
   Future<void> _homeAction(HomeAction action) async {
     switch (action) {
@@ -613,6 +619,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _openConversations() async {
+    _closeReader();
     if (widget.dayHomeEnabled) setState(() => _homeDestination = 1);
     await showAppSheet(context, const ConversationsSheet());
   }
@@ -624,6 +631,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // tapping the title / new-conversation repeatedly cycles the rotation.
     setState(() {
       _starterGeneration++;
+      _readingSource = null;
       if (widget.dayHomeEnabled) _homeDestination = 1;
     });
   }
@@ -631,18 +639,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   // ── Source detail ────────────────────────────────────────────────────────────
 
   Future<void> _showSourceDetail(Source source, List<Source> allSources) async {
-    final baseUrl = ref.read(appConfigProvider).baseUrl;
-    final saved = ref.read(savedPassagesProvider.notifier);
-    await showAppSheet(
-      context,
-      _SourceDetailSheet(
-        initialSource: source,
-        allSources: allSources,
-        baseUrl: baseUrl,
-        savedNotifier: saved,
-      ),
-      fitContent: true,
-    );
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _readingSource = source;
+      _readingSources = allSources.isEmpty ? [source] : allSources;
+      _readingGeneration++;
+    });
   }
 
   Future<void> _openUrl(String url) async {
@@ -752,7 +754,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 selectedIndex: _homeDestination,
                 onDestinationSelected: (index) {
                   FocusScope.of(context).unfocus();
-                  setState(() => _homeDestination = index);
+                  setState(() {
+                    _homeDestination = index;
+                    _readingSource = null;
+                  });
                 },
                 destinations: const [
                   NavigationDestination(
@@ -774,7 +779,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ],
               )
               : null,
-      body: IndexedStack(
+      body: AdaptiveReadingWorkspace(
+        onClose: _closeReader,
+        reader: _readingSource == null ? null : Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.md),
+          child: _SourceDetailSheet(
+            key: ValueKey(_readingGeneration),
+            initialSource: _readingSource!,
+            allSources: _readingSources,
+            baseUrl: config.baseUrl,
+            savedNotifier: ref.read(savedPassagesProvider.notifier),
+            onClose: _closeReader,
+          ),
+        ),
+        child: IndexedStack(
         index: !widget.dayHomeEnabled || _homeDestination == 1 ? 1 : 0,
         children: [
           if (widget.dayHomeEnabled)
@@ -829,19 +847,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 800),
-                child: Column(
+                child: LayoutBuilder(builder: (context, space) => Column(
                   children: [
                     Expanded(child: _buildMessageList(chat, config)),
-                    _buildMemoryHint(
-                      memoryEnabled: memoryEnabled,
-                      memory: memory,
+                    ConstrainedBox(
+                      // Keep controls reachable at large text sizes while the
+                      // keyboard or a fold leaves little vertical space.
+                      constraints: BoxConstraints(maxHeight: space.maxHeight * .65),
+                      child: SingleChildScrollView(
+                        child: Column(children: [
+                          _buildMemoryHint(
+                            memoryEnabled: memoryEnabled,
+                            memory: memory,
+                          ),
+                          _buildInputBar(chat, config),
+                        ]),
+                      ),
                     ),
-                    _buildInputBar(chat, config),
                   ],
-                ),
+                )),
               ),
             ),
         ],
+      ),
       ),
       ),
     );
@@ -1223,8 +1251,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ],
             ),
             const SizedBox(height: AppSpacing.xs),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              alignment: WrapAlignment.center,
               children: [
                 TextButton.icon(
                   icon: const Icon(AppIcons.meetings, size: 14),
@@ -1874,7 +1902,10 @@ class _SourceDetailSheet extends ConsumerStatefulWidget {
   final List<Source> allSources;
   final String baseUrl;
   final SavedPassagesNotifier savedNotifier;
+  final VoidCallback? onClose;
   const _SourceDetailSheet({
+    super.key,
+    this.onClose,
     required this.initialSource,
     required this.allSources,
     required this.baseUrl,
@@ -1929,9 +1960,13 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
       final libraryRepo = ref.read(libraryRepositoryProvider);
       final installed = await libraryRepo.isPackInstalled;
       if (installed && mounted) {
-        Navigator.pop(context);
-        Navigator.push(
-          context,
+        final navigator = Navigator.of(context);
+        if (widget.onClose != null) {
+          widget.onClose!();
+        } else {
+          navigator.pop();
+        }
+        navigator.push(
           MaterialPageRoute(
             builder:
                 (context) => OfflineReaderScreen(
@@ -1966,6 +2001,7 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
           SheetHeader(
             icon: AppIcons.source,
             title: total > 1 ? 'Source ${_currentPage + 1} of $total' : 'Source',
+            onClose: widget.onClose,
             actions: [
               if (total > 1) ...[
                 IconButton(
@@ -2036,8 +2072,7 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.lg,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: ListView(
                       children: [
                         Text(
                           s.title,
@@ -2054,15 +2089,9 @@ class _SourceDetailSheetState extends ConsumerState<_SourceDetailSheet> {
                           style: theme.textTheme.bodySmall,
                         ),
                         const SizedBox(height: AppSpacing.md),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            child: Text(
-                              s.excerpt,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
+                        Text(
+                          s.excerpt,
+                          style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
                         ),
                         const SizedBox(height: AppSpacing.lg),
                         Row(
